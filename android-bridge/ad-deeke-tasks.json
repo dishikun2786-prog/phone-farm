@@ -1,0 +1,140 @@
+{
+  "description": "ad-deeke 任务脚本映射表 — 供控制服务器 task_templates 表使用",
+  "templates": [
+    {
+      "name": "抖音推荐营销",
+      "platform": "dy",
+      "script": "task_dy_toker",
+      "description": "刷推荐视频流，根据配置的条件（关键词、性别、年龄、地区）自动评论、点赞、关注、私信视频作者",
+      "config": {
+        "toker_view_video_keywords": "",
+        "toker_view_video_second": 30,
+        "toker_zan_rate": 70,
+        "toker_comment_rate": 60,
+        "toker_focus_rate": 20,
+        "toker_private_msg_rate": 10,
+        "toker_comment_area_zan_rate": 80,
+        "toker_run_hour": ["9","10","11","14","15","16","20","21"],
+        "toker_run_sex": ["0","1"],
+        "toker_run_min_age": 20,
+        "toker_run_max_age": 45,
+        "toker_view_video_ip": ""
+      }
+    },
+    {
+      "name": "抖音同城营销",
+      "platform": "dy",
+      "script": "task_dy_toker_city",
+      "description": "刷同城视频流，按地域定向营销",
+      "config": {
+        "toker_city_view_video_second": 30,
+        "toker_city_view_video_keywords": "",
+        "toker_city_view_video_ip": "",
+        "toker_city_zan_rate": 70,
+        "toker_city_comment_rate": 60,
+        "toker_city_focus_rate": 20,
+        "toker_city_private_msg_rate": 10,
+        "toker_city_comment_area_zan_rate": 80,
+        "toker_city_run_hour": ["9","10","11","14","15","16"],
+        "toker_city_distance": 10,
+        "toker_city_run_sex": ["0","1"],
+        "toker_city_run_min_age": 20,
+        "toker_city_run_max_age": 45
+      }
+    },
+    {
+      "name": "抖音评论区互动",
+      "platform": "dy",
+      "script": "task_dy_toker_comment",
+      "description": "在视频评论区点赞、评论，提高互动率"
+    },
+    {
+      "name": "抖音搜索用户营销",
+      "platform": "dy",
+      "script": "task_dy_search_user",
+      "description": "搜索指定关键词，对搜索结果中的用户进行关注、私信等操作"
+    },
+    {
+      "name": "抖音直播间互动",
+      "platform": "dy",
+      "script": "task_dy_live_barrage",
+      "description": "进入直播间自动发送弹幕互动"
+    },
+    {
+      "name": "抖音涨粉",
+      "platform": "dy",
+      "script": "task_dy_fans_inc_main",
+      "description": "通过批量点赞、关注等操作实现涨粉"
+    },
+    {
+      "name": "抖音AI智能回复",
+      "platform": "dy",
+      "script": "task_dy_ai_back",
+      "description": "使用AI大模型智能回复私信和评论"
+    },
+    {
+      "name": "快手推荐营销",
+      "platform": "ks",
+      "script": "task_ks_toker",
+      "description": "快手推荐视频流营销",
+      "config": {
+        "toker_ks_view_video_second": 30,
+        "toker_ks_view_video_keywords": "",
+        "toker_ks_zan_rate": 70,
+        "toker_ks_comment_rate": 60,
+        "toker_ks_focus_rate": 20,
+        "toker_ks_run_hour": ["9","10","11","14","15","16","20","21"]
+      }
+    },
+    {
+      "name": "快手搜索用户营销",
+      "platform": "ks",
+      "script": "task_ks_search_user",
+      "description": "快手搜索关键词用户营销"
+    },
+    {
+      "name": "微信视频号推荐营销",
+      "platform": "wx",
+      "script": "task_wx_toker",
+      "description": "微信视频号推荐视频流营销",
+      "config": {
+        "toker_wx_view_video_second": 30,
+        "toker_wx_view_video_keywords": "",
+        "toker_wx_zan_rate": 70,
+        "toker_wx_comment_rate": 60,
+        "toker_wx_focus_rate": 20,
+        "toker_wx_run_hour": ["9","10","11","14","15","16","20","21"]
+      }
+    },
+    {
+      "name": "微信视频号搜索营销",
+      "platform": "wx",
+      "script": "task_wx_search_inquiry",
+      "description": "微信视频号搜索询盘"
+    },
+    {
+      "name": "小红书推荐营销",
+      "platform": "xhs",
+      "script": "task_xhs_toker",
+      "description": "小红书推荐流笔记营销"
+    },
+    {
+      "name": "小红书涨粉",
+      "platform": "xhs",
+      "script": "task_xhs_fans",
+      "description": "通过互动操作实现涨粉"
+    },
+    {
+      "name": "小红书养号",
+      "platform": "xhs",
+      "script": "task_xhs_yanghao",
+      "description": "模拟真人操作养号，提高账号权重"
+    },
+    {
+      "name": "小红书AI智能回复",
+      "platform": "xhs",
+      "script": "task_xhs_ai_back",
+      "description": "AI智能回复评论和私信"
+    }
+  ]
+}
