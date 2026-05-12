@@ -63,8 +63,8 @@ android {
             initWith(buildTypes.getByName("debug"))
             applicationIdSuffix = ".staging"
             versionNameSuffix = "-staging"
-            buildConfigField("String", "API_BASE_URL", "\"https://staging.phonefarm.io/api/v1\"")
-            buildConfigField("String", "WS_URL", "\"wss://staging.phonefarm.io/ws/device\"")
+            buildConfigField("String", "API_BASE_URL", "\"https://phone.openedskill.com/api/v1\"")
+            buildConfigField("String", "WS_URL", "\"wss://phone.openedskill.com/ws/device\"")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -80,8 +80,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            buildConfigField("String", "API_BASE_URL", "\"https://api.phonefarm.io/api/v1\"")
-            buildConfigField("String", "WS_URL", "\"wss://api.phonefarm.io/ws/device\"")
+            buildConfigField("String", "API_BASE_URL", "\"https://phone.openedskill.com/api/v1\"")
+            buildConfigField("String", "WS_URL", "\"wss://phone.openedskill.com/ws/device\"")
             // Release NDK flags
             externalNativeBuild {
                 cmake {

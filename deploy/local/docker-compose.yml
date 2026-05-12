@@ -46,8 +46,8 @@ services:
       DEVICE_AUTH_TOKEN: "${DEVICE_AUTH_TOKEN:-device-auth-token-change-me}"
       UDP_RELAY_PORT: "8444"
       # ── VPS 桥接配置 ──
-      BRIDGE_RELAY_URL: "${BRIDGE_RELAY_URL:-ws://your-vps-ip:80/ws/control}"
-      BRIDGE_CONTROL_TOKEN: "${BRIDGE_CONTROL_TOKEN:-control-token-change-me}"
+      BRIDGE_RELAY_URL: "${BRIDGE_RELAY_URL:-ws://phone.openedskill.com:80/ws/control}"
+      BRIDGE_CONTROL_TOKEN: "${BRIDGE_CONTROL_TOKEN:-79YKhPyiD0EalMI5BbUJd4mGxXj6ove8ZzT2FgS1uqWHLcCf}"
     depends_on:
       - postgres
       - redis

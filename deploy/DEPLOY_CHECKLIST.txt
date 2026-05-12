@@ -1,0 +1,43 @@
+# ============================================================
+# PhoneFarm 生产部署配置清单
+# VPS: 47.243.254.248 / phone.openedskill.com
+# ============================================================
+
+# ---- VPS 端操作 ----
+# 1. 复制 .env.production → D:\phonefarm-relay\.env
+# 2. 复制 nginx.production.conf → C:\nginx-1.26.3\conf\nginx.conf
+# 3. 生成 SSL 证书:
+#    winget install OpenSSL.OpenSSL
+#    mkdir C:\nginx-1.26.3\ssl
+#    openssl req -x509 -nodes -days 365 -newkey rsa:2048 `
+#      -keyout C:\nginx-1.26.3\ssl\privkey.pem `
+#      -out C:\nginx-1.26.3\ssl\fullchain.pem `
+#      -subj "/CN=phone.openedskill.com"
+# 4. 重启服务:
+#    pm2 restart phonefarm-relay
+#    C:\nginx-1.26.3\nginx.exe -s reload
+# 5. 验证: curl https://phone.openedskill.com/health
+
+# ---- 本地端操作 ----
+# 1. 确认 deploy/local/.env 已配置
+# 2. 启动:
+#    cd deploy/local
+#    docker compose up -d
+#    或开发模式:
+#    cd control-server
+#    set BRIDGE_RELAY_URL=ws://phone.openedskill.com:80/ws/control
+#    set BRIDGE_CONTROL_TOKEN=79YKhPyiD0EalMI5BbUJd4mGxXj6ove8ZzT2FgS1uqWHLcCf
+#    npm run dev
+
+# ---- APK 构建 ----
+# cd android-client
+# $env:JAVA_HOME="C:\Users\dishi\AppData\Local\PhoneFarm\jdk21\jdk-21.0.11+10"
+# .\gradlew.bat assembleStaging    # phone.openedskill.com
+# .\gradlew.bat assembleRelease    # phone.openedskill.com (需签名)
+
+# ---- AI 协同 (可选) ----
+# 本地 Claude Code 连接 VPS DeepSeek:
+# cd control-server
+# npx tsx src/ai-orchestrator/ai-claude-cli.ts status `
+#   --bridge-url "ws://phone.openedskill.com:80/ws/ai/control" `
+#   --token "1nt0HMuo4iFAyxeRmDfGhZJvTPlUVSzk"
