@@ -2,13 +2,18 @@ const API_BASE = '/api/v1';
 const REQUEST_TIMEOUT_MS = 15000;
 
 export class ApiError extends Error {
+  code: 'TIMEOUT' | 'NETWORK' | 'UNAUTHORIZED' | 'SERVER' | 'UNKNOWN';
+  status?: number;
+
   constructor(
     message: string,
-    public code: 'TIMEOUT' | 'NETWORK' | 'UNAUTHORIZED' | 'SERVER' | 'UNKNOWN',
-    public status?: number,
+    code: 'TIMEOUT' | 'NETWORK' | 'UNAUTHORIZED' | 'SERVER' | 'UNKNOWN',
+    status?: number,
   ) {
     super(message);
     this.name = 'ApiError';
+    this.code = code;
+    this.status = status;
   }
 }
 
@@ -293,6 +298,93 @@ export const api = {
     request(`/scripts/deploy/${deviceId}`, { method: 'POST' }),
   deployScriptsBatch: (deviceIds: string[]) =>
     request('/scripts/deploy-batch', { method: 'POST', body: JSON.stringify({ deviceIds }) }),
+
+  // ── Decision Engine (New Edge-Cloud Architecture) ──
+  decisionStart: (deviceId: string, taskPrompt: string, options?: { maxSteps?: number; platform?: string }) =>
+    request("/decision/start", { method: "POST", body: JSON.stringify({ deviceId, taskPrompt, ...options }) }),
+  decisionStop: (deviceId: string, reason?: string) =>
+    request("/decision/stop", { method: "POST", body: JSON.stringify({ deviceId, reason }) }),
+  decisionStatus: (deviceId: string): Promise<{
+    deviceId: string;
+    active: boolean;
+    taskPrompt?: string;
+    stepNumber?: number;
+    maxSteps?: number;
+    consecutiveFailures?: number;
+    consecutiveLowConfidence?: number;
+    lastStep?: Record<string, unknown>;
+  }> => request(`/decision/status/${deviceId}`),
+  decisionStats: () => request("/decision/stats"),
+
+  // ── Stream On-Demand ──
+  streamStart: (deviceId: string, options?: { maxSize?: number; bitRate?: number; maxFps?: number; audio?: boolean }) =>
+    request("/stream/start", { method: "POST", body: JSON.stringify({ deviceId, options }) }),
+  streamStop: (deviceId: string) =>
+    request("/stream/stop", { method: "POST", body: JSON.stringify({ deviceId }) }),
+  streamStatus: (deviceId: string) => request(`/stream/status/${deviceId}`),
+  streamStats: () => request("/stream/stats"),
+
+  // ── Cross-Device Memory ──
+  memoryStats: () => request("/memory/stats"),
+  memorySyncRules: () => request("/memory/rules/sync", { method: "POST" }),
+
+  // ── Config Management ──
+  configGetCategories: () => request("/config/categories"),
+  configGetDefinitions: (category?: string) => {
+    const qs = category ? `?category=${encodeURIComponent(category)}` : "";
+    return request(`/config/definitions${qs}`);
+  },
+  configGetDefinition: (key: string) => request(`/config/definitions/${encodeURIComponent(key)}`),
+  configResolve: (params?: { deviceId?: string; groupId?: string; templateId?: string; planId?: string }) => {
+    const search = new URLSearchParams();
+    if (params?.deviceId) search.set("deviceId", params.deviceId);
+    if (params?.groupId) search.set("groupId", params.groupId);
+    if (params?.templateId) search.set("templateId", params.templateId);
+    if (params?.planId) search.set("planId", params.planId);
+    const qs = search.toString();
+    return request(`/config/resolve${qs ? `?${qs}` : ""}`);
+  },
+  configResolveDevice: (deviceId: string) => request(`/config/resolve/${encodeURIComponent(deviceId)}`),
+  configGetValues: (params?: { scope?: string; scopeId?: string; definitionId?: string }) => {
+    const search = new URLSearchParams();
+    if (params?.scope) search.set("scope", params.scope);
+    if (params?.scopeId) search.set("scopeId", params.scopeId);
+    if (params?.definitionId) search.set("definitionId", params.definitionId);
+    const qs = search.toString();
+    return request(`/config/values${qs ? `?${qs}` : ""}`);
+  },
+  configGetScopedValues: (scope: string, scopeId: string) =>
+    request(`/config/values/${encodeURIComponent(scope)}/${encodeURIComponent(scopeId)}`),
+  configUpdateValue: (data: {
+    definitionKey: string;
+    scope: string;
+    scopeId?: string;
+    value: string;
+    changeReason?: string;
+  }) => request("/config/values", { method: "PUT", body: JSON.stringify(data) }),
+  configDeleteValue: (id: string) => request(`/config/values/${id}`, { method: "DELETE" }),
+  configGetTemplates: () => request("/config/templates"),
+  configCreateTemplate: (data: { name: string; description?: string; values: Record<string, string> }) =>
+    request("/config/templates", { method: "POST", body: JSON.stringify(data) }),
+  configUpdateTemplate: (id: string, data: { name?: string; description?: string; values?: Record<string, string> }) =>
+    request(`/config/templates/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  configDeleteTemplate: (id: string) => request(`/config/templates/${id}`, { method: "DELETE" }),
+  configApplyTemplate: (id: string, targetScope: "device" | "group", targetScopeId: string) =>
+    request(`/config/templates/${id}/apply`, { method: "POST", body: JSON.stringify({ targetScope, targetScopeId }) }),
+  configGetAuditLog: (params?: { configKey?: string; scope?: string; limit?: number; offset?: number }) => {
+    const search = new URLSearchParams();
+    if (params?.configKey) search.set("configKey", params.configKey);
+    if (params?.scope) search.set("scope", params.scope);
+    if (params?.limit) search.set("limit", String(params.limit));
+    if (params?.offset) search.set("offset", String(params.offset));
+    const qs = search.toString();
+    return request(`/config/audit-log${qs ? `?${qs}` : ""}`);
+  },
+  configSeed: () => request("/config/seed", { method: "POST" }),
+  configExport: (scope?: string, scopeId?: string) =>
+    request("/config/export", { method: "POST", body: JSON.stringify({ scope, scopeId }) }),
+  configImport: (data: { values?: any[]; templates?: any[]; overwrite?: boolean }) =>
+    request("/config/import", { method: "POST", body: JSON.stringify(data) }),
 
   // Generic request (used by admin pages and custom endpoints)
   request: (path: string, options?: RequestInit) => request(path, options),

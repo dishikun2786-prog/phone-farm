@@ -22,9 +22,10 @@ import com.phonefarm.client.data.local.entity.*
         NotificationEntity::class,
         LocalCronJobEntity::class,
         OfflineMessageEntity::class,
-        CrashReportEntity::class
+        CrashReportEntity::class,
+        PlatformAccountEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -44,4 +45,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun localCronJobDao(): LocalCronJobDao
     abstract fun offlineMessageDao(): OfflineMessageDao
     abstract fun crashReportDao(): CrashReportDao
+    abstract fun platformAccountDao(): PlatformAccountDao
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Video, Square, Download, Settings2 } from 'lucide-react';
+import { Video, Square, Download } from 'lucide-react';
 import { api } from '../lib/api';
 
 interface Props {

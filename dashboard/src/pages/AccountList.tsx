@@ -107,7 +107,7 @@ export default function AccountList() {
     >
       <div>
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-gray-900">账号管理</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100">账号管理</h2>
           <button
             onClick={() => setShowForm(!showForm)}
             className="flex items-center gap-1 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
@@ -125,7 +125,7 @@ export default function AccountList() {
         {!loading && !error && accounts.length > 0 && (
           <>
             {showForm && (
-              <form onSubmit={handleCreate} className="bg-white rounded-xl border border-gray-200 p-6 mb-4 space-y-4">
+              <form onSubmit={handleCreate} className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-6 mb-4 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">平台</label>
@@ -208,12 +208,12 @@ export default function AccountList() {
               {accounts.map(acct => (
                 <div
                   key={acct.id}
-                  className="bg-white rounded-xl border border-gray-200 p-4 flex items-center justify-between"
+                  className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-4 flex items-center justify-between hover:shadow-sm transition-all"
                 >
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-gray-900">{acct.username}</span>
-                      <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
+                      <span className="font-medium text-gray-900 dark:text-slate-100">{acct.username}</span>
+                      <span className="text-xs bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 px-1.5 py-0.5 rounded">
                         {PLATFORM_NAMES[acct.platform] || acct.platform}
                       </span>
                       {acct.loginStatus && (

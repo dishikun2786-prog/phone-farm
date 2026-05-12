@@ -1,60 +1,43 @@
 package com.phonefarm.client.network.security
 
+import com.phonefarm.client.BuildConfig
 import okhttp3.CertificatePinner
 
 /**
- * OkHttp CertificatePinner with pinned SHA-256 public key hashes for the
- * PhoneFarm control server.
+ * OkHttp CertificatePinner with SHA-256 public key pinning for the
+ * PhoneFarm control server at phone.openedskill.com.
  *
  * Certificate pinning prevents man-in-the-middle attacks by verifying the
- * server's certificate chain against pre-configured SHA-256 hashes.
+ * server's certificate chain against pre-configured SHA-256 SPKI hashes.
  *
- * The pinned hashes should be updated when the server certificate rotates
- * (typically every 90 days).
+ * Pin expires 2026-07-03 — regenerate before expiry:
+ *   openssl s_client -connect phone.openedskill.com:443 -servername phone.openedskill.com </dev/null 2>/dev/null \
+ *     | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl base64
  */
 object CertificatePinnerFactory {
 
-    // Primary server certificate pin (sha256/<base64-encoded SPKI hash>).
-    // These are placeholder values; replace with actual server certificate hashes.
-    private const val PRIMARY_PIN = "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    // Cloudflare edge certificate (Google Trust Services WE1) — expires 2026-07-03
+    private const val CLOUDFLARE_EDGE_PIN =
+        "sha256/Ne5iCXIYr1PAn3QMIJOUlerhMjil/BpZiKcUFezYjzA="
 
-    // Backup pin for certificate rotation (next certificate in rotation chain).
-    private const val BACKUP_PIN = "sha256/BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB="
-
-    // Headscale coordination server pin.
-    private const val HEADSCALE_PIN = "sha256/CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC="
+    // Backup: Google Trust Services root CA R4
+    private const val GTS_ROOT_R4_PIN =
+        "sha256/hUqBGNNDFzl2BnemMsKbD7qAuQ1tGlpOXkMRcZqTqOs="
 
     /**
-     * Create a CertificatePinner configured with both Tailscale MagicDNS patterns.
+     * Create a CertificatePinner for the production server.
      *
-     * Pinning strategy:
-     * - Production server: pins[0] = PRIMARY_PIN, pins[1] = BACKUP_PIN.
-     * - At least one of the two must match for successful TLS handshake.
-     * - REPLACE placeholder pins with actual server certificate SHA-256 SPKI hashes
-     *   before deploying to production.
-     *
-     * In debug builds, use [createDebug] which disables pinning.
+     * On release/staging builds: pins against Cloudflare edge + GTS root backup.
+     * On debug builds: no pinning (allow emulator/localhost/self-signed).
      */
     fun create(): CertificatePinner {
+        if (BuildConfig.DEBUG) {
+            return CertificatePinner.DEFAULT
+        }
+
         return CertificatePinner.Builder()
-            .add(
-                "*.phonefarm.local",   // Tailscale MagicDNS hostname
-                PRIMARY_PIN,
-                BACKUP_PIN,
-            )
-            .add(
-                "*.tailnet-*.ts.net",  // Tailscale MagicDNS pattern
-                PRIMARY_PIN,
-                BACKUP_PIN,
-            )
-            // TODO: Add production domain once DNS is configured.
-            // .add("api.phonefarm.io", PRIMARY_PIN, BACKUP_PIN)
+            .add("phone.openedskill.com", CLOUDFLARE_EDGE_PIN, GTS_ROOT_R4_PIN)
+            .add("*.openedskill.com", CLOUDFLARE_EDGE_PIN, GTS_ROOT_R4_PIN)
             .build()
     }
-
-    /**
-     * Return a no-op pinner for development/debug builds.
-     * Allows connecting to self-signed, emulator, or otherwise untrusted TLS endpoints.
-     */
-    fun createDebug(): CertificatePinner = CertificatePinner.DEFAULT
 }

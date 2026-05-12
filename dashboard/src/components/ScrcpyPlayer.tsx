@@ -185,7 +185,7 @@ export default function ScrcpyPlayer({
       }
 
       // Binary messages are H.264 NAL units
-      const nalUnit = new Uint8Array(event.data as ArrayBuffer);
+      const nalUnit = new Uint8Array(event.data as unknown as ArrayBuffer);
 
       if (!mediaSourceRef.current) {
         // First NAL unit — initialize MediaSource
@@ -315,7 +315,7 @@ export default function ScrcpyPlayer({
 
     try {
       sbUpdatingRef.current = true;
-      sourceBufferRef.current.appendBuffer(data.buffer);
+      sourceBufferRef.current.appendBuffer(data.buffer as ArrayBuffer);
     } catch (err: any) {
       if (err.name === 'QuotaExceededError') {
         // Buffer full — clear and restart

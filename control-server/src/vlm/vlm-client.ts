@@ -1,5 +1,9 @@
 /**
  * VLM Client — HTTP wrapper for the Python VLM Bridge service.
+ *
+ * @deprecated 由 DeepSeekClient + QwenVLClient (src/decision/) 替代。
+ *   保留用于 FF_LEGACY_VLM=true 回退兼容。
+ *
  * Handles OpenAI-compatible API calls with retry and timeout.
  */
 import { config } from '../config';

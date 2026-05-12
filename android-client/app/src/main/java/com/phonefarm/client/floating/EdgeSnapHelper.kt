@@ -53,13 +53,13 @@ class EdgeSnapHelper(
         // Check left edge
         if (x < snapThresholdPx) {
             edge = SnapEdge.LEFT
-            offset = -(bubbleWidth - peekWidthPx)
+            offset = -(bubbleWidth - peekWidthPx).toInt()
             snappedX = offset
         }
         // Check right edge
         else if (x > screenWidth - bubbleWidth - snapThresholdPx) {
             edge = SnapEdge.RIGHT
-            offset = screenWidth - peekWidthPx
+            offset = (screenWidth - peekWidthPx).toInt()
             snappedX = offset
         }
 

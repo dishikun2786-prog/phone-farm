@@ -2,6 +2,7 @@ package com.phonefarm.client.network
 
 import com.phonefarm.client.BuildConfig
 import com.phonefarm.client.di.TokenHolder
+import com.phonefarm.client.network.security.CertificatePinnerFactory
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -24,6 +25,7 @@ object NetworkModule {
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(120, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
+            .certificatePinner(CertificatePinnerFactory.create())
             .build()
     }
 

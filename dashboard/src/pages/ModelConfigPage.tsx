@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useStore } from '../store';
 import { api } from '../lib/api';
 import { toast } from '../hooks/useToast';
@@ -10,7 +10,7 @@ import SearchBar from '../components/SearchBar';
 import FilterBar from '../components/FilterBar';
 import {
   Cpu, Plus, Trash2, Edit3, Star, Zap, Loader2, X, Eye, EyeOff,
-  CheckCircle2, XCircle, Clock, ChevronDown, ChevronUp, FlaskConical
+  CheckCircle2, XCircle, ChevronDown, ChevronUp, FlaskConical
 } from 'lucide-react';
 
 type ModelType = 'autoglm' | 'qwenvl' | 'uitars' | 'maiui' | 'guiowl';
@@ -29,10 +29,6 @@ const MODEL_TYPE_COLORS: Record<ModelType, string> = {
   uitars: 'bg-emerald-100 text-emerald-700',
   maiui: 'bg-amber-100 text-amber-700',
   guiowl: 'bg-pink-100 text-pink-700',
-};
-
-const PLATFORM_NAMES: Record<string, string> = {
-  dy: '抖音', ks: '快手', wx: '微信', xhs: '小红书',
 };
 
 interface FormData {

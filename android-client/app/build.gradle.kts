@@ -59,14 +59,13 @@ android {
                 }
             }
         }
-        staging {
-            initWith(buildTypes.getByName("debug"))
+        create("staging") {
             applicationIdSuffix = ".staging"
             versionNameSuffix = "-staging"
-            buildConfigField("String", "API_BASE_URL", "\"https://phone.openedskill.com/api/v1\"")
-            buildConfigField("String", "WS_URL", "\"wss://phone.openedskill.com/ws/device\"")
             isMinifyEnabled = true
             isShrinkResources = true
+            buildConfigField("String", "API_BASE_URL", "\"https://phone.openedskill.com/api/v1\"")
+            buildConfigField("String", "WS_URL", "\"wss://phone.openedskill.com/ws/device\"")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -206,6 +205,10 @@ dependencies {
     // ML Kit OCR — dual-channel UI tree (Phase O2)
     implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
     implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.1")
+
+    // TFLite — YOLO-nano UI detection
+    implementation("org.tensorflow:tensorflow-lite:2.16.1")
+    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
 
     // CameraX — for screenshot alternative
     implementation("androidx.camera:camera-core:1.4.1")

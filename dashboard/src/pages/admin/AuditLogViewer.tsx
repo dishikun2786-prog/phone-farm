@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import PageWrapper from '../../components/PageWrapper';
 import { api } from '../../lib/api';
 import { toast } from '../../hooks/useToast';
-import { Search, Download, Clock, User, Smartphone, Activity } from 'lucide-react';
+import { Search, Download } from 'lucide-react';
 
 interface AuditLog {
   id: string;
@@ -73,52 +73,52 @@ export default function AuditLogViewer() {
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <select value={filterAction} onChange={e => { setFilterAction(e.target.value); setPage(0); }}
-          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+          className="px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-700 dark:text-slate-100">
           {ACTIONS.map(a => <option key={a} value={a}>{ACTION_LABELS[a] || a}</option>)}
         </select>
         <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
           <input value={filterDevice} onChange={e => { setFilterDevice(e.target.value); setPage(0); }} placeholder="设备 ID..."
-            className="w-40 pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400" />
+            className="w-40 pl-8 pr-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-700 dark:text-slate-100 focus:outline-none focus:border-blue-400" />
         </div>
-        <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(0); }} className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
-        <span className="text-gray-400 text-sm">至</span>
-        <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(0); }} className="px-3 py-2 border border-gray-200 rounded-lg text-sm" />
-        <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">
+        <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(0); }} className="px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-700 dark:text-slate-100" />
+        <span className="text-gray-400 dark:text-slate-500 text-sm">至</span>
+        <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(0); }} className="px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-700 dark:text-slate-100" />
+        <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-slate-700">
           <Download size={14} /> 导出 CSV
         </button>
-        <div className="ml-auto text-sm text-gray-500">共 {total} 条记录</div>
+        <div className="ml-auto text-sm text-gray-500 dark:text-slate-400">共 {total} 条记录</div>
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
               <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">时间</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">操作</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">用户</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">设备</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">资源</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">详情</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">IP</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">时间</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">操作</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">用户</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">设备</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">资源</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">详情</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">IP</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
               {loading ? (
-                <tr><td colSpan={7} className="text-center py-12 text-gray-400">加载中...</td></tr>
+                <tr><td colSpan={7} className="text-center py-12 text-gray-400 dark:text-slate-500">加载中...</td></tr>
               ) : logs.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-12 text-gray-400">暂无审计日志</td></tr>
+                <tr><td colSpan={7} className="text-center py-12 text-gray-400 dark:text-slate-500">暂无审计日志</td></tr>
               ) : logs.map(l => (
-                <tr key={l.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">{new Date(l.timestamp).toLocaleString('zh-CN')}</td>
-                  <td className="px-4 py-3"><span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">{ACTION_LABELS[l.action] || l.action}</span></td>
-                  <td className="px-4 py-3 text-gray-600">{l.userId}</td>
-                  <td className="px-4 py-3 text-gray-500 font-mono text-xs">{l.deviceId || '-'}</td>
-                  <td className="px-4 py-3 text-gray-500">{l.resource}</td>
-                  <td className="px-4 py-3 text-gray-400 text-xs max-w-[200px] truncate">{l.detail}</td>
-                  <td className="px-4 py-3 text-gray-400 font-mono text-xs">{l.ip}</td>
+                <tr key={l.id} className="hover:bg-gray-50 dark:hover:bg-slate-700">
+                  <td className="px-4 py-3 text-gray-500 dark:text-slate-400 whitespace-nowrap text-xs">{new Date(l.timestamp).toLocaleString('zh-CN')}</td>
+                  <td className="px-4 py-3"><span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300">{ACTION_LABELS[l.action] || l.action}</span></td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-slate-400">{l.userId}</td>
+                  <td className="px-4 py-3 text-gray-500 dark:text-slate-400 font-mono text-xs">{l.deviceId || '-'}</td>
+                  <td className="px-4 py-3 text-gray-500 dark:text-slate-400">{l.resource}</td>
+                  <td className="px-4 py-3 text-gray-400 dark:text-slate-500 text-xs max-w-[200px] truncate">{l.detail}</td>
+                  <td className="px-4 py-3 text-gray-400 dark:text-slate-500 font-mono text-xs">{l.ip}</td>
                 </tr>
               ))}
             </tbody>
@@ -126,13 +126,13 @@ export default function AuditLogViewer() {
         </div>
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
-            <div className="text-sm text-gray-500">第 {page + 1}/{totalPages} 页</div>
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-slate-700">
+            <div className="text-sm text-gray-500 dark:text-slate-400">第 {page + 1}/{totalPages} 页</div>
             <div className="flex gap-1">{Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
               const p = i + Math.max(0, page - 3);
               if (p >= totalPages) return null;
               return <button key={p} onClick={() => setPage(p)}
-                className={`w-8 h-8 rounded text-sm ${p === page ? 'bg-blue-600 text-white' : 'hover:bg-gray-100'}`}>{p + 1}</button>;
+                className={`w-8 h-8 rounded text-sm ${p === page ? 'bg-blue-600 text-white' : 'hover:bg-gray-100 dark:hover:bg-slate-700'}`}>{p + 1}</button>;
             })}</div>
           </div>
         )}

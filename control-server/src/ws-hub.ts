@@ -1,4 +1,5 @@
 import { WebSocket } from 'ws';
+import jwt from 'jsonwebtoken';
 
 interface DeviceConnection {
   ws: WebSocket;
@@ -169,6 +170,10 @@ class WsHub {
     if (!conn || conn.ws.readyState !== WebSocket.OPEN) return false;
     conn.ws.send(JSON.stringify(message));
     return true;
+  }
+
+  broadcastToFrontends(message: object): void {
+    this.#broadcastToFrontends(message);
   }
 
   isDeviceOnline(deviceId: string): boolean {

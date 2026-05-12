@@ -22,7 +22,7 @@ export default function VlmTaskPage() {
   const [modelName, setModelName] = useState('');
   const [maxSteps, setMaxSteps] = useState(50);
   const [running, setRunning] = useState(false);
-  const [episodeId, setEpisodeId] = useState('');
+  const [_episodeId, setEpisodeId] = useState('');
   const [episodes, setEpisodes] = useState<VLMEpisode[]>([]);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('');
@@ -79,27 +79,27 @@ export default function VlmTaskPage() {
   }, [liveInfo, deviceId]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
           <Bot size={24} className="text-purple-600" />
           VLM AI 任务
         </h2>
-        <span className="text-sm text-gray-500">
+        <span className="text-sm text-gray-500 dark:text-slate-400">
           自然语言驱动手机操作 · 基于 ClawGUI Agent
         </span>
       </div>
 
       {/* Task Form */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
+      <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-6 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">目标设备</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">目标设备</label>
             <select
               value={deviceId}
               onChange={e => setDeviceId(e.target.value)}
               disabled={running}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50"
+              className="w-full border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50"
             >
               <option value="">选择在线设备...</option>
               {onlineDevices.map(d => (
@@ -110,12 +110,12 @@ export default function VlmTaskPage() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">模型 (可选)</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">模型 (可选)</label>
             <select
               value={modelName}
               onChange={e => setModelName(e.target.value)}
               disabled={running}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50"
+              className="w-full border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50"
             >
               <option value="">默认 (autoglm-phone-9b)</option>
               <option value="autoglm-phone-9b">AutoGLM-Phone-9B</option>
@@ -128,20 +128,20 @@ export default function VlmTaskPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">任务指令（自然语言）</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">任务指令（自然语言）</label>
           <textarea
             value={task}
             onChange={e => setTask(e.target.value)}
             disabled={running}
             rows={3}
             placeholder="例如：打开抖音，搜索美食博主，浏览前5个视频，给点赞超过1万的视频点赞并关注作者"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50 resize-none"
+            className="w-full border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50 resize-none"
           />
         </div>
 
         <div className="flex items-center gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">最大步数</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">最大步数</label>
             <input
               type="number"
               value={maxSteps}
@@ -149,7 +149,7 @@ export default function VlmTaskPage() {
               disabled={running}
               min={1}
               max={200}
-              className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50"
+              className="w-24 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50"
             />
           </div>
           <div className="flex gap-2 pt-5">
@@ -176,9 +176,9 @@ export default function VlmTaskPage() {
 
         {status && (
           <div className={`text-sm px-3 py-2 rounded-lg ${
-            status.includes('Error') ? 'bg-red-50 text-red-700' :
-            running ? 'bg-purple-50 text-purple-700' :
-            'bg-gray-50 text-gray-700'
+            status.includes('Error') ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400' :
+            running ? 'bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300' :
+            'bg-gray-50 dark:bg-slate-700 text-gray-700 dark:text-slate-300'
           }`}>
             {status}
           </div>
@@ -188,11 +188,11 @@ export default function VlmTaskPage() {
       {/* Live Screenshot + Step Log */}
       {running && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+          <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-4">
+            <h3 className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-3 flex items-center gap-2">
               <Camera size={16} />
               实时画面
-              {screenshot && <span className="text-xs text-green-600">接收中...</span>}
+              {screenshot && <span className="text-xs text-green-600 dark:text-green-400">接收中...</span>}
             </h3>
             <div className="bg-black rounded-lg overflow-hidden min-h-64 flex items-center justify-center">
               {screenshot ? (
@@ -210,8 +210,8 @@ export default function VlmTaskPage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+          <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-4">
+            <h3 className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-3 flex items-center gap-2">
               <Clock size={16} />
               执行日志
             </h3>
@@ -232,16 +232,16 @@ export default function VlmTaskPage() {
       )}
 
       {/* Episode History */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-sm font-medium text-gray-700 mb-3">Episode 历史记录</h3>
+      <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-6">
+        <h3 className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-3">Episode 历史记录</h3>
         {episodes.length === 0 ? (
-          <p className="text-sm text-gray-400">暂无 VLM 任务记录。执行一个任务后这里会显示。</p>
+          <p className="text-sm text-gray-400 dark:text-slate-500">暂无 VLM 任务记录。执行一个任务后这里会显示。</p>
         ) : (
           <div className="space-y-2">
             {episodes.map(ep => (
               <div
                 key={ep.episodeId}
-                className="flex items-center justify-between p-3 border border-gray-100 rounded-lg hover:bg-gray-50 cursor-pointer"
+                className="flex items-center justify-between p-3 border border-gray-100 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer"
                 onClick={() => navigate(`/vlm/episodes/${ep.episodeId}`)}
               >
                 <div className="flex items-center gap-3">
@@ -253,13 +253,13 @@ export default function VlmTaskPage() {
                     <Clock size={18} className="text-gray-400" />
                   )}
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{ep.episodeId}</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{ep.episodeId}</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">
                       {ep.status} · {ep.totalSteps} steps · {(ep.totalDurationMs / 1000).toFixed(1)}s
                     </p>
                   </div>
                 </div>
-                <span className="text-xs text-gray-400">{ep.message?.slice(0, 60)}</span>
+                <span className="text-xs text-gray-400 dark:text-slate-500">{ep.message?.slice(0, 60)}</span>
               </div>
             ))}
           </div>

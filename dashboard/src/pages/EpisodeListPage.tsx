@@ -6,9 +6,11 @@ import StatsDashboard from '../components/StatsDashboard';
 import Pagination from '../components/Pagination';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { toast } from '../hooks/useToast';
+import SearchBar from '../components/SearchBar';
+import FilterBar from '../components/FilterBar';
 import {
   CheckCircle2, XCircle, Clock, Loader2, Trash2, FileCode2,
-  Filter, Search, Play, Bot
+  Play, Bot
 } from 'lucide-react';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -37,6 +39,7 @@ export default function EpisodeListPage() {
   const devices = useStore(s => s.devices);
   const loadDevices = useStore(s => s.loadDevices);
 
+  const [searchQuery, setSearchQuery] = useState('');
   const [filterDevice, setFilterDevice] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterModel, setFilterModel] = useState('');
@@ -57,7 +60,7 @@ export default function EpisodeListPage() {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterDevice, filterStatus, filterModel]);
+  }, [searchQuery, filterDevice, filterStatus, filterModel]);
 
   const handleFilter = useCallback(() => {
     setCurrentPage(1);
@@ -110,17 +113,37 @@ export default function EpisodeListPage() {
 
   const uniqueModels = [...new Set(episodes.map(e => e.modelName).filter(Boolean))];
 
-  const totalPages = Math.max(1, Math.ceil(episodes.length / PAGE_SIZE));
+  const STATUS_FILTER_OPTIONS = [
+    { key: 'completed', label: '已完成' },
+    { key: 'failed', label: '失败' },
+    { key: 'running', label: '运行中' },
+    { key: 'stopped', label: '已停止' },
+  ];
+
+  const filteredEpisodes = useMemo(() => {
+    let list = episodes;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(e =>
+        e.episodeId?.toLowerCase().includes(q) ||
+        e.taskPrompt?.toLowerCase().includes(q) ||
+        e.deviceId?.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [episodes, searchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredEpisodes.length / PAGE_SIZE));
   const paginatedEpisodes = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
-    return episodes.slice(start, start + PAGE_SIZE);
-  }, [episodes, currentPage]);
+    return filteredEpisodes.slice(start, start + PAGE_SIZE);
+  }, [filteredEpisodes, currentPage]);
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
           <Bot size={24} className="text-purple-600" />
           VLM Episode 历史
         </h2>
@@ -129,8 +152,8 @@ export default function EpisodeListPage() {
             onClick={() => setShowStats(!showStats)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors ${
               showStats
-                ? 'bg-purple-100 text-purple-700'
-                : 'text-gray-600 hover:bg-gray-100'
+                ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                : 'text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700'
             }`}
           >
             统计
@@ -149,34 +172,33 @@ export default function EpisodeListPage() {
       {showStats && <StatsDashboard />}
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-4">
         <div className="flex items-center gap-3 flex-wrap">
-          <Filter size={16} className="text-gray-400" />
+          <SearchBar
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="搜索 Episode ID/指令/设备..."
+            className="w-56"
+          />
           <select
             value={filterDevice}
             onChange={e => setFilterDevice(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+            className="border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
           >
             <option value="">全部设备</option>
             {devices.map(d => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
-          <select
+          <FilterBar
+            options={STATUS_FILTER_OPTIONS}
             value={filterStatus}
-            onChange={e => setFilterStatus(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-          >
-            <option value="">全部状态</option>
-            <option value="completed">已完成</option>
-            <option value="failed">失败</option>
-            <option value="running">运行中</option>
-            <option value="stopped">已停止</option>
-          </select>
+            onChange={setFilterStatus}
+          />
           <select
             value={filterModel}
             onChange={e => setFilterModel(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+            className="border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
           >
             <option value="">全部模型</option>
             {uniqueModels.map(m => (
@@ -185,14 +207,13 @@ export default function EpisodeListPage() {
           </select>
           <button
             onClick={handleFilter}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm text-gray-700 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg text-sm text-gray-700 dark:text-slate-300 transition-colors"
           >
-            <Search size={14} />
             筛选
           </button>
-          {episodes.length > 0 && (
-            <span className="text-xs text-gray-400 ml-auto">
-              共 {episodes.length} 条，第 {currentPage}/{totalPages} 页
+          {filteredEpisodes.length > 0 && (
+            <span className="text-xs text-gray-400 dark:text-slate-500 ml-auto">
+              共 {filteredEpisodes.length} 条，第 {currentPage}/{totalPages} 页
             </span>
           )}
         </div>
@@ -203,9 +224,9 @@ export default function EpisodeListPage() {
         <div className="flex items-center justify-center py-20">
           <Loader2 size={32} className="animate-spin text-purple-500" />
         </div>
-      ) : episodes.length === 0 ? (
-        <div className="text-center py-20 text-gray-400">
-          <Bot size={48} className="mx-auto mb-3 text-gray-300" />
+      ) : filteredEpisodes.length === 0 && !searchQuery && !filterDevice && !filterStatus && !filterModel ? (
+        <div className="text-center py-20 text-gray-400 dark:text-slate-500">
+          <Bot size={48} className="mx-auto mb-3 text-gray-300 dark:text-slate-600" />
           <p className="text-lg">暂无 VLM Episode 记录</p>
           <p className="text-sm mt-1">执行一个 VLM 任务后，记录将在此显示</p>
           <button
@@ -218,39 +239,39 @@ export default function EpisodeListPage() {
         </div>
       ) : (
         <>
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-200 bg-gray-50">
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Episode ID</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">设备</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">任务指令</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">模型</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">状态</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">步数</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">耗时</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">时间</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-600">操作</th>
+                  <tr className="border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800">
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">Episode ID</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">设备</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">任务指令</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">模型</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">状态</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">步数</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">耗时</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">时间</th>
+                    <th className="text-right px-4 py-3 font-medium text-gray-600 dark:text-slate-400">操作</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
                   {paginatedEpisodes.map(ep => (
                     <tr
                       key={ep.episodeId}
-                      className="hover:bg-gray-50 cursor-pointer transition-colors"
+                      className="hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer transition-colors"
                       onClick={() => navigate(`/vlm/episodes/${ep.episodeId}`)}
                     >
-                      <td className="px-4 py-3 font-mono text-xs text-gray-500 max-w-32 truncate" title={ep.episodeId}>
+                      <td className="px-4 py-3 font-mono text-xs text-gray-500 dark:text-slate-400 max-w-32 truncate" title={ep.episodeId}>
                         {ep.episodeId?.slice(0, 12)}...
                       </td>
-                      <td className="px-4 py-3 text-gray-700">
+                      <td className="px-4 py-3 text-gray-700 dark:text-slate-300">
                         {getDeviceName(ep.deviceId)}
                       </td>
-                      <td className="px-4 py-3 text-gray-600 max-w-48 truncate" title={ep.taskPrompt}>
+                      <td className="px-4 py-3 text-gray-600 dark:text-slate-400 max-w-48 truncate" title={ep.taskPrompt}>
                         {ep.taskPrompt?.slice(0, 50)}{(ep.taskPrompt?.length || 0) > 50 ? '...' : ''}
                       </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">
+                      <td className="px-4 py-3 text-gray-500 dark:text-slate-400 text-xs">
                         {ep.modelName || '-'}
                       </td>
                       <td className="px-4 py-3">
@@ -262,13 +283,13 @@ export default function EpisodeListPage() {
                           {STATUS_LABELS[ep.status] || ep.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-gray-600 font-mono">
+                      <td className="px-4 py-3 text-gray-600 dark:text-slate-400 font-mono">
                         {ep.totalSteps}
                       </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">
+                      <td className="px-4 py-3 text-gray-500 dark:text-slate-400 text-xs">
                         {(ep.totalDurationMs / 1000).toFixed(1)}s
                       </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">
+                      <td className="px-4 py-3 text-gray-500 dark:text-slate-400 text-xs">
                         {new Date(ep.createdAt).toLocaleDateString('zh-CN')}
                       </td>
                       <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
@@ -324,28 +345,28 @@ export default function EpisodeListPage() {
       {/* Compile Modal */}
       {showCompileModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowCompileModal(null)}>
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl p-6 w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-2 mb-4">
               <FileCode2 size={20} className="text-purple-600" />
-              <h3 className="text-lg font-semibold text-gray-900">编译为脚本</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">编译为脚本</h3>
             </div>
             <div className="space-y-4 mb-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">脚本名称</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">脚本名称</label>
                 <input
                   type="text"
                   value={compileName}
                   onChange={e => setCompileName(e.target.value)}
                   placeholder="输入脚本名称"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  className="w-full border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">目标平台</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">目标平台</label>
                 <select
                   value={compilePlatform}
                   onChange={e => setCompilePlatform(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  className="w-full border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                 >
                   <option value="dy">抖音</option>
                   <option value="ks">快手</option>
@@ -357,7 +378,7 @@ export default function EpisodeListPage() {
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => setShowCompileModal(null)}
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm text-gray-700 transition-colors"
+                className="px-4 py-2 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg text-sm text-gray-700 dark:text-slate-300 transition-colors"
               >
                 取消
               </button>

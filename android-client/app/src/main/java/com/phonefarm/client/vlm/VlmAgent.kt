@@ -39,6 +39,7 @@ class VlmAgent @Inject constructor(
     private val actionValidator: ActionValidator,
     private val memoryManager: MemoryManager,
     private val promptTemplateManager: PromptTemplateManager,
+    private val actionExecutor: com.phonefarm.client.edge.ActionExecutor,
 ) {
 
     private val _agentState = MutableStateFlow<AgentState>(AgentState.Idle)
@@ -348,6 +349,21 @@ class VlmAgent @Inject constructor(
     }
 
     /**
+     * Update the target model name for subsequent [execute] calls.
+     */
+    fun updateModel(modelName: String) {
+        android.util.Log.i("VlmAgent", "VLM model updated to: $modelName")
+    }
+
+    /**
+     * Override the maximum steps per task.
+     */
+    fun updateMaxSteps(max: Int) {
+        maxSteps = max
+        android.util.Log.i("VlmAgent", "VLM max steps updated to: $max")
+    }
+
+    /**
      * Pause the currently running agent loop.
      * The agent will block at the start of the next iteration.
      */
@@ -433,52 +449,9 @@ class VlmAgent @Inject constructor(
     /**
      * Execute a validated [VLMAction] via the accessibility service.
      */
-    private fun executeAction(action: VLMAction) {
-        val service = PhoneFarmAccessibilityService.instance ?: return
-
-        when (action) {
-            is VLMAction.Tap -> {
-                service.click(action.x.toFloat(), action.y.toFloat())
-            }
-            is VLMAction.LongPress -> {
-                service.longPress(action.x.toFloat(), action.y.toFloat(), action.durationMs)
-            }
-            is VLMAction.Swipe -> {
-                service.swipe(
-                    action.x1.toFloat(), action.y1.toFloat(),
-                    action.x2.toFloat(), action.y2.toFloat(),
-                    action.durationMs,
-                )
-            }
-            is VLMAction.Type -> {
-                service.inputText(action.text)
-            }
-            is VLMAction.Back -> {
-                service.back()
-            }
-            is VLMAction.Home -> {
-                service.home()
-            }
-            is VLMAction.Launch -> {
-                // Launch via shell command (accessibility service cannot start activities)
-                try {
-                    val cmd = "am start -n ${action.packageName}/.MainActivity"
-                    Runtime.getRuntime().exec(cmd)
-                } catch (e: Exception) {
-                    try {
-                        // Fallback: use monkey
-                        Runtime.getRuntime().exec(
-                            "monkey -p ${action.packageName} -c android.intent.category.LAUNCHER 1"
-                        )
-                    } catch (_: Exception) {
-                        android.util.Log.e("VlmAgent", "Failed to launch ${action.packageName}")
-                    }
-                }
-            }
-            is VLMAction.Terminate -> {
-                // No UI action; termination is handled at the orchestration level
-            }
-        }
+    private suspend fun executeAction(action: VLMAction) {
+        val deviceAction = action.toDeviceAction()
+        actionExecutor.execute(deviceAction)
     }
 
     /**
@@ -562,4 +535,16 @@ sealed class VLMAction {
 
     /** Terminate the VLM task loop, optionally with a completion [message]. */
     data class Terminate(val message: String = "") : VLMAction()
+}
+
+/** Map VLMAction to the canonical DeviceAction model for unified execution. */
+private fun VLMAction.toDeviceAction(): com.phonefarm.client.edge.model.DeviceAction = when (this) {
+    is VLMAction.Tap -> com.phonefarm.client.edge.model.DeviceAction.Tap(x, y)
+    is VLMAction.LongPress -> com.phonefarm.client.edge.model.DeviceAction.LongPress(x, y, durationMs.toInt())
+    is VLMAction.Swipe -> com.phonefarm.client.edge.model.DeviceAction.Swipe(x1, y1, x2, y2, durationMs.toInt())
+    is VLMAction.Type -> com.phonefarm.client.edge.model.DeviceAction.Type(text)
+    is VLMAction.Back -> com.phonefarm.client.edge.model.DeviceAction.Back
+    is VLMAction.Home -> com.phonefarm.client.edge.model.DeviceAction.Home
+    is VLMAction.Launch -> com.phonefarm.client.edge.model.DeviceAction.Launch(packageName)
+    is VLMAction.Terminate -> com.phonefarm.client.edge.model.DeviceAction.Terminate(message.ifEmpty { null })
 }

@@ -68,19 +68,19 @@ export default function BatchOperationPanel() {
     <PageWrapper title="批量操作">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Device Selection */}
-        <div className="lg:col-span-1 bg-white rounded-xl border border-gray-200 p-4">
+        <div className="lg:col-span-1 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-sm">选择设备 ({selectedIds.size}/{onlineDevices.length})</h3>
+            <h3 className="font-semibold text-sm text-gray-900 dark:text-slate-100">选择设备 ({selectedIds.size}/{onlineDevices.length})</h3>
             <button onClick={toggleAll} className="text-xs text-blue-600 hover:text-blue-800">{selectedIds.size === onlineDevices.length ? '取消全选' : '全选在线'}</button>
           </div>
           <div className="space-y-1 max-h-[400px] overflow-y-auto">
-            {onlineDevices.length === 0 && <p className="text-gray-400 text-sm py-4 text-center">暂无在线设备</p>}
+            {onlineDevices.length === 0 && <p className="text-gray-400 dark:text-slate-500 text-sm py-4 text-center">暂无在线设备</p>}
             {onlineDevices.map(d => (
-              <label key={d.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+              <label key={d.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 cursor-pointer">
                 <input type="checkbox" checked={selectedIds.has(d.id)} onChange={() => toggleDevice(d.id)} />
                 <div>
-                  <div className="text-sm">{d.name || d.id}</div>
-                  <div className="text-xs text-gray-400">{d.model}</div>
+                  <div className="text-sm text-gray-900 dark:text-slate-100">{d.name || d.id}</div>
+                  <div className="text-xs text-gray-400 dark:text-slate-500">{d.model}</div>
                 </div>
               </label>
             ))}
@@ -88,12 +88,12 @@ export default function BatchOperationPanel() {
         </div>
 
         {/* Command Panel */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-4">
-          <h3 className="font-semibold text-sm mb-3">选择命令</h3>
+        <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-4">
+          <h3 className="font-semibold text-sm text-gray-900 dark:text-slate-100 mb-3">选择命令</h3>
           <div className="grid grid-cols-3 gap-2 mb-4">
             {COMMANDS.map(cmd => (
               <button key={cmd.key} onClick={() => setSelectedCommand(cmd.key)}
-                className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-sm transition-all ${selectedCommand === cmd.key ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-gray-100 hover:border-gray-200 text-gray-600'}`}>
+                className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-sm transition-all ${selectedCommand === cmd.key ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'border-gray-100 dark:border-slate-700 hover:border-gray-200 dark:hover:border-slate-600 text-gray-600 dark:text-slate-400'}`}>
                 <cmd.icon size={18} className={cmd.color} />
                 <span>{cmd.label}</span>
               </button>
@@ -102,9 +102,9 @@ export default function BatchOperationPanel() {
 
           {selectedCommand && COMMANDS.find(c => c.key === selectedCommand)?.needsParams && (
             <div className="mb-4">
-              <label className="block text-sm text-gray-600 mb-1">{COMMANDS.find(c => c.key === selectedCommand)!.paramLabel}</label>
+              <label className="block text-sm text-gray-600 dark:text-slate-400 mb-1">{COMMANDS.find(c => c.key === selectedCommand)!.paramLabel}</label>
               <textarea value={params} onChange={e => setParams(e.target.value)} rows={3} placeholder={`输入${COMMANDS.find(c => c.key === selectedCommand)!.paramLabel}...`}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono resize-none focus:outline-none focus:border-blue-400" />
+                className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 rounded-lg text-sm font-mono resize-none focus:outline-none focus:border-blue-400" />
             </div>
           )}
 
@@ -121,7 +121,7 @@ export default function BatchOperationPanel() {
               <h4 className="text-sm font-medium mb-2">执行结果</h4>
               <div className="space-y-1 max-h-[300px] overflow-y-auto">
                 {results.map(r => (
-                  <div key={r.deviceId} className={`flex items-center gap-2 p-2 rounded text-sm ${r.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                  <div key={r.deviceId} className={`flex items-center gap-2 p-2 rounded text-sm ${r.success ? 'bg-green-50 dark:bg-green-900/30 text-green-700' : 'bg-red-50 dark:bg-red-900/20 text-red-700'}`}>
                     {r.success ? <CheckSquare size={14} /> : <SquareIcon size={14} />}
                     <span className="truncate">{r.deviceId}</span>
                     {r.error && <span className="text-xs ml-auto">{r.error}</span>}

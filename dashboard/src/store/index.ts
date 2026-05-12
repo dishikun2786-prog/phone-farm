@@ -14,6 +14,7 @@ interface Device {
   screenOn: boolean;
   lastSeen: string;
   online?: boolean;
+  runtime?: string;
 }
 
 interface TaskTemplate {
@@ -122,7 +123,13 @@ function decodeJwt(token: string): UserInfo | null {
   } catch { return null; }
 }
 
+type Theme = 'light' | 'dark';
+
 interface AppState {
+  // Theme
+  theme: Theme;
+  toggleTheme: () => void;
+
   // Auth
   token: string | null;
   isAuthenticated: boolean;
@@ -191,7 +198,23 @@ interface AppState {
   deleteModel: (id: string) => Promise<void>;
 }
 
+function getInitialTheme(): Theme {
+  const stored = localStorage.getItem('theme');
+  if (stored === 'dark' || stored === 'light') return stored;
+  return 'light';
+}
+
 export const useStore = create<AppState>((set, get) => ({
+  // Theme
+  theme: getInitialTheme(),
+  toggleTheme: () => {
+    set(s => {
+      const next: Theme = s.theme === 'light' ? 'dark' : 'light';
+      localStorage.setItem('theme', next);
+      return { theme: next };
+    });
+  },
+
   // Auth
   token: localStorage.getItem('token'),
   isAuthenticated: !!localStorage.getItem('token'),

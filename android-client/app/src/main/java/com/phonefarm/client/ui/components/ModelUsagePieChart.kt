@@ -46,6 +46,7 @@ fun ModelUsagePieChart(
                 val total = slices.sumOf { it.value.toDouble() }.toFloat()
                 val colors = slices.map { it.color }
                 val sweepAngles = if (total > 0f) slices.map { (it.value / total) * 360f } else listOf(360f)
+	                val surfaceColor = MaterialTheme.colorScheme.surface
 
                 Canvas(
                     modifier = Modifier.size(120.dp),
@@ -66,7 +67,7 @@ fun ModelUsagePieChart(
                     }
                     // Center hole (donut style)
                     drawCircle(
-                        color = MaterialTheme.colorScheme.surface,
+                        color = surfaceColor,
                         radius = size.width * 0.3f,
                     )
                 }

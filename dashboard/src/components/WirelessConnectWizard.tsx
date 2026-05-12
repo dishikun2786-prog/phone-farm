@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Wifi, ArrowRight, Loader2, Check, Smartphone } from 'lucide-react';
 import { useStore } from '../store';
 import { api } from '../lib/api';
-import { toast } from '../hooks/useToast';
 
 interface Props {
   onClose?: () => void;

@@ -2,6 +2,7 @@ package com.phonefarm.client.ui.components
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -12,6 +13,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -102,11 +105,7 @@ fun ThinkingBlock(
                     text = if (isExpanded) "收起" else "展开",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .then(
-                            androidx.compose.foundation.clickable(onClick = onToggle)
-                                .let { it }
-                        ),
+                    modifier = Modifier.clickable(onClick = onToggle),
                 )
             }
 
@@ -189,7 +188,7 @@ fun ScreenshotPreview(
     ) {
         Box(contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                androidx.compose.material.icons.Icons.Default.Smartphone?.let {
+                Icons.Filled.PhoneAndroid.let {
                     androidx.compose.material3.Icon(
                         imageVector = it,
                         contentDescription = null,
@@ -276,7 +275,7 @@ fun ChatInputBar(
                     )
                     .then(
                         if (value.isNotBlank() && enabled)
-                            Modifier.let { androidx.compose.foundation.clickable(onClick = onSend).let { it } }
+                            Modifier.clickable(onClick = onSend)
                         else Modifier
                     ),
                 contentAlignment = Alignment.Center,
@@ -287,7 +286,6 @@ fun ChatInputBar(
     }
 }
 
-// Extension to handle clickable on Modifier without Compose clickable import issue
 private fun Modifier.conditionalClickable(enabled: Boolean, onClick: () -> Unit): Modifier {
-    return if (enabled) this.then(androidx.compose.foundation.clickable(onClick = onClick) as Modifier) else this
+    return if (enabled) this.then(Modifier.clickable(onClick = onClick)) else this
 }

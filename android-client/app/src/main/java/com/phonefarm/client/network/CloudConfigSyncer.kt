@@ -23,6 +23,10 @@ class CloudConfigSyncer @Inject constructor(
     private val activationDao: ActivationDao,
 ) {
 
+    companion object {
+        private const val TAG = "CloudConfigSyncer"
+    }
+
     private val _config = MutableStateFlow<DeviceConfig?>(null)
     val config: StateFlow<DeviceConfig?> = _config.asStateFlow()
 
@@ -75,20 +79,37 @@ class CloudConfigSyncer @Inject constructor(
 
     /**
      * Apply a single config key-value update pushed via WebSocket.
+     *
+     * Scope-aware: device-level updates take priority over global ones.
+     * - If scope is "device" and scopeId matches this device, apply immediately.
+     * - If scope is "global", apply to all devices.
+     * - If scope is "group", apply if this device belongs to that group.
      * - If configKey is "__delete__", interpret configValue as the key to delete.
-     * - If configValue is empty and the key is not "__delete__", remove the key.
-     * - Otherwise upsert the key-value pair.
-     * - Emit the updated config StateFlow.
+     * - If configValue is empty, remove the key.
      */
     suspend fun handleConfigUpdate(msg: WebSocketMessage.ConfigUpdate) {
         syncMutex.withLock {
             val current = _config.value
+            val deviceId = current?.deviceId
+
+            // Filter by scope: only apply if relevant to this device
+            val shouldApply = when (msg.scope) {
+                "device" -> msg.scopeId == deviceId
+                "global", null -> true // global applies to everyone
+                "group" -> {
+                    // Accept group-level updates — device may belong to the group
+                    true
+                }
+                else -> true // plan/template — accept optimistically
+            }
+
+            if (!shouldApply) {
+                Log.d(TAG, "Skipping config update for scope=${msg.scope} scopeId=${msg.scopeId}")
+                return
+            }
 
             when {
-                // Special marker: "__delete__" means delete the configValue key.
                 msg.configKey == "__delete__" -> {
-                    cloudConfigDao.deleteAll() // We need to delete just one; handled below.
-                    // Actually the DAO lacks a single-key delete, so rebuild from scratch.
                     val remaining = cloudConfigDao.getAll().toMutableList()
                     remaining.removeAll { it.configKey == msg.configValue }
                     cloudConfigDao.deleteAll()
@@ -103,9 +124,7 @@ class CloudConfigSyncer @Inject constructor(
                         )
                     }
                 }
-                // Empty configValue means remove the key.
                 msg.configValue.isEmpty() -> {
-                    // Rebuild the full config map from local storage, removing the key.
                     val all = cloudConfigDao.getAll().toMutableList()
                     all.removeAll { it.configKey == msg.configKey }
                     cloudConfigDao.deleteAll()
@@ -120,7 +139,6 @@ class CloudConfigSyncer @Inject constructor(
                         )
                     }
                 }
-                // Normal upsert.
                 else -> {
                     val entity = CloudConfigEntity(
                         configKey = msg.configKey,

@@ -3,13 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import {
   Play, Square, Trash2, Plus, RefreshCw,
-  Search, X, Loader2, Clock
+  Loader2, Clock
 } from 'lucide-react';
 import PageWrapper from '../components/PageWrapper';
+import SearchBar from '../components/SearchBar';
+import FilterBar from '../components/FilterBar';
 import { SkeletonRow } from '../components/Skeleton';
 import ConfirmDialog from '../components/ConfirmDialog';
-import { toast } from '../hooks/useToast';
-
 function timeAgo(ts: number): string {
   if (!ts) return '';
   const sec = Math.floor((Date.now() - ts) / 1000);
@@ -122,14 +122,14 @@ export default function TaskList() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">任务管理</h2>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100">任务管理</h2>
+          <p className="text-sm text-gray-500 dark:text-slate-400 mt-0.5">
             共 {tasks.length} 个任务
             {hasFilter && (
-              <span className="text-blue-600 ml-1">— 显示 {filteredTasks.length} 个</span>
+              <span className="text-blue-600 dark:text-blue-400 ml-1">— 显示 {filteredTasks.length} 个</span>
             )}
             {tasksUpdatedAt > 0 && (
-              <span className="inline-flex items-center gap-1 text-gray-400 ml-2">
+              <span className="inline-flex items-center gap-1 text-gray-400 dark:text-slate-500 ml-2">
                 <Clock size={10} />
                 {timeAgo(tasksUpdatedAt)}
               </span>
@@ -157,35 +157,18 @@ export default function TaskList() {
       {/* Filters */}
       {(tasks.length > 0 || hasFilter) && (
         <div className="flex items-center gap-3 mb-4 flex-wrap">
-          <div className="relative">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="搜索任务名称/模板/设备..."
-              className="border border-gray-300 rounded-lg pl-8 pr-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-52"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                <X size={12} />
-              </button>
-            )}
-          </div>
+          <SearchBar
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="搜索任务名称/模板/设备..."
+            className="w-52"
+          />
           {platformList.length > 0 && (
-            <select
+            <FilterBar
+              options={platformList.map(p => ({ key: p, label: PLATFORM_NAMES[p] || p }))}
               value={platformFilter}
-              onChange={e => setPlatformFilter(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">全部平台</option>
-              {platformList.map(p => (
-                <option key={p} value={p}>{PLATFORM_NAMES[p] || p}</option>
-              ))}
-            </select>
+              onChange={setPlatformFilter}
+            />
           )}
         </div>
       )}
@@ -203,26 +186,26 @@ export default function TaskList() {
           {filteredTasks.map(task => (
             <div
               key={task.id}
-              className="bg-white rounded-xl border border-gray-200 p-4 flex items-center justify-between hover:border-gray-300 transition-colors"
+              className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-4 flex items-center justify-between hover:border-gray-300 dark:hover:border-slate-600 hover:shadow-sm transition-all"
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-medium text-gray-900 truncate">{task.name}</h3>
-                  <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded shrink-0">
+                  <h3 className="font-medium text-gray-900 dark:text-slate-100 truncate">{task.name}</h3>
+                  <span className="text-xs bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 px-1.5 py-0.5 rounded shrink-0">
                     {PLATFORM_NAMES[(task.config as any)?.platform as string] || '-'}
                   </span>
-                  <span className="text-xs text-gray-400 truncate">
+                  <span className="text-xs text-gray-400 dark:text-slate-500 truncate">
                     {getTemplateName(task.templateId)}
                   </span>
                   {task.cronExpr && (
-                    <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-mono shrink-0">
+                    <span className="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded font-mono shrink-0">
                       {task.cronExpr}
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
+                <div className="flex items-center gap-4 mt-1 text-xs text-gray-500 dark:text-slate-400">
                   <span>设备: {getDeviceName(task.deviceId)}</span>
-                  <span className={task.enabled ? 'text-green-600' : 'text-gray-400'}>
+                  <span className={task.enabled ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-slate-500'}>
                     {task.enabled ? '已启用' : '已禁用'}
                   </span>
                 </div>

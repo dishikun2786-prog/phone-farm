@@ -24,7 +24,7 @@ interface GroupState {
   setMasterDevice: (deviceId: string | null) => void;
 }
 
-export const useGroupStore = create<GroupState>((set, get) => ({
+export const useGroupStore = create<GroupState>((set, _get) => ({
   groups: [],
   activeGroupId: null,
   masterDeviceId: null,

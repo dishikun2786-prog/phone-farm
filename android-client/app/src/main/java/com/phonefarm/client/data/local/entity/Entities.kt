@@ -184,3 +184,15 @@ data class CrashReportEntity(
     val timestamp: Long,
     val reported: Boolean = false
 )
+
+@Entity(tableName = "platform_accounts")
+data class PlatformAccountEntity(
+    @PrimaryKey val id: String,
+    val platform: String,
+    val username: String,
+    val deviceId: String?,
+    val healthStatus: String, // UNKNOWN, HEALTHY, EXPIRED, LOCKED, RATE_LIMITED, BANNED, ERROR
+    val lastCheckedAt: Long?,
+    val createdAt: Long,
+    val updatedAt: Long
+)

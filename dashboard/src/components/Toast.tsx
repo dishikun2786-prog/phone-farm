@@ -16,14 +16,14 @@ export default function ToastContainer() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+    <div className="fixed top-4 right-4 max-md:top-auto max-md:bottom-4 max-md:left-4 max-md:right-4 z-[100] flex flex-col gap-2 max-w-sm w-full pointer-events-none">
       {toasts.map(t => {
         const style = ICON_MAP[t.type];
         const Icon = style.icon;
         return (
           <div
             key={t.id}
-            className={`pointer-events-auto flex items-start gap-2.5 px-4 py-3 rounded-lg border shadow-lg ${style.bg} ${style.border} animate-slide-in-right`}
+            className={`pointer-events-auto flex items-start gap-2.5 px-4 py-3 rounded-lg border shadow-lg ${style.bg} ${style.border} md:animate-slide-in-right max-md:animate-slide-up`}
           >
             <Icon size={18} className={style.text + ' mt-0.5 shrink-0'} />
             <span className={`text-sm font-medium flex-1 ${style.text}`}>{t.message}</span>

@@ -192,6 +192,19 @@ class PhoneFarmAccessibilityService : AccessibilityService() {
     }
 
     /**
+     * Dismiss the soft keyboard if visible.
+     * Uses performGlobalAction(11) on API 36+ (GLOBAL_ACTION_DISMISS_KEYBOARD),
+     * falls back to back() as a heuristic dismissal.
+     */
+    fun dismissKeyboard(): Boolean {
+        return try {
+            performGlobalAction(/* GLOBAL_ACTION_DISMISS_KEYBOARD */ 11)
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
      * TODO: Trigger HOME global action.
      */
     fun home(): Boolean {

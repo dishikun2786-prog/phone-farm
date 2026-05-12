@@ -24,3 +24,6 @@ android-client/.gradle/
 android-client/app/schemas/
 # Gradle
 *.gradle/
+# Kotlin/C++ build caches
+android-client/.kotlin/
+android-client/app/.cxx/

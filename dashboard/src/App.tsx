@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useStore } from './store';
 import { useWebSocket } from './hooks/useWebSocket';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from './components/Layout';
@@ -15,7 +16,7 @@ import EpisodeListPage from './pages/EpisodeListPage';
 import ScriptManager from './pages/ScriptManager';
 import ModelConfigPage from './pages/ModelConfigPage';
 import KeyMapPage from './pages/KeyMapPage';
-import SettingsPage from './pages/SettingsPage';
+import SystemControlPanel from './pages/SystemControlPanel';
 import GroupControlPanel from './components/GroupControlPanel';
 import EpisodePlayer from './components/EpisodePlayer';
 import AdminPanel from './pages/admin/AdminPanel';
@@ -26,6 +27,11 @@ import AuditLogViewer from './pages/admin/AuditLogViewer';
 import VlmUsageDashboard from './pages/admin/VlmUsageDashboard';
 import AlertRuleConfig from './pages/admin/AlertRuleConfig';
 import ServerHealthDashboard from './pages/admin/ServerHealthDashboard';
+import ConfigManagement from './pages/config/ConfigManagement';
+import ConfigGlobalEditor from './pages/config/ConfigGlobalEditor';
+import ConfigDeviceEditor from './pages/config/ConfigDeviceEditor';
+import ConfigTemplateEditor from './pages/config/ConfigTemplateEditor';
+import ConfigAuditLog from './pages/config/ConfigAuditLog';
 import type { EpisodeStep } from './components/EpisodePlayer';
 import ToastContainer from './components/Toast';
 import { api } from './lib/api';
@@ -42,7 +48,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/vlm/models': 'VLM 模型配置',
   '/groups': '群控管理',
   '/keymaps': '键位映射',
-  '/settings': '系统设置',
+  '/settings': '服务控制',
   '/admin': '管理面板',
   '/admin/card-keys': '卡密管理',
   '/admin/groups': '设备分组',
@@ -51,6 +57,11 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/vlm-usage': 'VLM 用量统计',
   '/admin/alerts': '告警规则',
   '/admin/health': '服务健康监控',
+  '/config': '配置管理',
+  '/config/global': '全局配置编辑',
+  '/config/device': '设备配置编辑',
+  '/config/templates': '配置模板管理',
+  '/config/audit': '配置变更审计',
 };
 
 function useDocumentTitle() {
@@ -160,6 +171,25 @@ function EpisodeDetailPage() {
 function AppInner() {
   useDocumentTitle();
   const updateLiveInfo = useStore(s => s.updateLiveInfo);
+  const theme = useStore(s => s.theme);
+  const toggleTheme = useStore(s => s.toggleTheme);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+  }, [theme]);
+
+  useKeyboardShortcuts({
+    onToggleTheme: toggleTheme,
+    onFocusSearch: () => {
+      const searchInput = document.querySelector<HTMLInputElement>('input[type="text"][placeholder*="搜索"]');
+      searchInput?.focus();
+    },
+    onEscape: () => {
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+    },
+  });
 
   const handleWsMessage = useCallback((msg: any) => {
     switch (msg.type) {
@@ -186,6 +216,10 @@ function AppInner() {
           taskMessage: msg.message,
         });
         break;
+      case 'config_update':
+        // Real-time config change notification
+        console.log(`[Config] ${msg.configKey} updated (scope=${msg.scope}, v${msg.version})`);
+        break;
     }
   }, [updateLiveInfo]);
 
@@ -206,7 +240,7 @@ function AppInner() {
         <Route path="/vlm/models" element={<ModelConfigPage />} />
         <Route path="/groups" element={<GroupControlPanel />} />
         <Route path="/keymaps" element={<KeyMapPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/settings" element={<SystemControlPanel />} />
         <Route path="/admin" element={<AdminPanel />} />
         <Route path="/admin/card-keys" element={<CardKeyManagement />} />
         <Route path="/admin/groups" element={<DeviceGroupManagement />} />
@@ -215,6 +249,11 @@ function AppInner() {
         <Route path="/admin/vlm-usage" element={<VlmUsageDashboard />} />
         <Route path="/admin/alerts" element={<AlertRuleConfig />} />
         <Route path="/admin/health" element={<ServerHealthDashboard />} />
+        <Route path="/config" element={<ConfigManagement />} />
+        <Route path="/config/global" element={<ConfigGlobalEditor />} />
+        <Route path="/config/device" element={<ConfigDeviceEditor />} />
+        <Route path="/config/templates" element={<ConfigTemplateEditor />} />
+        <Route path="/config/audit" element={<ConfigAuditLog />} />
       </Routes>
     </Layout>
   );

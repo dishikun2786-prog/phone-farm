@@ -1,9 +1,5 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Keyboard, Plus, Pencil, Trash2, Monitor } from 'lucide-react';
-import { api } from '../lib/api';
-import { toast } from '../hooks/useToast';
-import { BUILTIN_PRESETS } from '../pages/KeyMapPage';
+import { Keyboard, Plus, Monitor } from 'lucide-react';
 
 interface KeyMapProfile {
   id: string;
@@ -21,7 +17,7 @@ interface Props {
   deviceHeight?: number;
 }
 
-export default function KeyMapEditor({ onSelect, activeProfileId, deviceWidth = 1080, deviceHeight = 2400 }: Props) {
+export default function KeyMapEditor({ activeProfileId, deviceWidth = 1080, deviceHeight = 2400 }: Props) {
   const navigate = useNavigate();
 
   return (

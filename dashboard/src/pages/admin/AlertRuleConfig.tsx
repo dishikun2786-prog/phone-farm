@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import PageWrapper from '../../components/PageWrapper';
 import { api } from '../../lib/api';
 import { toast } from '../../hooks/useToast';
-import { Bell, BellOff, Plus, Trash2, Play, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { Bell, BellOff, Plus, Trash2, CheckCircle2, XCircle, Clock } from 'lucide-react';
 
 interface AlertRule {
   id: string;
@@ -110,11 +110,11 @@ export default function AlertRuleConfig() {
   return (
     <PageWrapper title="告警规则">
       {/* Tab Switch */}
-      <div className="flex items-center gap-1 mb-4 bg-gray-100 rounded-lg p-1 w-fit">
-        <button onClick={() => setActiveTab('rules')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab === 'rules' ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>
+      <div className="flex items-center gap-1 mb-4 bg-gray-100 dark:bg-slate-700 rounded-lg p-1 w-fit">
+        <button onClick={() => setActiveTab('rules')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab === 'rules' ? 'bg-white dark:bg-slate-800 shadow text-gray-900 dark:text-slate-100' : 'text-gray-500 dark:text-slate-400'}`}>
           规则配置 ({rules.length})
         </button>
-        <button onClick={() => setActiveTab('history')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab === 'history' ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}>
+        <button onClick={() => setActiveTab('history')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeTab === 'history' ? 'bg-white dark:bg-slate-800 shadow text-gray-900 dark:text-slate-100' : 'text-gray-500 dark:text-slate-400'}`}>
           告警历史 ({history.length})
         </button>
       </div>
@@ -126,36 +126,36 @@ export default function AlertRuleConfig() {
             <Plus size={14} /> 新增规则
           </button>
 
-          {loading ? <p className="text-gray-400 text-center py-8">加载中...</p> :
-           rules.length === 0 ? <p className="text-gray-400 text-center py-8">暂无告警规则</p> :
+          {loading ? <p className="text-gray-400 dark:text-slate-500 text-center py-8">加载中...</p> :
+           rules.length === 0 ? <p className="text-gray-400 dark:text-slate-500 text-center py-8">暂无告警规则</p> :
            <div className="space-y-3">
             {rules.map(rule => (
-            <div key={rule.id} className={`bg-white rounded-xl border p-4 transition-all ${rule.enabled ? 'border-gray-200' : 'border-gray-100 opacity-60'}`}>
+            <div key={rule.id} className={`bg-white dark:bg-slate-800 rounded-xl border p-4 transition-all ${rule.enabled ? 'border-gray-200 dark:border-slate-700' : 'border-gray-100 dark:border-slate-700 opacity-60'}`}>
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-gray-900">{rule.name}</span>
-                    <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${rule.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    <span className="font-medium text-gray-900 dark:text-slate-100">{rule.name}</span>
+                    <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${rule.enabled ? 'bg-green-100 dark:bg-green-900/30 text-green-700' : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400'}`}>
                       {rule.enabled ? '启用' : '禁用'}
                     </span>
                   </div>
-                  <div className="text-sm text-gray-500 mt-1">
+                  <div className="text-sm text-gray-500 dark:text-slate-400 mt-1">
                     {METRIC_OPTIONS.find(m => m.value === rule.metric)?.label || rule.metric}
                     {' '}{rule.operator === 'gt' ? '>' : rule.operator === 'lt' ? '<' : rule.operator}{' '}
-                    <span className="font-mono font-medium text-gray-700">{rule.threshold}</span>
+                    <span className="font-mono font-medium text-gray-700 dark:text-slate-300">{rule.threshold}</span>
                     {' · 持续 '}{formatDuration(rule.durationMs)}
                   </div>
                   <div className="flex flex-wrap gap-1 mt-2">
                     {rule.channels.map(ch => (
-                      <span key={ch} className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">{CHANNEL_OPTIONS.find(c => c.value === ch)?.label || ch}</span>
+                      <span key={ch} className="px-1.5 py-0.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400 rounded text-xs">{CHANNEL_OPTIONS.find(c => c.value === ch)?.label || ch}</span>
                     ))}
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
-                  <button onClick={() => handleToggle(rule)} className="p-1.5 hover:bg-gray-100 rounded" title={rule.enabled ? '禁用' : '启用'}>
+                  <button onClick={() => handleToggle(rule)} className="p-1.5 hover:bg-gray-100 dark:bg-slate-700 dark:hover:bg-slate-700 rounded" title={rule.enabled ? '禁用' : '启用'}>
                     {rule.enabled ? <BellOff size={14} /> : <Bell size={14} />}
                   </button>
-                  <button onClick={() => handleDelete(rule.id)} className="p-1.5 hover:bg-red-50 text-red-400 hover:text-red-600 rounded"><Trash2 size={14} /></button>
+                  <button onClick={() => handleDelete(rule.id)} className="p-1.5 hover:bg-red-50 dark:bg-red-900/20 dark:hover:bg-red-900/20 text-red-400 hover:text-red-600 rounded"><Trash2 size={14} /></button>
                 </div>
               </div>
             </div>
@@ -164,20 +164,20 @@ export default function AlertRuleConfig() {
         </>
       ) : (
         <>
-          {historyLoading ? <p className="text-gray-400 text-center py-8">加载中...</p> :
-           history.length === 0 ? <p className="text-gray-400 text-center py-8">暂无告警历史</p> :
+          {historyLoading ? <p className="text-gray-400 dark:text-slate-500 text-center py-8">加载中...</p> :
+           history.length === 0 ? <p className="text-gray-400 dark:text-slate-500 text-center py-8">暂无告警历史</p> :
            <div className="space-y-2">
             {history.map(h => (
-            <div key={h.id} className={`bg-white rounded-lg border p-3 flex items-center gap-3 ${h.status === 'firing' ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50'}`}>
+            <div key={h.id} className={`bg-white dark:bg-slate-800 rounded-lg border p-3 flex items-center gap-3 ${h.status === 'firing' ? 'border-red-200 bg-red-50 dark:bg-red-900/20' : 'border-green-200 bg-green-50 dark:bg-green-900/30'}`}>
               {h.status === 'firing' ? <XCircle size={18} className="text-red-500 shrink-0" /> : <CheckCircle2 size={18} className="text-green-500 shrink-0" />}
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium">{h.message}</div>
-                <div className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
+                <div className="text-xs text-gray-500 dark:text-slate-400 flex items-center gap-2 mt-0.5">
                   <Clock size={12} /> {new Date(h.firedAt).toLocaleString('zh-CN')}
                   {h.resolvedAt && <span>→ {new Date(h.resolvedAt).toLocaleString('zh-CN')}</span>}
                 </div>
               </div>
-              <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${h.status === 'firing' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+              <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${h.status === 'firing' ? 'bg-red-100 dark:bg-red-900/30 text-red-700' : 'bg-green-100 dark:bg-green-900/30 text-green-700'}`}>
                 {h.status === 'firing' ? '触发中' : '已解除'}
               </span>
             </div>
@@ -189,25 +189,25 @@ export default function AlertRuleConfig() {
       {/* Create/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowModal(false)}>
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-semibold mb-4">{editingRule.id ? '编辑规则' : '新增规则'}</h3>
             <div className="space-y-3">
-              <div><label className="block text-sm text-gray-600 mb-1">规则名称</label><input value={editingRule.name || ''} onChange={e => setEditingRule(r => ({ ...r, name: e.target.value }))} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" /></div>
-              <div><label className="block text-sm text-gray-600 mb-1">监控指标</label>
-                <select value={editingRule.metric} onChange={e => setEditingRule(r => ({ ...r, metric: e.target.value }))} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+              <div><label className="block text-sm text-gray-600 dark:text-slate-400 mb-1">规则名称</label><input value={editingRule.name || ''} onChange={e => setEditingRule(r => ({ ...r, name: e.target.value }))} className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-700 dark:text-slate-100" /></div>
+              <div><label className="block text-sm text-gray-600 dark:text-slate-400 mb-1">监控指标</label>
+                <select value={editingRule.metric} onChange={e => setEditingRule(r => ({ ...r, metric: e.target.value }))} className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-700 dark:text-slate-100">
                   {METRIC_OPTIONS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-sm text-gray-600 mb-1">条件</label>
-                  <select value={editingRule.operator} onChange={e => setEditingRule(r => ({ ...r, operator: e.target.value as any }))} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+                <div><label className="block text-sm text-gray-600 dark:text-slate-400 mb-1">条件</label>
+                  <select value={editingRule.operator} onChange={e => setEditingRule(r => ({ ...r, operator: e.target.value as any }))} className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-700 dark:text-slate-100">
                     <option value="gt">大于 (&gt;)</option><option value="lt">小于 (&lt;)</option><option value="gte">大于等于 (&gt;=)</option><option value="lte">小于等于 (&lt;=)</option><option value="eq">等于 (=)</option>
                   </select>
                 </div>
-                <div><label className="block text-sm text-gray-600 mb-1">阈值</label><input type="number" value={editingRule.threshold} onChange={e => setEditingRule(r => ({ ...r, threshold: +e.target.value }))} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" /></div>
+                <div><label className="block text-sm text-gray-600 dark:text-slate-400 mb-1">阈值</label><input type="number" value={editingRule.threshold} onChange={e => setEditingRule(r => ({ ...r, threshold: +e.target.value }))} className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-700 dark:text-slate-100" /></div>
               </div>
-              <div><label className="block text-sm text-gray-600 mb-1">持续时间 (毫秒)</label><input type="number" value={editingRule.durationMs} onChange={e => setEditingRule(r => ({ ...r, durationMs: +e.target.value }))} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" /></div>
-              <div><label className="block text-sm text-gray-600 mb-1">通知渠道</label>
+              <div><label className="block text-sm text-gray-600 dark:text-slate-400 mb-1">持续时间 (毫秒)</label><input type="number" value={editingRule.durationMs} onChange={e => setEditingRule(r => ({ ...r, durationMs: +e.target.value }))} className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-700 dark:text-slate-100" /></div>
+              <div><label className="block text-sm text-gray-600 dark:text-slate-400 mb-1">通知渠道</label>
                 <div className="flex flex-wrap gap-2">
                   {CHANNEL_OPTIONS.map(c => (
                     <label key={c.value} className="flex items-center gap-1.5 text-sm cursor-pointer">
@@ -220,7 +220,7 @@ export default function AlertRuleConfig() {
               </div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-sm">取消</button>
+              <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm">取消</button>
               <button onClick={handleSave} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">保存</button>
             </div>
           </div>

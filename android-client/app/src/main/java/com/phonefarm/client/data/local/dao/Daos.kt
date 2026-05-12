@@ -276,6 +276,34 @@ interface OfflineMessageDao {
     suspend fun trimTo(keep: Int = 500)
 }
 
+// === Platform Accounts ===
+@Dao
+interface PlatformAccountDao {
+    @Query("SELECT * FROM platform_accounts ORDER BY createdAt DESC")
+    fun observeAll(): Flow<List<PlatformAccountEntity>>
+
+    @Query("SELECT * FROM platform_accounts ORDER BY createdAt DESC")
+    suspend fun getAll(): List<PlatformAccountEntity>
+
+    @Query("SELECT * FROM platform_accounts WHERE id = :id")
+    suspend fun getById(id: String): PlatformAccountEntity?
+
+    @Query("SELECT * FROM platform_accounts WHERE platform = :platform ORDER BY createdAt DESC")
+    suspend fun getByPlatform(platform: String): List<PlatformAccountEntity>
+
+    @Query("SELECT * FROM platform_accounts WHERE deviceId = :deviceId ORDER BY createdAt DESC")
+    suspend fun getByDevice(deviceId: String): List<PlatformAccountEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entity: PlatformAccountEntity)
+
+    @Query("DELETE FROM platform_accounts WHERE id = :id")
+    suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM platform_accounts")
+    suspend fun deleteAll()
+}
+
 // === Crash Reports ===
 @Dao
 interface CrashReportDao {

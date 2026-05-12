@@ -121,3 +121,138 @@ export const vlmScripts = pgTable('vlm_scripts', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+// ── Activation (card key system) ──
+
+export const cardKeys = pgTable('card_keys', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  code: varchar('code', { length: 64 }).unique().notNull(),
+  days: integer('days').notNull(),
+  maxDevices: integer('max_devices').default(1).notNull(),
+  usedDevices: integer('used_devices').default(0).notNull(),
+  status: varchar('status', { length: 16 }).default('active').notNull(), // active, used, expired, disabled
+  createdBy: varchar('created_by', { length: 128 }).default('system').notNull(),
+  note: text('note'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+});
+
+export const deviceBindings = pgTable('device_bindings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  cardKeyId: uuid('card_key_id').references(() => cardKeys.id, { onDelete: 'cascade' }).notNull(),
+  deviceId: varchar('device_id', { length: 256 }).notNull(),
+  deviceName: varchar('device_name', { length: 256 }).notNull(),
+  boundAt: timestamp('bound_at', { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+});
+
+// ── Device Groups ──
+
+export const deviceGroups = pgTable('device_groups', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: varchar('name', { length: 256 }).notNull(),
+  description: text('description'),
+  deviceIds: jsonb('device_ids').default([]).notNull(),
+  tags: jsonb('tags').default([]).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// ── Platform Accounts (social media) ──
+
+export const platformAccounts = pgTable('platform_accounts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  platform: platformEnum('platform').notNull(),
+  username: varchar('username', { length: 256 }).notNull(),
+  passwordEncrypted: text('password_encrypted').notNull(),
+  deviceId: uuid('device_id').references(() => devices.id, { onDelete: 'set null' }),
+  status: varchar('status', { length: 16 }).default('active').notNull(), // active, logged_out, banned, expired
+  lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// ── API Keys ──
+
+export const apiKeys = pgTable('api_keys', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  name: varchar('name', { length: 256 }).notNull(),
+  keyPrefix: varchar('key_prefix', { length: 32 }).notNull(),
+  keyHash: varchar('key_hash', { length: 128 }).notNull(),
+  permissions: jsonb('permissions').default(['read']).notNull(),
+  ipWhitelist: jsonb('ip_whitelist').default([]).notNull(),
+  maxUses: integer('max_uses').default(0),
+  usedCount: integer('used_count').default(0),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  enabled: boolean('enabled').default(true).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// ── Cron Jobs ──
+
+export const cronJobs = pgTable('cron_jobs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'cascade' }),
+  cronExpr: varchar('cron_expr', { length: 128 }).notNull(),
+  deviceIds: jsonb('device_ids').default([]).notNull(),
+  enabled: boolean('enabled').default(true).notNull(),
+  lastRunAt: timestamp('last_run_at', { withTimezone: true }),
+  nextRunAt: timestamp('next_run_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// ── Crash Reports ──
+
+export const crashReports = pgTable('crash_reports', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  deviceId: varchar('device_id', { length: 256 }).notNull(),
+  deviceName: varchar('device_name', { length: 256 }),
+  appVersion: varchar('app_version', { length: 32 }),
+  androidVersion: varchar('android_version', { length: 16 }),
+  crashType: varchar('crash_type', { length: 32 }).notNull(), // java_exception, native_signal, anr, oom, unknown
+  stackTrace: text('stack_trace').notNull(),
+  threadName: varchar('thread_name', { length: 128 }),
+  scriptName: varchar('script_name', { length: 256 }),
+  memoryInfo: jsonb('memory_info'),
+  recentLogs: jsonb('recent_logs'),
+  timestamp: timestamp('timestamp', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// ── Account Deletions (GDPR) ──
+
+export const accountDeletions = pgTable('account_deletions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  username: varchar('username', { length: 128 }),
+  requestedAt: timestamp('requested_at', { withTimezone: true }).defaultNow().notNull(),
+  scheduledDeletionAt: timestamp('scheduled_deletion_at', { withTimezone: true }).notNull(),
+  cancelled: boolean('cancelled').default(false).notNull(),
+});
+
+// ── Webhook Configs ──
+
+export const webhookConfigs = pgTable('webhook_configs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  url: varchar('url', { length: 1024 }).notNull(),
+  events: jsonb('events').default([]).notNull(),
+  secret: varchar('secret', { length: 256 }),
+  enabled: boolean('enabled').default(true).notNull(),
+  retryCount: integer('retry_count').default(0),
+  maxRetries: integer('max_retries').default(3),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// ── Alert Rules ──
+
+export const alertRules = pgTable('alert_rules', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: varchar('name', { length: 256 }).notNull(),
+  type: varchar('type', { length: 32 }).notNull(), // device_offline, task_failure, battery_low, etc.
+  conditions: jsonb('conditions').default({}).notNull(),
+  channels: jsonb('channels').default([]).notNull(), // webhook, email, push
+  enabled: boolean('enabled').default(true).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});

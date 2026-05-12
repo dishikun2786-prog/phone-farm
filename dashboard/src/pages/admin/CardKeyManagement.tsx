@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import PageWrapper from '../../components/PageWrapper';
 import { api } from '../../lib/api';
 import { toast } from '../../hooks/useToast';
-import { Key, Plus, Download, Ban, Search, Copy, Check, X } from 'lucide-react';
+import { Plus, Download, Ban, Search, Copy, X } from 'lucide-react';
 
 interface CardKey {
   id: string;
@@ -101,10 +101,10 @@ export default function CardKeyManagement() {
   });
 
   const STATUS_TAGS: Record<string, { label: string; className: string }> = {
-    active: { label: '可用', className: 'bg-green-100 text-green-700' },
-    used: { label: '已使用', className: 'bg-blue-100 text-blue-700' },
-    expired: { label: '已过期', className: 'bg-yellow-100 text-yellow-700' },
-    disabled: { label: '已禁用', className: 'bg-red-100 text-red-700' },
+    active: { label: '可用', className: 'bg-green-100 dark:bg-green-900/30 text-green-700' },
+    used: { label: '已使用', className: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700' },
+    expired: { label: '已过期', className: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700' },
+    disabled: { label: '已禁用', className: 'bg-red-100 dark:bg-red-900/30 text-red-700' },
   };
 
   return (
@@ -112,12 +112,12 @@ export default function CardKeyManagement() {
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <div className="relative flex-1 min-w-0 max-w-xs">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜索卡密..."
-            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-400" />
+            className="w-full pl-9 pr-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm dark:bg-slate-700 dark:text-slate-100 focus:outline-none focus:border-blue-400" />
         </div>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+          className="px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-700 dark:text-slate-100">
           <option value="all">全部状态</option>
           <option value="active">可用</option>
           <option value="used">已使用</option>
@@ -127,48 +127,48 @@ export default function CardKeyManagement() {
         <button onClick={() => setShowGenerate(true)} className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
           <Plus size={16} /> 生成卡密
         </button>
-        <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50">
+        <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-slate-700">
           <Download size={16} /> 导出 CSV
         </button>
         {selectedIds.size > 0 && (
-          <button onClick={() => handleDisable(Array.from(selectedIds))} className="flex items-center gap-1.5 px-3 py-2 border border-red-200 text-red-600 rounded-lg text-sm hover:bg-red-50">
+          <button onClick={() => handleDisable(Array.from(selectedIds))} className="flex items-center gap-1.5 px-3 py-2 border border-red-200 text-red-600 rounded-lg text-sm hover:bg-red-50 dark:hover:bg-red-900/20">
             <Ban size={16} /> 禁用 {selectedIds.size} 个
           </button>
         )}
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
+            <thead className="bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
               <tr>
                 <th className="w-10 px-4 py-3"><input type="checkbox" checked={selectedIds.size === filteredKeys.length && filteredKeys.length > 0} onChange={toggleAll} /></th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">卡密</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">有效期</th>
-                <th className="text-center px-4 py-3 font-medium text-gray-600">设备配额</th>
-                <th className="text-center px-4 py-3 font-medium text-gray-600">状态</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">备注</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">创建时间</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">卡密</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">有效期</th>
+                <th className="text-center px-4 py-3 font-medium text-gray-600 dark:text-slate-400">设备配额</th>
+                <th className="text-center px-4 py-3 font-medium text-gray-600 dark:text-slate-400">状态</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">备注</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400">创建时间</th>
                 <th className="w-12 px-4 py-3"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
               {loading ? (
-                <tr><td colSpan={8} className="text-center py-12 text-gray-400">加载中...</td></tr>
+                <tr><td colSpan={8} className="text-center py-12 text-gray-400 dark:text-slate-500">加载中...</td></tr>
               ) : filteredKeys.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-12 text-gray-400">暂无数据</td></tr>
+                <tr><td colSpan={8} className="text-center py-12 text-gray-400 dark:text-slate-500">暂无数据</td></tr>
               ) : filteredKeys.map(k => (
-                <tr key={k.id} className="hover:bg-gray-50">
+                <tr key={k.id} className="hover:bg-gray-50 dark:hover:bg-slate-700">
                   <td className="px-4 py-3"><input type="checkbox" checked={selectedIds.has(k.id)} onChange={() => toggleSelect(k.id)} /></td>
                   <td className="px-4 py-3 font-mono text-xs">{k.code}</td>
-                  <td className="px-4 py-3 text-gray-500">{k.days} 天</td>
+                  <td className="px-4 py-3 text-gray-500 dark:text-slate-400">{k.days} 天</td>
                   <td className="px-4 py-3 text-center">{k.usedDevices}/{k.maxDevices}</td>
                   <td className="px-4 py-3 text-center"><span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${STATUS_TAGS[k.status]?.className || ''}`}>{STATUS_TAGS[k.status]?.label || k.status}</span></td>
-                  <td className="px-4 py-3 text-gray-500 max-w-[120px] truncate">{k.note || '-'}</td>
-                  <td className="px-4 py-3 text-gray-400 text-xs">{new Date(k.createdAt).toLocaleString('zh-CN')}</td>
+                  <td className="px-4 py-3 text-gray-500 dark:text-slate-400 max-w-[120px] truncate">{k.note || '-'}</td>
+                  <td className="px-4 py-3 text-gray-400 dark:text-slate-500 text-xs">{new Date(k.createdAt).toLocaleString('zh-CN')}</td>
                   <td className="px-4 py-3">
-                    <button onClick={() => copyToClipboard(k.code)} className="p-1 hover:bg-gray-100 rounded" title="复制"><Copy size={14} /></button>
+                    <button onClick={() => copyToClipboard(k.code)} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded" title="复制"><Copy size={14} /></button>
                   </td>
                 </tr>
               ))}
@@ -180,27 +180,27 @@ export default function CardKeyManagement() {
       {/* Generate Modal */}
       {showGenerate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowGenerate(false)}>
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">生成卡密</h3>
-              <button onClick={() => setShowGenerate(false)} className="p-1 hover:bg-gray-100 rounded"><X size={18} /></button>
+              <button onClick={() => setShowGenerate(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"><X size={18} /></button>
             </div>
             <div className="space-y-3">
-              <div><label className="block text-sm text-gray-600 mb-1">生成数量</label><input type="number" value={generateForm.count} onChange={e => setGenerateForm(f => ({ ...f, count: +e.target.value }))} min={1} max={500} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" /></div>
-              <div><label className="block text-sm text-gray-600 mb-1">有效期 (天)</label><input type="number" value={generateForm.days} onChange={e => setGenerateForm(f => ({ ...f, days: +e.target.value }))} min={1} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" /></div>
-              <div><label className="block text-sm text-gray-600 mb-1">最大设备数</label><input type="number" value={generateForm.maxDevices} onChange={e => setGenerateForm(f => ({ ...f, maxDevices: +e.target.value }))} min={1} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" /></div>
-              <div><label className="block text-sm text-gray-600 mb-1">前缀 (可选)</label><input type="text" value={generateForm.prefix} onChange={e => setGenerateForm(f => ({ ...f, prefix: e.target.value }))} placeholder="如: VIP" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" /></div>
-              <div><label className="block text-sm text-gray-600 mb-1">备注 (可选)</label><input type="text" value={generateForm.note} onChange={e => setGenerateForm(f => ({ ...f, note: e.target.value }))} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" /></div>
+              <div><label className="block text-sm text-gray-600 dark:text-slate-400 mb-1">生成数量</label><input type="number" value={generateForm.count} onChange={e => setGenerateForm(f => ({ ...f, count: +e.target.value }))} min={1} max={500} className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm dark:bg-slate-700 dark:text-slate-100" /></div>
+              <div><label className="block text-sm text-gray-600 dark:text-slate-400 mb-1">有效期 (天)</label><input type="number" value={generateForm.days} onChange={e => setGenerateForm(f => ({ ...f, days: +e.target.value }))} min={1} className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm dark:bg-slate-700 dark:text-slate-100" /></div>
+              <div><label className="block text-sm text-gray-600 dark:text-slate-400 mb-1">最大设备数</label><input type="number" value={generateForm.maxDevices} onChange={e => setGenerateForm(f => ({ ...f, maxDevices: +e.target.value }))} min={1} className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm dark:bg-slate-700 dark:text-slate-100" /></div>
+              <div><label className="block text-sm text-gray-600 dark:text-slate-400 mb-1">前缀 (可选)</label><input type="text" value={generateForm.prefix} onChange={e => setGenerateForm(f => ({ ...f, prefix: e.target.value }))} placeholder="如: VIP" className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm dark:bg-slate-700 dark:text-slate-100" /></div>
+              <div><label className="block text-sm text-gray-600 dark:text-slate-400 mb-1">备注 (可选)</label><input type="text" value={generateForm.note} onChange={e => setGenerateForm(f => ({ ...f, note: e.target.value }))} className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm dark:bg-slate-700 dark:text-slate-100" /></div>
             </div>
             <div className="flex gap-3 mt-5">
-              <button onClick={() => setShowGenerate(false)} className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-sm">取消</button>
+              <button onClick={() => setShowGenerate(false)} className="flex-1 px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm">取消</button>
               <button onClick={handleGenerate} disabled={generating} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
                 {generating ? '生成中...' : '确认生成'}
               </button>
             </div>
             {generatedKeys.length > 0 && (
-              <div className="mt-4 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3">
-                <div className="text-xs text-gray-500 mb-2">生成的卡密（请及时保存）:</div>
+              <div className="mt-4 max-h-48 overflow-y-auto border border-gray-200 dark:border-slate-700 rounded-lg p-3">
+                <div className="text-xs text-gray-500 dark:text-slate-400 mb-2">生成的卡密（请及时保存）:</div>
                 {generatedKeys.map(k => (
                   <div key={k.id} className="flex items-center justify-between text-xs font-mono py-1">
                     <span>{k.code}</span>

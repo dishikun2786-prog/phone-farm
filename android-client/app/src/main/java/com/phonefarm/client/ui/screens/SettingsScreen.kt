@@ -153,7 +153,7 @@ fun SettingsScreen(
 
         // Appearance
         SettingsGroupCard(title = "外观") {
-            SettingsRow(label = "主题") {
+            SettingsRow(label = "主题", trailing = {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ThemeMode.entries.forEach { mode ->
                         FilterChip(
@@ -163,11 +163,11 @@ fun SettingsScreen(
                         )
                     }
                 }
-            }
+            })
             AccentPicker(currentAccent = s.accent, onAccentSelected = viewModel::setAccent)
-            SettingsRow(label = "液态玻璃效果") {
+            SettingsRow(label = "液态玻璃效果", trailing = {
                 Switch(checked = s.glassEnabled, onCheckedChange = { viewModel.toggleGlass() })
-            }
+            })
             SettingsRow(label = "字体大小", value = "%.0f%%".format(s.fontScale * 100))
             Slider(
                 value = s.fontScale,

@@ -1,22 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Production: cert pinning for phone.openedskill.com (Cloudflare Origin CA) -->
+    <!-- Production: phone.openedskill.com (Cloudflare proxy — Google Trust Services edge cert) -->
+    <!-- Pin expires: 2026-07-03 — regenerate before expiry -->
     <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="true">phone.openedskill.com</domain>
-        <pin-set expiration="2027-07-01">
-            <pin digest="SHA-256">PLACEHOLDER_PIN_1_REPLACE_BEFORE_PRODUCTION</pin>
-            <pin digest="SHA-256">PLACEHOLDER_PIN_2_REPLACE_BEFORE_PRODUCTION</pin>
+        <domain includeSubdomains="true">openedskill.com</domain>
+        <pin-set expiration="2026-07-03">
+            <!-- Cloudflare edge cert SPKI pin (Google Trust Services WE1) -->
+            <pin digest="SHA-256">Ne5iCXIYr1PAn3QMIJOUlerhMjil/BpZiKcUFezYjzA=</pin>
+            <!-- Backup: Cloudflare Origin CA RSA 2048 (generated from server-side cert) -->
+            <pin digest="SHA-256">PLACEHOLDER_ORIGIN_CA_BACKUP_REPLACE_BEFORE_2026_07</pin>
         </pin-set>
+        <!-- Trust system CAs (includes Google Trust Services for Cloudflare edge) -->
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
     </domain-config>
 
-    <!-- Debug/Staging: allow cleartext for local dev -->
+    <!-- Debug/Staging: allow cleartext for local dev and emulator -->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">localhost</domain>
         <domain includeSubdomains="true">10.0.2.2</domain>
         <domain includeSubdomains="true">192.168.0.0/16</domain>
     </domain-config>
 
-    <!-- Default: disallow cleartext -->
+    <!-- Default: disallow cleartext, trust system CAs only -->
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />

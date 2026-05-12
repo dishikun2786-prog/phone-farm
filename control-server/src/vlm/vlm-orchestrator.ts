@@ -1,6 +1,13 @@
 /**
  * VLM Orchestrator — Main control loop for AI-driven phone automation.
  *
+ * @deprecated 由 DecisionEngine (src/decision/decision-engine.ts) 替代。
+ *   旧模式: screenshot → VLM → action → device command (同步阻塞)
+ *   新模式: EdgeState → DecisionRouter → DeepSeek/Qwen3-VL → execute_decision (异步流式)
+ *
+ * 保留旧代码用于 FF_LEGACY_VLM=true 时的回退兼容。
+ * 迁移完成后 (Phase E) 移除此文件。
+ *
  * Coordinates: screenshot → VLM call → action parsing → device command → repeat.
  * Reuses existing phone commands via WebSocket hub — no remote-bridge.js changes needed.
  *

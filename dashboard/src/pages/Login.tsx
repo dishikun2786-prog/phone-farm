@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { Eye, EyeOff, Loader2, WifiOff } from 'lucide-react';
-import { ApiError } from '../lib/api';
+
 
 export default function Login() {
   const [username, setUsername] = useState('admin');

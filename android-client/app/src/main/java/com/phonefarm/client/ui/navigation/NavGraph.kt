@@ -6,14 +6,18 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.phonefarm.client.ui.components.FabAction
 import com.phonefarm.client.ui.components.QuickActionFab
 import com.phonefarm.client.ui.screens.*
 
@@ -199,7 +203,7 @@ fun NavGraph(navController: NavHostController = rememberNavController()) {
         }
 
         composable(Routes.NOTIFICATIONS) {
-            NotificationsCenterScreen(onBack = { navController.popBackStack() }) { /* action */ }
+            NotificationsCenterScreen(onBack = { navController.popBackStack() }, onNavigateToAction = { /* action */ })
         }
 
         composable(Routes.LOCAL_CRON) {

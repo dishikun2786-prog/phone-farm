@@ -89,7 +89,7 @@ fun QuickActionFab(
 
 data class FabAction(
     val label: String,
-    val color: Color = MaterialTheme.colorScheme.primary,
+    val color: Color = Color(0xFF6750A4),
     val onClick: () -> Unit,
     val icon: androidx.compose.ui.graphics.vector.ImageVector = Icons.Default.Add,
 )

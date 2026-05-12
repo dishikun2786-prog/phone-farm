@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Terminal, Play, Loader2, AlertTriangle } from 'lucide-react';
 import { api } from '../lib/api';
-import type { ApiError } from '../lib/api';
 
 interface Props {
   deviceId: string;

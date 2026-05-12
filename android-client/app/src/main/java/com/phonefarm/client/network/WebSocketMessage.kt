@@ -131,6 +131,8 @@ sealed class WebSocketMessage {
         val configKey: String,
         val configValue: String,
         val version: Int,
+        val scope: String? = null,      // "global" | "device" | "group" | "plan" | "template"
+        val scopeId: String? = null,    // target device/group/plan/template id
     ) : WebSocketMessage()
 
     @Serializable
@@ -247,7 +249,88 @@ sealed class WebSocketMessage {
         val isRead: Boolean = false,
         val timestamp: Long,
     ) : WebSocketMessage()
+
+    // ── Edge-Cloud Messages (New Architecture) ──
+
+    /** Device reports step execution result back to cloud DecisionRouter */
+    @Serializable
+    data class StepResult(
+        override val type: String = "step_result",
+        val deviceId: String,
+        val outcome: String, // "success" | "fail"
+        val action: kotlinx.serialization.json.JsonObject? = null,
+        val durationMs: Long = 0,
+    ) : WebSocketMessage()
+
+    /** Device uploads compiled edge state to cloud for AI decision */
+    @Serializable
+    data class EdgeState(
+        override val type: String = "edge_state",
+        val deviceId: String,
+        val stateJson: String, // CompiledState serialized as JSON
+        val screenshotBase64: String? = null,
+    ) : WebSocketMessage()
+
+    @Serializable
+    data class ExecuteDecision(
+        override val type: String = "execute_decision",
+        val decision: DecisionDto? = null,
+    ) : WebSocketMessage()
+
+    @Serializable
+    data class StartStream(
+        override val type: String = "start_stream",
+        val maxSize: Int? = null,
+        val bitRate: Int? = null,
+        val maxFps: Int? = null,
+        val audio: Boolean? = null,
+    ) : WebSocketMessage()
+
+    @Serializable
+    data class StopStream(
+        override val type: String = "stop_stream",
+        val reason: String? = null,
+    ) : WebSocketMessage()
+
+    @Serializable
+    data class ReactionRulesUpdate(
+        override val type: String = "reaction_rules_update",
+        val rules: List<RuleDto>? = null,
+    ) : WebSocketMessage()
 }
+
+// ── Edge-Cloud DTOs ──
+
+@Serializable
+data class DecisionDto(
+    val decisionId: String? = null,
+    val thinking: String? = null,
+    val action: kotlinx.serialization.json.JsonObject? = null,
+    val confidence: Double? = null,
+    val finished: Boolean? = null,
+    val needScreenshot: Boolean? = null,
+    val nextStepHint: String? = null,
+    val modelUsed: String? = null,
+)
+
+@Serializable
+data class RuleDto(
+    val id: String? = null,
+    val scenario: String? = null,
+    val conditions: RuleConditionsDto? = null,
+    val autoAction: kotlinx.serialization.json.JsonObject? = null,
+    val confidence: Double? = null,
+    val enabled: Boolean? = null,
+)
+
+@Serializable
+data class RuleConditionsDto(
+    val popupKeywords: List<String>? = null,
+    val maxChangeRatio: Double? = null,
+    val keyboardVisible: Boolean? = null,
+    val pageTypes: List<String>? = null,
+    val appPackages: List<String>? = null,
+)
 
 /**
  * Connection state enum for the WebSocket lifecycle.

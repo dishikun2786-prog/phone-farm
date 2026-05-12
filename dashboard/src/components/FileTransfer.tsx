@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { FolderOpen, Upload, Download, Trash2, File, Folder, Package, Loader2 } from 'lucide-react';
+import { FolderOpen, Upload, Trash2, File, Folder, Package, Loader2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { toast } from '../hooks/useToast';
 
@@ -30,7 +30,6 @@ export default function FileTransfer({ deviceId, tailscaleIp }: Props) {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
 
   const loadFiles = useCallback(async (dir?: string) => {
     if (!tailscaleIp) return;

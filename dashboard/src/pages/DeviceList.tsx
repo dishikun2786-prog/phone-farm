@@ -1,13 +1,17 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import {
-  Battery, Wifi, WifiOff, Search, RefreshCw,
-  CheckSquare, Square, X, Clock, Upload
+  Battery, Wifi, WifiOff, RefreshCw,
+  CheckSquare, Square, X, Clock, Upload,
+  Monitor, Camera, FileCode2, Copy, ChevronRight,
 } from 'lucide-react';
 import PageWrapper from '../components/PageWrapper';
 import { SkeletonGrid } from '../components/Skeleton';
+import SearchBar from '../components/SearchBar';
+import FilterBar from '../components/FilterBar';
 import { toast } from '../hooks/useToast';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { api } from '../lib/api';
 
 function timeAgo(ts: number): string {
@@ -42,15 +46,14 @@ function BatteryIcon({ level }: { level: number }) {
 
 const QUICK_FILTERS = [
   { key: 'all', label: '全部' },
-  { key: 'online', label: '仅在线' },
-  { key: 'busy', label: '执行中' },
-  { key: 'lowBattery', label: '电量低' },
-] as const;
-
-type FilterKey = typeof QUICK_FILTERS[number]['key'];
+  { key: 'online', label: '在线' },
+  { key: 'busy', label: '忙碌' },
+  { key: 'lowBattery', label: '低电量' },
+];
 
 export default function DeviceList() {
   const navigate = useNavigate();
+  const { isDesktop } = useMediaQuery();
   const devices = useStore(s => s.devices);
   const devicesLoading = useStore(s => s.devicesLoading);
   const devicesError = useStore(s => s.devicesError);
@@ -60,16 +63,32 @@ export default function DeviceList() {
   const sendCommand = useStore(s => s.sendCommand);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [quickFilter, setQuickFilter] = useState<FilterKey>('all');
+  const [quickFilter, setQuickFilter] = useState('');
   const [batchMode, setBatchMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchRunning, setBatchRunning] = useState(false);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    x: number; y: number; deviceId: string; deviceName: string;
+  } | null>(null);
+
+  const currentFilter = quickFilter;
 
   useEffect(() => {
     loadDevices();
     const timer = setInterval(loadDevices, 10000);
     return () => clearInterval(timer);
   }, [loadDevices]);
+
+  // Close context menu on any click
+  useEffect(() => {
+    if (contextMenu) {
+      const close = () => setContextMenu(null);
+      document.addEventListener('click', close);
+      return () => document.removeEventListener('click', close);
+    }
+  }, [contextMenu]);
 
   const getDeviceLive = (deviceId: string) => liveInfo[deviceId] || {};
 
@@ -85,7 +104,7 @@ export default function DeviceList() {
       );
     }
 
-    switch (quickFilter) {
+    switch (currentFilter) {
       case 'online':
         list = list.filter(d => d.status === 'online');
         break;
@@ -103,15 +122,15 @@ export default function DeviceList() {
     }
 
     return list;
-  }, [devices, searchQuery, quickFilter, liveInfo]);
+  }, [devices, searchQuery, currentFilter, liveInfo]);
 
-  const toggleSelect = (id: string) => {
+  const toggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
-  };
+  }, []);
 
   const toggleSelectAll = () => {
     if (selectedIds.size === filteredDevices.length) {
@@ -150,23 +169,195 @@ export default function DeviceList() {
     setSelectedIds(new Set());
   };
 
+  const handleContextMenu = (e: React.MouseEvent, deviceId: string, deviceName: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (batchMode) return;
+    setContextMenu({ x: e.clientX, y: e.clientY, deviceId, deviceName });
+  };
+
+  const contextActions = (deviceId: string) => [
+    { label: '查看详情', icon: Monitor, action: () => navigate(`/devices/${deviceId}`) },
+    { label: '发送截图命令', icon: Camera, action: () => { sendCommand(deviceId, 'screenshot'); toast('info', '已发送截图命令'); } },
+    { label: '部署脚本', icon: FileCode2, action: () => { api.deployScriptsBatch([deviceId]).catch(() => toast('error', '部署失败')); } },
+    { label: '复制设备 ID', icon: Copy, action: () => { navigator.clipboard.writeText(deviceId); toast('success', '设备 ID 已复制'); } },
+  ];
+
   const onlineCount = devices.filter(d => d.status === 'online').length;
-  const hasFilter = searchQuery || quickFilter !== 'all';
+  const hasFilter = searchQuery || currentFilter;
+
+  const renderDeviceCard = (device: typeof devices[0], index: number) => {
+    const live = getDeviceLive(device.id);
+    const isOnline = device.status === 'online';
+    const isSelected = selectedIds.has(device.id);
+
+    return (
+      <div
+        key={device.id}
+        role="button"
+        tabIndex={0}
+        onClick={() => {
+          if (batchMode) { toggleSelect(device.id); }
+          else { navigate(`/devices/${device.id}`); }
+        }}
+        onContextMenu={(e) => handleContextMenu(e, device.id, device.name)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            if (batchMode) toggleSelect(device.id);
+            else navigate(`/devices/${device.id}`);
+          }
+        }}
+        className={`bg-white dark:bg-slate-800 rounded-xl border overflow-hidden cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group focus:outline-none focus:ring-2 focus:ring-blue-500 animate-scale-in ${
+          isSelected
+            ? 'border-blue-400 dark:border-blue-500 ring-2 ring-blue-200 dark:ring-blue-800'
+            : 'border-gray-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-slate-600'
+        }`}
+        style={{ animationDelay: `${index * 40}ms` }}
+      >
+        {/* Screenshot area */}
+        <div className="aspect-9/16 bg-slate-900 relative flex items-center justify-center">
+          {live.screenshot ? (
+            <img
+              src={`data:image/jpeg;base64,${live.screenshot}`}
+              alt="device screen"
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="text-slate-500 text-xs">
+              {isOnline ? '等待画面...' : '离线'}
+            </div>
+          )}
+
+          {/* Batch select checkbox */}
+          {batchMode && (
+            <div className={`absolute top-2 left-2 w-6 h-6 rounded flex items-center justify-center transition-colors ${
+              isSelected ? 'bg-blue-600 text-white' : 'bg-white/80 text-gray-400'
+            }`}>
+              {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+            </div>
+          )}
+
+          {/* Online indicator */}
+          <div className="absolute top-2 right-2">
+            {isOnline ? (
+              <Wifi size={14} className="text-green-400 drop-shadow-sm" />
+            ) : (
+              <WifiOff size={14} className="text-red-400 drop-shadow-sm" />
+            )}
+          </div>
+
+          {/* Device name overlay on screenshot */}
+          {!live.screenshot && (
+            <div className="absolute bottom-2 left-2 right-2">
+              <p className="text-white/80 text-xs font-medium truncate">{device.name}</p>
+            </div>
+          )}
+
+          {/* Hover action overlay */}
+          {!batchMode && (
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+              <span className="text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 px-3 py-1.5 rounded-full">
+                {isOnline ? '查看详情' : '离线'}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Info */}
+        <div className="p-3 space-y-1.5">
+          {live.screenshot && (
+            <div className="font-medium text-sm text-gray-900 dark:text-slate-100 truncate">{device.name}</div>
+          )}
+          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-400">
+            <BatteryIcon level={live.battery ?? device.battery ?? 0} />
+            <span className="truncate max-w-20">{getAppName(live.currentApp || device.currentApp)}</span>
+          </div>
+          {live.taskStatus && (
+            <div className="text-xs">
+              <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs ${
+                live.taskStatus === 'running'
+                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+                  : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-400'
+              }`}>
+                {live.taskStatus === 'running' ? '执行中' : live.taskStatus}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderMobileListItem = (device: typeof devices[0], index: number) => {
+    const live = getDeviceLive(device.id);
+    const isOnline = device.status === 'online';
+    const isSelected = selectedIds.has(device.id);
+
+    return (
+      <div
+        key={device.id}
+        role="button"
+        tabIndex={0}
+        onClick={() => {
+          if (batchMode) { toggleSelect(device.id); }
+          else { navigate(`/devices/${device.id}`); }
+        }}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            if (batchMode) toggleSelect(device.id);
+            else navigate(`/devices/${device.id}`);
+          }
+        }}
+        className={`flex items-center gap-3 px-4 py-3 bg-white dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors animate-fade-in ${
+          isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+        }`}
+        style={{ animationDelay: `${index * 30}ms` }}
+      >
+        {batchMode && (
+          <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${
+            isSelected ? 'bg-blue-600 text-white' : 'border-2 border-gray-300 dark:border-slate-500'
+          }`}>
+            {isSelected && <CheckSquare size={12} />}
+          </div>
+        )}
+        <div className={`w-2 h-2 rounded-full shrink-0 ${
+          isOnline ? 'bg-green-500' : device.status === 'busy' ? 'bg-amber-500' : 'bg-gray-400'
+        }`} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-gray-900 dark:text-slate-100 truncate">{device.name}</span>
+            <BatteryIcon level={live.battery ?? device.battery ?? 0} />
+          </div>
+          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+            <span>{device.tailscaleIp || '-'}</span>
+            <span>·</span>
+            <span>Android {device.androidVersion}</span>
+            <span>·</span>
+            <span>{getAppName(live.currentApp || device.currentApp)}</span>
+          </div>
+        </div>
+        {!batchMode && <ChevronRight size={16} className="text-gray-400 shrink-0" />}
+      </div>
+    );
+  };
 
   const content = (
     <div>
+      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">设备列表</h2>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-slate-100">设备列表</h2>
+          <p className="text-sm text-gray-500 dark:text-slate-400 mt-0.5">
             共 {devices.length} 台，在线 {onlineCount} 台
             {hasFilter && (
-              <span className="text-blue-600 ml-1">
+              <span className="text-blue-600 dark:text-blue-400 ml-1">
                 — 显示 {filteredDevices.length} 台
               </span>
             )}
             {devicesUpdatedAt > 0 && (
-              <span className="inline-flex items-center gap-1 text-gray-400 ml-2">
+              <span className="inline-flex items-center gap-1 text-gray-400 dark:text-slate-500 ml-2">
                 <Clock size={10} />
                 {timeAgo(devicesUpdatedAt)}
               </span>
@@ -178,46 +369,18 @@ export default function DeviceList() {
             <>
               <button
                 onClick={toggleSelectAll}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
               >
                 {selectedIds.size === filteredDevices.length ? <CheckSquare size={14} /> : <Square size={14} />}
                 {selectedIds.size === filteredDevices.length ? '取消全选' : '全选'}
               </button>
-              <span className="text-xs text-gray-500">已选 {selectedIds.size} 台</span>
-              <button
-                onClick={() => handleBatchAction('home')}
-                disabled={batchRunning || selectedIds.size === 0}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
-              >
-                批量返回主页
-              </button>
-              <button
-                onClick={() => handleBatchAction('screenshot')}
-                disabled={batchRunning || selectedIds.size === 0}
-                className="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
-              >
-                批量截图
-              </button>
-              <button
-                onClick={handleBatchDeploy}
-                disabled={batchRunning || selectedIds.size === 0}
-                className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
-              >
-                <Upload size={12} />
-                部署脚本
-              </button>
-              <button
-                onClick={() => { setBatchMode(false); setSelectedIds(new Set()); }}
-                className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 transition-colors"
-              >
-                <X size={16} />
-              </button>
+              <span className="text-xs text-gray-500 dark:text-slate-400">已选 {selectedIds.size} 台</span>
             </>
           ) : (
             <>
               <button
                 onClick={() => setBatchMode(true)}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
               >
                 <CheckSquare size={14} />
                 批量操作
@@ -225,7 +388,7 @@ export default function DeviceList() {
               <button
                 onClick={loadDevices}
                 disabled={devicesLoading}
-                className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 transition-colors"
+                className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg text-gray-400 dark:text-slate-500 transition-colors"
                 title="刷新"
               >
                 <RefreshCw size={16} className={devicesLoading ? 'animate-spin' : ''} />
@@ -235,141 +398,94 @@ export default function DeviceList() {
         </div>
       </div>
 
-      {/* Search + Quick Filters */}
+      {/* Search + Filters */}
       <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <div className="relative">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="搜索设备名称/IP/ID..."
-            className="border border-gray-300 rounded-lg pl-8 pr-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-52"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            >
-              <X size={12} />
-            </button>
-          )}
-        </div>
-        <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5">
-          {QUICK_FILTERS.map(f => (
-            <button
-              key={f.key}
-              onClick={() => setQuickFilter(f.key)}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
-                quickFilter === f.key
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+        <SearchBar
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="搜索设备名称/IP/ID..."
+          className="w-52"
+        />
+        <FilterBar
+          options={QUICK_FILTERS}
+          value={currentFilter}
+          onChange={setQuickFilter}
+        />
       </div>
 
-      {/* Loading state */}
+      {/* Loading */}
       {devicesLoading && devices.length === 0 && <SkeletonGrid count={8} />}
 
-      {/* Data grid */}
-      {devices.length > 0 && (
+      {/* Desktop Grid View */}
+      {isDesktop && devices.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {filteredDevices.map(device => {
-            const live = getDeviceLive(device.id);
-            const isOnline = device.status === 'online';
-            const isSelected = selectedIds.has(device.id);
+          {filteredDevices.map((device, i) => renderDeviceCard(device, i))}
+        </div>
+      )}
 
-            return (
-              <div
-                key={device.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => {
-                  if (batchMode) {
-                    toggleSelect(device.id);
-                  } else {
-                    navigate(`/devices/${device.id}`);
-                  }
-                }}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    if (batchMode) toggleSelect(device.id);
-                    else navigate(`/devices/${device.id}`);
-                  }
-                }}
-                className={`bg-white rounded-xl border overflow-hidden cursor-pointer hover:shadow-md transition-all group focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  isSelected
-                    ? 'border-blue-400 ring-2 ring-blue-200'
-                    : 'border-gray-200 hover:border-blue-300'
-                }`}
-              >
-                {/* Screenshot area */}
-                <div className="aspect-[9/16] bg-gray-900 relative flex items-center justify-center">
-                  {live.screenshot ? (
-                    <img
-                      src={`data:image/jpeg;base64,${live.screenshot}`}
-                      alt="device screen"
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="text-gray-500 text-xs">
-                      {isOnline ? '等待画面...' : '离线'}
-                    </div>
-                  )}
+      {/* Mobile List View */}
+      {!isDesktop && devices.length > 0 && (
+        <div className="-mx-4 bg-white dark:bg-slate-800 border-y border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden">
+          {filteredDevices.map((device, i) => renderMobileListItem(device, i))}
+        </div>
+      )}
 
-                  {/* Batch select checkbox */}
-                  {batchMode && (
-                    <div className={`absolute top-2 left-2 w-6 h-6 rounded flex items-center justify-center ${
-                      isSelected ? 'bg-blue-600 text-white' : 'bg-white/80 text-gray-400'
-                    }`}>
-                      {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
-                    </div>
-                  )}
+      {/* Floating batch action bar */}
+      {batchMode && selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-slide-up">
+          <div className="flex items-center gap-2 bg-gray-900 dark:bg-slate-700 text-white px-4 py-2.5 rounded-xl shadow-2xl">
+            <span className="text-xs text-gray-400 mr-1">已选 {selectedIds.size} 台</span>
+            <button
+              onClick={() => handleBatchAction('home')}
+              disabled={batchRunning}
+              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded-md text-xs font-medium transition-colors disabled:opacity-50"
+            >
+              Home
+            </button>
+            <button
+              onClick={() => handleBatchAction('screenshot')}
+              disabled={batchRunning}
+              className="px-3 py-1 bg-slate-600 hover:bg-slate-500 rounded-md text-xs font-medium transition-colors disabled:opacity-50"
+            >
+              截图
+            </button>
+            <button
+              onClick={handleBatchDeploy}
+              disabled={batchRunning}
+              className="flex items-center gap-1 px-3 py-1 bg-green-600 hover:bg-green-700 rounded-md text-xs font-medium transition-colors disabled:opacity-50"
+            >
+              <Upload size={10} />
+              部署
+            </button>
+            <button
+              onClick={() => { setBatchMode(false); setSelectedIds(new Set()); }}
+              className="p-1 hover:bg-slate-700 rounded-md text-gray-400 transition-colors ml-1"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
 
-                  {/* Online indicator */}
-                  <div className="absolute top-2 right-2">
-                    {isOnline ? (
-                      <Wifi size={14} className="text-green-400" />
-                    ) : (
-                      <WifiOff size={14} className="text-red-400" />
-                    )}
-                  </div>
-
-                  {/* Hover action hint */}
-                  {!batchMode && (
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                      <span className="text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 px-3 py-1.5 rounded-full">
-                        {isOnline ? '查看详情' : '离线'}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Info */}
-                <div className="p-3 space-y-1.5">
-                  <div className="font-medium text-sm text-gray-900 truncate">{device.name}</div>
-                  <div className="flex items-center justify-between text-xs text-gray-500">
-                    <BatteryIcon level={live.battery ?? device.battery ?? 0} />
-                    <span className="truncate max-w-20">{getAppName(live.currentApp || device.currentApp)}</span>
-                  </div>
-                  {live.taskStatus && (
-                    <div className="text-xs">
-                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full ${
-                        live.taskStatus === 'running' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
-                      }`}>
-                        {live.taskStatus === 'running' ? '执行中' : live.taskStatus}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+      {/* Right-click context menu */}
+      {contextMenu && (
+        <div
+          className="fixed z-200 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-xl py-1 w-44 animate-scale-in"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <div className="px-3 py-1.5 text-xs text-gray-400 dark:text-slate-500 truncate border-b border-gray-100 dark:border-slate-700">
+            {contextMenu.deviceName}
+          </div>
+          {contextActions(contextMenu.deviceId).map((action, i) => (
+            <button
+              key={i}
+              onClick={() => { action.action(); setContextMenu(null); }}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors text-left"
+            >
+              <action.icon size={14} className="text-gray-400" />
+              {action.label}
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -381,9 +497,9 @@ export default function DeviceList() {
       error={devicesError}
       empty={!devicesLoading && !devicesError && devices.length === 0}
       emptyTitle="暂无设备"
-      emptyDescription="等待手机通过 Tailscale 连接并运行 remote-bridge.js"
+      emptyDescription="等待手机通过 PhoneFarm APK 连接"
       emptyResults={!devicesLoading && !devicesError && devices.length > 0 && filteredDevices.length === 0}
-      onClearFilters={() => { setSearchQuery(''); setQuickFilter('all'); }}
+      onClearFilters={() => { setSearchQuery(''); setQuickFilter(''); }}
     >
       {content}
     </PageWrapper>

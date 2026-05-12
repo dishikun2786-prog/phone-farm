@@ -1,21 +1,24 @@
 /**
- * PhoneFarm Activation Store — 卡密生命周期管理（生成/验证/消费/解绑）
+ * PhoneFarm Activation Store — card key lifecycle management with PostgreSQL persistence.
  */
 import crypto from "crypto";
 import type { FastifyInstance } from "fastify";
+import { db } from "../db.js";
+import { cardKeys, deviceBindings } from "../schema.js";
+import { eq, and, lte, sql } from "drizzle-orm";
 
 export type ActivationStatus = "active" | "used" | "expired" | "disabled";
 
 export interface CardKey {
   id: string;
-  code: string;           // 16位卡密
-  days: number;            // 有效期天数
-  maxDevices: number;      // 最大设备数
-  usedDevices: number;     // 已绑定设备数
+  code: string;
+  days: number;
+  maxDevices: number;
+  usedDevices: number;
   status: ActivationStatus;
   createdBy: string;
   createdAt: number;
-  expiresAt: number;       // 卡密自身过期时间 (0=永久)
+  expiresAt: number;
   note?: string;
 }
 
@@ -30,14 +33,11 @@ export interface DeviceBinding {
 
 export class ActivationStore {
   private fastify: FastifyInstance;
-  private cardKeys: Map<string, CardKey> = new Map();
-  private bindings: Map<string, DeviceBinding> = new Map(); // deviceId → binding
 
   constructor(fastify: FastifyInstance) {
     this.fastify = fastify;
   }
 
-  /** 生成单个卡密 */
   generateCode(): string {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     const segments = Array.from({ length: 4 }, () =>
@@ -46,7 +46,6 @@ export class ActivationStore {
     return segments.join("-");
   }
 
-  /** 批量生成卡密 */
   async batchGenerate(params: {
     count: number;
     days: number;
@@ -58,30 +57,46 @@ export class ActivationStore {
   }): Promise<CardKey[]> {
     const keys: CardKey[] = [];
     const now = Date.now();
-    for (let i = 0; i < params.count; i++) {
-      const code = params.prefix
+    const count = Math.min(params.count ?? 1, 500);
+
+    const rows = Array.from({ length: count }, () => ({
+      code: params.prefix
         ? `${params.prefix}-${this.generateCode().substring(0, 15)}`
-        : this.generateCode();
-      const key: CardKey = {
-        id: crypto.randomUUID(),
-        code,
-        days: params.days,
-        maxDevices: params.maxDevices,
-        usedDevices: 0,
-        status: "active",
-        createdBy: params.createdBy,
-        createdAt: now,
-        expiresAt: params.expiresAt ?? 0,
-        note: params.note,
-      };
-      keys.push(key);
-      this.cardKeys.set(key.id, key);
+        : this.generateCode(),
+      days: params.days ?? 365,
+      maxDevices: params.maxDevices ?? 1,
+      usedDevices: 0,
+      status: "active" as const,
+      createdBy: params.createdBy,
+      note: params.note ?? null,
+      expiresAt: params.expiresAt ? new Date(params.expiresAt) : undefined,
+    }));
+
+    try {
+      const results = await db.insert(cardKeys).values(rows).returning();
+      for (const row of results) {
+        keys.push({
+          id: row.id,
+          code: row.code,
+          days: row.days,
+          maxDevices: row.maxDevices,
+          usedDevices: row.usedDevices,
+          status: row.status as ActivationStatus,
+          createdBy: row.createdBy,
+          createdAt: row.createdAt.getTime(),
+          expiresAt: row.expiresAt?.getTime() ?? 0,
+          note: row.note ?? undefined,
+        });
+      }
+    } catch (err: any) {
+      this.fastify.log.error(`[Activation] DB insert failed: ${err.message}`);
+      throw err;
     }
-    this.fastify.log.info(`[Activation] Generated ${params.count} card keys`);
+
+    this.fastify.log.info(`[Activation] Generated ${keys.length} card keys`);
     return keys;
   }
 
-  /** 验证卡密（本地格式校验） */
   validateFormat(code: string): { valid: boolean; error?: string } {
     const normalized = code.replace(/\s/g, "").toUpperCase();
     const parts = normalized.split("-");
@@ -94,18 +109,6 @@ export class ActivationStore {
     return { valid: true };
   }
 
-  /** 通过卡密代码查找卡密 */
-  private findCardByCode(code: string): CardKey | undefined {
-    const normalized = code.replace(/\s/g, "").toUpperCase();
-    for (const key of this.cardKeys.values()) {
-      if (key.code.replace(/\s/g, "").toUpperCase() === normalized) {
-        return key;
-      }
-    }
-    return undefined;
-  }
-
-  /** 消费卡密（设备绑定） */
   async consume(code: string, deviceId: string, deviceName: string): Promise<{
     success: boolean;
     error?: string;
@@ -117,57 +120,85 @@ export class ActivationStore {
       return { success: false, error: formatCheck.error };
     }
 
-    const cardKey = this.findCardByCode(code);
+    const normalized = code.replace(/\s/g, "").toUpperCase();
+
+    // Find card key by code
+    const [cardKey] = await db
+      .select()
+      .from(cardKeys)
+      .where(eq(cardKeys.code, normalized))
+      .limit(1);
+
     if (!cardKey) {
       return { success: false, error: "卡密不存在" };
     }
 
-    // Check status
     if (cardKey.status !== "active") {
       return { success: false, error: `卡密状态为 ${cardKey.status}` };
     }
 
-    // Check card expiration (0 = permanent)
-    if (cardKey.expiresAt > 0 && cardKey.expiresAt < Date.now()) {
-      cardKey.status = "expired";
+    if (cardKey.expiresAt && cardKey.expiresAt.getTime() < Date.now()) {
+      await db.update(cardKeys).set({ status: "expired" }).where(eq(cardKeys.id, cardKey.id));
       return { success: false, error: "卡密已过期" };
     }
 
-    // Check device limit
     if (cardKey.usedDevices >= cardKey.maxDevices) {
       return { success: false, error: `卡密已达到最大设备数限制 (${cardKey.maxDevices})` };
     }
 
-    // Check if this device already has a binding
-    const existing = this.bindings.get(deviceId);
+    // Check existing binding
+    const [existing] = await db
+      .select()
+      .from(deviceBindings)
+      .where(eq(deviceBindings.deviceId, deviceId))
+      .limit(1);
+
     if (existing) {
       return { success: false, error: "此设备已激活，请先解绑" };
     }
 
     // Create binding
     const now = Date.now();
-    const expiresAt = now + cardKey.days * 24 * 3600 * 1000;
-    const binding: DeviceBinding = {
-      id: crypto.randomUUID(),
-      cardKeyId: cardKey.id,
-      deviceId,
-      deviceName,
-      boundAt: now,
-      expiresAt,
-    };
+    const expiresAt = new Date(now + cardKey.days * 24 * 3600 * 1000);
+
+    const [binding] = await db
+      .insert(deviceBindings)
+      .values({
+        cardKeyId: cardKey.id,
+        deviceId,
+        deviceName,
+        boundAt: new Date(now),
+        expiresAt,
+      })
+      .returning();
 
     // Update card key usage
-    cardKey.usedDevices++;
-    if (cardKey.usedDevices >= cardKey.maxDevices) {
-      cardKey.status = "used";
-    }
+    const newUsed = cardKey.usedDevices + 1;
+    const newStatus = newUsed >= cardKey.maxDevices ? "used" : "active";
+    await db
+      .update(cardKeys)
+      .set({ usedDevices: newUsed, status: newStatus })
+      .where(eq(cardKeys.id, cardKey.id));
 
-    this.bindings.set(deviceId, binding);
-    this.fastify.log.info(`[Activation] Device ${deviceId} bound to card ${code} (expires ${new Date(expiresAt).toISOString()})`);
-    return { success: true, expiresAt: binding.expiresAt, binding };
+    this.fastify.log.info(
+      `[Activation] Device ${deviceId} bound to card ${code} (expires ${expiresAt.toISOString()})`
+    );
+
+    const bindingExpires = binding.expiresAt!.getTime();
+    return {
+      success: true,
+      expiresAt: bindingExpires,
+      binding: {
+        id: binding.id,
+        cardKeyId: binding.cardKeyId,
+        deviceId: binding.deviceId,
+        deviceName: binding.deviceName,
+        boundAt: binding.boundAt.getTime(),
+        expiresAt: bindingExpires,
+      },
+    };
   }
 
-  /** 查询激活状态 */
   async getStatus(deviceId: string): Promise<{
     activated: boolean;
     cardKey?: string;
@@ -176,94 +207,148 @@ export class ActivationStore {
     maxDevices?: number;
     usedDevices?: number;
   }> {
-    const binding = this.bindings.get(deviceId);
+    const [binding] = await db
+      .select()
+      .from(deviceBindings)
+      .where(eq(deviceBindings.deviceId, deviceId))
+      .limit(1);
+
     if (!binding) {
       return { activated: false };
     }
 
-    // Check if binding has expired
-    if (binding.expiresAt < Date.now()) {
-      this.bindings.delete(deviceId);
+    if (!binding.expiresAt || binding.expiresAt.getTime() < Date.now()) {
+      await db.delete(deviceBindings).where(eq(deviceBindings.id, binding.id));
       return { activated: false };
     }
 
-    const cardKey = this.cardKeys.get(binding.cardKeyId);
-    const remainingMs = binding.expiresAt - Date.now();
+    const [cardKey] = await db
+      .select()
+      .from(cardKeys)
+      .where(eq(cardKeys.id, binding.cardKeyId))
+      .limit(1);
+
+    const bindingExpiresMs = binding.expiresAt?.getTime() ?? 0;
+    const remainingMs = bindingExpiresMs - Date.now();
     const remainingDays = Math.max(0, Math.ceil(remainingMs / (24 * 3600 * 1000)));
 
     return {
       activated: true,
       cardKey: cardKey?.code,
-      expiresAt: binding.expiresAt,
+      expiresAt: bindingExpiresMs,
       remainingDays,
       maxDevices: cardKey?.maxDevices,
       usedDevices: cardKey?.usedDevices,
     };
   }
 
-  /** 解绑设备（释放卡密配额） */
   async unbind(deviceId: string): Promise<{ success: boolean; error?: string }> {
-    const binding = this.bindings.get(deviceId);
+    const [binding] = await db
+      .select()
+      .from(deviceBindings)
+      .where(eq(deviceBindings.deviceId, deviceId))
+      .limit(1);
+
     if (!binding) {
       return { success: false, error: "设备未激活" };
     }
 
-    const cardKey = this.cardKeys.get(binding.cardKeyId);
+    const [cardKey] = await db
+      .select()
+      .from(cardKeys)
+      .where(eq(cardKeys.id, binding.cardKeyId))
+      .limit(1);
+
     if (cardKey && cardKey.usedDevices > 0) {
-      cardKey.usedDevices--;
-      // If card was fully used, revert to active
-      if (cardKey.status === "used" && cardKey.expiresAt > 0 && cardKey.expiresAt < Date.now()) {
-        cardKey.status = "expired";
-      } else if (cardKey.status === "used") {
-        cardKey.status = "active";
+      const newUsed = cardKey.usedDevices - 1;
+      let newStatus: string = cardKey.status;
+      if (cardKey.status === "used") {
+        if (cardKey.expiresAt && cardKey.expiresAt.getTime() < Date.now()) {
+          newStatus = "expired";
+        } else {
+          newStatus = "active";
+        }
       }
+      await db
+        .update(cardKeys)
+        .set({ usedDevices: newUsed, status: newStatus })
+        .where(eq(cardKeys.id, cardKey.id));
     }
 
-    this.bindings.delete(deviceId);
+    await db.delete(deviceBindings).where(eq(deviceBindings.id, binding.id));
     this.fastify.log.info(`[Activation] Device ${deviceId} unbound`);
     return { success: true };
   }
 
-  /** 查询所有卡密 */
   async list(params: {
     status?: ActivationStatus;
     createdBy?: string;
     limit?: number;
     offset?: number;
   }): Promise<{ keys: CardKey[]; total: number }> {
-    let keys = Array.from(this.cardKeys.values());
-    if (params.status) keys = keys.filter((k) => k.status === params.status);
-    if (params.createdBy) keys = keys.filter((k) => k.createdBy === params.createdBy);
-    keys.sort((a, b) => b.createdAt - a.createdAt);
-    const total = keys.length;
-    const offset = params.offset ?? 0;
-    const limit = params.limit ?? 50;
-    return { keys: keys.slice(offset, offset + limit), total };
+    let query = db.select().from(cardKeys).$dynamic();
+
+    if (params.status) {
+      query = query.where(eq(cardKeys.status, params.status));
+    }
+    if (params.createdBy) {
+      query = query.where(eq(cardKeys.createdBy, params.createdBy));
+    }
+
+    const totalResult = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(cardKeys);
+
+    const rows = await query
+      .orderBy(sql`${cardKeys.createdAt} DESC`)
+      .limit(params.limit ?? 50)
+      .offset(params.offset ?? 0);
+
+    const keys: CardKey[] = rows.map((row) => ({
+      id: row.id,
+      code: row.code,
+      days: row.days,
+      maxDevices: row.maxDevices,
+      usedDevices: row.usedDevices,
+      status: row.status as ActivationStatus,
+      createdBy: row.createdBy,
+      createdAt: row.createdAt.getTime(),
+      expiresAt: row.expiresAt?.getTime() ?? 0,
+      note: row.note ?? undefined,
+    }));
+
+    return { keys, total: totalResult[0]?.count ?? 0 };
   }
 
-  /** 批量禁用卡密 */
   async batchDisable(ids: string[]): Promise<{ disabled: number }> {
-    let disabled = 0;
-    for (const id of ids) {
-      const key = this.cardKeys.get(id);
-      if (key && key.status === "active") {
-        key.status = "disabled";
-        disabled++;
-      }
-    }
-    this.fastify.log.info(`[Activation] Disabled ${disabled} card keys`);
-    return { disabled };
+    const result = await db
+      .update(cardKeys)
+      .set({ status: "disabled" })
+      .where(and(eq(cardKeys.status, "active"), sql`${cardKeys.id} = ANY(${ids})`));
+
+    this.fastify.log.info(`[Activation] Disabled card keys`);
+    return { disabled: result.rowCount ?? 0 };
   }
 
-  /** 检查是否即将到期 */
   async checkExpiring(daysThreshold = 7): Promise<DeviceBinding[]> {
-    const threshold = Date.now() + daysThreshold * 24 * 3600 * 1000;
-    const expiring: DeviceBinding[] = [];
-    for (const binding of this.bindings.values()) {
-      if (binding.expiresAt <= threshold && binding.expiresAt > Date.now()) {
-        expiring.push(binding);
-      }
-    }
-    return expiring;
+    const threshold = new Date(Date.now() + daysThreshold * 24 * 3600 * 1000);
+    const now = new Date();
+
+    const rows = await db
+      .select()
+      .from(deviceBindings)
+      .where(and(
+        lte(deviceBindings.expiresAt, threshold),
+        sql`${deviceBindings.expiresAt} > ${now}`
+      ));
+
+    return rows.map((row) => ({
+      id: row.id,
+      cardKeyId: row.cardKeyId,
+      deviceId: row.deviceId,
+      deviceName: row.deviceName,
+      boundAt: row.boundAt.getTime(),
+      expiresAt: row.expiresAt?.getTime() ?? 0,
+    }));
   }
 }

@@ -86,4 +86,7 @@ object AppModule {
 
     @Provides
     fun provideCrashReportDao(db: AppDatabase): CrashReportDao = db.crashReportDao()
+
+    @Provides
+    fun providePlatformAccountDao(db: AppDatabase): PlatformAccountDao = db.platformAccountDao()
 }

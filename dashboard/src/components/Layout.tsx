@@ -8,12 +8,15 @@ import {
   Play, History, FileCode2, ChevronDown, Menu, X, Settings2,
   Layers, Keyboard, ShieldCheck, Wrench,
   Key, Server, AlertTriangle, BarChart3, Search, TabletSmartphone, ListChecks,
+  Globe, Package, Clock, Sun, Moon,
 } from 'lucide-react';
 
 export default function Layout({ children, connectionState }: { children: React.ReactNode; connectionState: ConnectionState }) {
   const logout = useStore(s => s.logout);
   const user = useStore(s => s.user);
   const devices = useStore(s => s.devices);
+  const theme = useStore(s => s.theme);
+  const toggleTheme = useStore(s => s.toggleTheme);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -31,7 +34,7 @@ export default function Layout({ children, connectionState }: { children: React.
   const isAdminUser = user?.role === 'super_admin' || user?.role === 'admin';
   const isAiActive = location.pathname.startsWith('/vlm');
   const isDeviceActive = ['/', '/groups', '/keymaps'].some(p => location.pathname === p || location.pathname.startsWith('/devices/'));
-  const isToolsActive = location.pathname === '/settings';
+  const isToolsActive = location.pathname === '/settings' || location.pathname.startsWith('/config');
   const isAdminActive = location.pathname.startsWith('/admin');
 
   // Close dropdowns when clicking outside
@@ -77,6 +80,11 @@ export default function Layout({ children, connectionState }: { children: React.
 
   const toolsLinks = [
     { to: '/settings', label: '系统设置', icon: Settings2 },
+    { to: '/config', label: '配置管理', icon: Globe },
+    { to: '/config/global', label: '全局配置', icon: Settings2 },
+    { to: '/config/device', label: '设备配置', icon: Smartphone },
+    { to: '/config/templates', label: '配置模板', icon: Package },
+    { to: '/config/audit', label: '变更审计', icon: Clock },
   ];
 
   const adminLinks = [
@@ -92,12 +100,12 @@ export default function Layout({ children, connectionState }: { children: React.
 
   const navLinkCls = (isActive: boolean) =>
     `flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-      isActive ? 'bg-gray-100 text-gray-900' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+      isActive ? 'bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-slate-100' : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-slate-200'
     }`;
 
   const mobileNavLinkCls = (isActive: boolean) =>
     `flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-      isActive ? 'bg-gray-100 text-gray-900' : 'text-gray-600 hover:bg-gray-50'
+      isActive ? 'bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-slate-100' : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
     }`;
 
   const navContent = (
@@ -118,14 +126,14 @@ export default function Layout({ children, connectionState }: { children: React.
           <ChevronDown size={12} className={`transition-transform ${deviceMenuOpen ? 'rotate-180' : ''}`} />
         </button>
         {deviceMenuOpen && (
-          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-40 z-50">
+          <div className="absolute top-full left-0 mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg py-1 w-40 z-50">
             {deviceLinks.map(link => {
               const isActive = location.pathname === link.to;
               return (
                 <button key={link.to}
                   onClick={() => { navigate(link.to); setDeviceMenuOpen(false); }}
                   className={`w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                    isActive ? 'bg-gray-50 text-gray-900 font-medium' : 'text-gray-600 hover:bg-gray-50'
+                    isActive ? 'bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-slate-100 font-medium' : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
                   }`}
                 >
                   <link.icon size={14} />{link.label}
@@ -154,14 +162,14 @@ export default function Layout({ children, connectionState }: { children: React.
           <ChevronDown size={12} className={`transition-transform ${aiMenuOpen ? 'rotate-180' : ''}`} />
         </button>
         {aiMenuOpen && (
-          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-40 z-50">
+          <div className="absolute top-full left-0 mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg py-1 w-40 z-50">
             {aiLinks.map(link => {
               const isActive = location.pathname === link.to;
               return (
                 <button key={link.to}
                   onClick={() => { navigate(link.to); setAiMenuOpen(false); }}
                   className={`w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                    isActive ? 'bg-gray-50 text-gray-900 font-medium' : 'text-gray-600 hover:bg-gray-50'
+                    isActive ? 'bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-slate-100 font-medium' : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
                   }`}
                 >
                   <link.icon size={14} />{link.label}
@@ -185,14 +193,14 @@ export default function Layout({ children, connectionState }: { children: React.
           <ChevronDown size={12} className={`transition-transform ${toolsMenuOpen ? 'rotate-180' : ''}`} />
         </button>
         {toolsMenuOpen && (
-          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-40 z-50">
+          <div className="absolute top-full left-0 mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg py-1 w-40 z-50">
             {toolsLinks.map(link => {
               const isActive = location.pathname === link.to;
               return (
                 <button key={link.to}
                   onClick={() => { navigate(link.to); setToolsMenuOpen(false); }}
                   className={`w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                    isActive ? 'bg-gray-50 text-gray-900 font-medium' : 'text-gray-600 hover:bg-gray-50'
+                    isActive ? 'bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-slate-100 font-medium' : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
                   }`}
                 >
                   <link.icon size={14} />{link.label}
@@ -222,14 +230,14 @@ export default function Layout({ children, connectionState }: { children: React.
             <ChevronDown size={12} className={`transition-transform ${adminMenuOpen ? 'rotate-180' : ''}`} />
           </button>
           {adminMenuOpen && (
-            <div className="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-44 z-50">
+            <div className="absolute top-full right-0 mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg py-1 w-44 z-50">
               {adminLinks.map(link => {
                 const isActive = location.pathname === link.to;
                 return (
                   <button key={link.to}
                     onClick={() => { navigate(link.to); setAdminMenuOpen(false); }}
                     className={`w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                      isActive ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-50'
+                      isActive ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium' : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
                     }`}
                   >
                     <link.icon size={14} />{link.label}
@@ -260,7 +268,7 @@ export default function Layout({ children, connectionState }: { children: React.
         任务
       </NavLink>
 
-      <div className="px-4 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">AI 智能</div>
+      <div className="px-4 py-1.5 text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wider">AI 智能</div>
 
       {aiLinks.map(link => {
         const isActive = location.pathname === link.to;
@@ -270,8 +278,8 @@ export default function Layout({ children, connectionState }: { children: React.
             onClick={() => { navigate(link.to); setMobileMenuOpen(false); }}
             className={`w-full flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm transition-colors ${
               isActive
-                ? 'bg-gray-100 text-gray-900 font-medium'
-                : 'text-gray-600 hover:bg-gray-50'
+                ? 'bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-slate-100 font-medium'
+                : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
             }`}
           >
             <link.icon size={18} className={isActive ? 'text-purple-600' : ''} />
@@ -287,7 +295,7 @@ export default function Layout({ children, connectionState }: { children: React.
 
       {isAdminUser && (
         <>
-          <div className="px-4 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wider">管理面板</div>
+          <div className="px-4 py-1.5 text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wider">管理面板</div>
           {adminLinks.map(link => {
             const isActive = location.pathname === link.to;
             return (
@@ -295,7 +303,7 @@ export default function Layout({ children, connectionState }: { children: React.
                 key={link.to}
                 onClick={() => { navigate(link.to); setMobileMenuOpen(false); }}
                 className={`w-full flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm transition-colors ${
-                  isActive ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-50'
+                  isActive ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium' : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
                 }`}
               >
                 <link.icon size={18} />
@@ -307,6 +315,14 @@ export default function Layout({ children, connectionState }: { children: React.
       )}
 
       <hr className="my-2 border-gray-100" />
+
+      <button
+        onClick={toggleTheme}
+        className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors w-full"
+      >
+        {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+        {theme === 'dark' ? '浅色主题' : '暗色主题'}
+      </button>
 
       <button
         onClick={handleLogout}
@@ -323,12 +339,12 @@ export default function Layout({ children, connectionState }: { children: React.
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
       {/* Top navbar */}
-      <nav className="bg-white border-b border-gray-200 fixed top-0 left-0 right-0 z-50">
+      <nav className="bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 fixed top-0 left-0 right-0 z-50">
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-6">
-            <h1 className="text-lg font-bold text-gray-900">PhoneFarm</h1>
+            <h1 className="text-lg font-bold text-gray-900 dark:text-slate-100">PhoneFarm</h1>
 
             {/* Desktop nav */}
             <div className="hidden md:flex items-center gap-1">
@@ -339,6 +355,13 @@ export default function Layout({ children, connectionState }: { children: React.
           {/* Desktop right section */}
           <div className="hidden md:flex items-center gap-3">
             <ConnectivityBadge state={connectionState} />
+            <button
+              onClick={toggleTheme}
+              className="p-1.5 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+              title={theme === 'dark' ? '切换到浅色主题' : '切换到暗色主题'}
+            >
+              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
             <button
               onClick={handleLogout}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-500 hover:text-red-600 transition-colors"
@@ -351,7 +374,7 @@ export default function Layout({ children, connectionState }: { children: React.
           {/* Mobile hamburger */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-1.5 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors"
+            className="md:hidden p-1.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg text-gray-600 dark:text-slate-300 transition-colors"
           >
             {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
@@ -362,7 +385,7 @@ export default function Layout({ children, connectionState }: { children: React.
       {mobileMenuOpen && (
         <div className="md:hidden fixed inset-0 z-40">
           <div className="absolute inset-0 bg-black/30" onClick={() => setMobileMenuOpen(false)} />
-          <div className="absolute top-14 right-0 bottom-0 w-72 bg-white shadow-xl overflow-y-auto">
+          <div className="absolute top-14 right-0 bottom-0 w-72 bg-white dark:bg-slate-800 shadow-xl overflow-y-auto">
             <div className="p-3 flex flex-col gap-0.5">
               {mobileNavContent}
             </div>

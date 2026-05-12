@@ -27,8 +27,7 @@ export function useClipboardSync({ deviceId, wsRef, enabled = true }: UseClipboa
   useEffect(() => {
     if (!enabled) return;
 
-    const handleCopy = (e: ClipboardEvent) => {
-      const text = window.getSelection()?.toString() || e.clipboardData?.getData('text/plain') || '';
+    const handleCopy = (_e: ClipboardEvent) => {
       // Small delay to let clipboard actually fill
       setTimeout(async () => {
         try {

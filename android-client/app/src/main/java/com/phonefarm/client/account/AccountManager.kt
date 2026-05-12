@@ -1,32 +1,39 @@
 package com.phonefarm.client.account
 
-import android.content.Context
-import dagger.hilt.android.qualifiers.ApplicationContext
+import com.phonefarm.client.data.local.SecurePreferences
+import com.phonefarm.client.data.local.dao.PlatformAccountDao
+import com.phonefarm.client.data.local.entity.PlatformAccountEntity
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Central manager for platform account CRUD and encrypted storage.
  *
- * Accounts (username + password + session cookies) are stored encrypted using
- * the AndroidKeyStore-backed SecurePreferences. Each account is associated
- * with a platform (e.g., "wechat", "douyin", "kuaishou", "xiaohongshu")
- * and can be linked to a specific device via deviceId.
+ * Accounts metadata is persisted in Room (PlatformAccountEntity).
+ * Passwords and session cookies are stored encrypted via SecurePreferences,
+ * keyed by account ID — they never touch Room in plaintext.
  */
 @Singleton
 class AccountManager @Inject constructor(
-    @ApplicationContext private val context: Context,
+    private val dao: PlatformAccountDao,
+    private val securePrefs: SecurePreferences,
 ) {
 
     data class PlatformAccount(
         val id: String,
         val platform: String,
         val username: String,
-        val password: String,       // encrypted at rest
-        val cookies: String?,       // session cookie JSON, encrypted at rest
+        val password: String,
+        val cookies: String?,
         val deviceId: String?,
         val healthStatus: AccountHealthStatus,
         val lastCheckedAt: Long?,
@@ -35,29 +42,31 @@ class AccountManager @Inject constructor(
 
     enum class AccountHealthStatus {
         UNKNOWN,
-        HEALTHY,        // login still valid
-        EXPIRED,        // session/cookie expired, re-login needed
-        LOCKED,         // account locked by platform
-        RATE_LIMITED,   // temporary rate limit
-        BANNED,         // permanently banned
-        ERROR,          // check failed for unknown reason
+        HEALTHY,
+        EXPIRED,
+        LOCKED,
+        RATE_LIMITED,
+        BANNED,
+        ERROR,
     }
+
+    companion object {
+        private const val TAG = "AccountManager"
+        private const val PREF_PASSWORD_PREFIX = "acct_pwd_"
+        private const val PREF_COOKIES_PREFIX = "acct_ck_"
+    }
+
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob() + CoroutineName("AccountManager"))
 
     private val _accounts = MutableStateFlow<List<PlatformAccount>>(emptyList())
     val accounts: StateFlow<List<PlatformAccount>> = _accounts.asStateFlow()
 
+    init {
+        scope.launch { loadFromStorage() }
+    }
+
     // ---- public API ----
 
-    /**
-     * Add a new platform account or update an existing one.
-     *
-     * @param platform  Platform identifier (wechat, douyin, kuaishou, xiaohongshu, etc.).
-     * @param username  Plaintext username.
-     * @param password  Plaintext password (will be stored encrypted).
-     * @param cookies   Optional session cookies JSON string from WebView login.
-     * @param deviceId  Optional device binding.
-     * @return The created/updated [PlatformAccount].
-     */
     suspend fun addAccount(
         platform: String,
         username: String,
@@ -65,60 +74,128 @@ class AccountManager @Inject constructor(
         cookies: String? = null,
         deviceId: String? = null,
     ): PlatformAccount {
-        // TODO: Encrypt password and cookies via SecurePreferences.
-        // TODO: Generate unique account ID (UUID).
-        // TODO: Persist to Room (AccountEntity) or local encrypted file.
-        // TODO: Update _accounts StateFlow.
-        throw NotImplementedError("AccountManager.addAccount not yet implemented")
+        val id = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
+
+        val entity = PlatformAccountEntity(
+            id = id,
+            platform = platform,
+            username = username,
+            deviceId = deviceId,
+            healthStatus = AccountHealthStatus.UNKNOWN.name,
+            lastCheckedAt = null,
+            createdAt = now,
+            updatedAt = now,
+        )
+        dao.upsert(entity)
+
+        securePrefs.putString(PREF_PASSWORD_PREFIX + id, password)
+        if (cookies != null) {
+            securePrefs.putString(PREF_COOKIES_PREFIX + id, cookies)
+        }
+
+        loadFromStorage()
+        return PlatformAccount(
+            id = id,
+            platform = platform,
+            username = username,
+            password = password,
+            cookies = cookies,
+            deviceId = deviceId,
+            healthStatus = AccountHealthStatus.UNKNOWN,
+            lastCheckedAt = null,
+            createdAt = now,
+        )
     }
 
-    /**
-     * Delete an account by ID.
-     *
-     * @param id The account UUID.
-     */
     suspend fun deleteAccount(id: String) {
-        // TODO: Remove from storage.
-        // TODO: Update _accounts StateFlow.
-        throw NotImplementedError("AccountManager.deleteAccount not yet implemented")
+        dao.deleteById(id)
+        securePrefs.remove(PREF_PASSWORD_PREFIX + id)
+        securePrefs.remove(PREF_COOKIES_PREFIX + id)
+        loadFromStorage()
     }
 
-    /**
-     * Check the health of a single account (login validity, rate limit, ban status).
-     *
-     * Performs an HTTP health-check call via the platform's API, or a
-     * simple cookie validity check against the platform's home page.
-     *
-     * @param id  The account UUID.
-     * @return Updated [AccountHealthStatus].
-     */
+    suspend fun updateAccountHealth(
+        id: String,
+        status: AccountHealthStatus,
+    ) {
+        val entity = dao.getById(id) ?: return
+        dao.upsert(entity.copy(
+            healthStatus = status.name,
+            lastCheckedAt = System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis(),
+        ))
+        loadFromStorage()
+    }
+
     suspend fun checkAccountHealth(id: String): AccountHealthStatus {
-        // TODO: Load account credentials.
-        // TODO: Perform platform-specific health check (HTTP head request with cookies).
-        // TODO: Update health status in storage.
-        // TODO: Update _accounts StateFlow.
-        throw NotImplementedError("AccountManager.checkAccountHealth not yet implemented")
+        val entity = dao.getById(id) ?: return AccountHealthStatus.ERROR
+        val cookies = securePrefs.getString(PREF_COOKIES_PREFIX + id)
+
+        val status = try {
+            performHealthCheck(entity.platform, entity.username, cookies)
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "Health check failed for ${entity.username}: ${e.message}")
+            AccountHealthStatus.ERROR
+        }
+
+        dao.upsert(entity.copy(
+            healthStatus = status.name,
+            lastCheckedAt = System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis(),
+        ))
+        loadFromStorage()
+        return status
     }
 
-    /**
-     * Get accounts filtered by platform.
-     */
     fun getAccountsByPlatform(platform: String): List<PlatformAccount> {
         return _accounts.value.filter { it.platform == platform }
     }
 
-    /**
-     * Get accounts filtered by device binding.
-     */
     fun getAccountsByDevice(deviceId: String): List<PlatformAccount> {
         return _accounts.value.filter { it.deviceId == deviceId }
     }
 
-    /**
-     * Reload accounts from storage and update the StateFlow.
-     */
     suspend fun refresh() {
-        // TODO: Reload from SecurePreferences / Room.
-        // TODO: Update _accounts.value.
+        loadFromStorage()
+    }
+
+    // ---- private helpers ----
+
+    private suspend fun loadFromStorage() {
+        val entities = dao.getAll()
+        val accounts = entities.map { entity ->
+            PlatformAccount(
+                id = entity.id,
+                platform = entity.platform,
+                username = entity.username,
+                password = securePrefs.getString(PREF_PASSWORD_PREFIX + entity.id) ?: "",
+                cookies = securePrefs.getString(PREF_COOKIES_PREFIX + entity.id),
+                deviceId = entity.deviceId,
+                healthStatus = try {
+                    AccountHealthStatus.valueOf(entity.healthStatus)
+                } catch (_: IllegalArgumentException) {
+                    AccountHealthStatus.UNKNOWN
+                },
+                lastCheckedAt = entity.lastCheckedAt,
+                createdAt = entity.createdAt,
+            )
+        }
+        _accounts.value = accounts
+    }
+
+    private fun performHealthCheck(
+        platform: String,
+        username: String,
+        cookies: String?,
+    ): AccountHealthStatus {
+        // Platform-specific health check via HTTP
+        // For now, check if cookies exist as a baseline
+        if (cookies.isNullOrBlank()) {
+            return AccountHealthStatus.EXPIRED
+        }
+        // TODO: Perform actual HTTP request to platform's home page
+        // to validate cookie/session validity
+        return AccountHealthStatus.UNKNOWN
     }
 }
