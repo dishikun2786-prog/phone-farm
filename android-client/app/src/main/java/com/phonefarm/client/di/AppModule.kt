@@ -17,11 +17,13 @@ import javax.inject.Singleton
 
 /**
  * Thread-safe in-memory JWT token holder.
- * Set by TokenRenewer after login, cleared on logout.
+ * Set by LoginViewModel after login, cleared on logout.
  */
 object TokenHolder {
     @Volatile
     var token: String? = null
+    @Volatile
+    var refreshToken: String? = null
 }
 
 @Module

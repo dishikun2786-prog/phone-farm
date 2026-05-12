@@ -1,16 +1,16 @@
-import 'dotenv/config';
-import Fastify from 'fastify';
-import fastifyWebsocket from '@fastify/websocket';
 import fastifyCors from '@fastify/cors';
 import fastifyJwt from '@fastify/jwt';
-import { config } from './config.js';
-import { initWsHub } from './ws-hub.js';
-import { deviceRoutes, taskRoutes, accountRoutes } from './routes.js';
-import { registerVlmRoutes } from './vlm/vlm-routes.js';
-import { BridgeClient } from './relay/bridge-client.js';
+import fastifyWebsocket from '@fastify/websocket';
+import 'dotenv/config';
+import Fastify from 'fastify';
 import type { WebSocket } from 'ws';
+import { config } from './config.js';
 import { db } from './db.js';
+import { BridgeClient } from './relay/bridge-client.js';
+import { accountRoutes, deviceRoutes, taskRoutes } from './routes.js';
 import { taskTemplates } from './schema.js';
+import { registerVlmRoutes } from './vlm/vlm-routes.js';
+import { initWsHub } from './ws-hub.js';
 
 const app = Fastify({ logger: true });
 
@@ -79,9 +79,14 @@ app.get('/api/v1/health', async () => {
   return {
     status: 'ok',
     uptime: process.uptime(),
+    version: '1.0.0',
     devicesOnline: hub.getOnlineDevices().length,
     bridge: bridgeClient ? bridgeClient.getStatus() : { enabled: false },
   };
+});
+
+app.get('/health', async () => {
+  return { status: 'ok', uptime: process.uptime(), version: '1.0.0' };
 });
 
 // Bridge status

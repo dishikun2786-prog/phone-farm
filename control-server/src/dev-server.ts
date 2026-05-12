@@ -356,7 +356,7 @@ async function main() {
 
   // Health
   app.get('/api/v1/health', async () => ({
-    status: 'ok', uptime: process.uptime(), devicesOnline: hub.onlineCount(), mode: 'dev',
+    status: 'ok', uptime: process.uptime(), version: '1.0.0', devicesOnline: hub.onlineCount(), mode: 'dev',
   }));
 
   // Relay stats

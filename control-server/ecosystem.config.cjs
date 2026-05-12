@@ -1,0 +1,40 @@
+module.exports = {
+  apps: [
+    {
+      name: 'phonefarm-control',
+      script: 'src/index.ts',
+      cwd: __dirname,
+      interpreter: 'node',
+      node_args: '--import ./node_modules/tsx/dist/loader.mjs',
+      watch: false,
+      autorestart: true,
+      max_restarts: 10,
+      restart_delay: 5000,
+      env: {
+        NODE_ENV: 'production',
+      },
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      error_file: 'logs/control-error.log',
+      out_file: 'logs/control-out.log',
+      merge_logs: true,
+    },
+    {
+      name: 'phonefarm-relay',
+      script: 'src/vps-relay.ts',
+      cwd: __dirname,
+      interpreter: 'node',
+      node_args: '--import ./node_modules/tsx/dist/loader.mjs',
+      watch: false,
+      autorestart: true,
+      max_restarts: 10,
+      restart_delay: 5000,
+      env: {
+        NODE_ENV: 'production',
+      },
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      error_file: 'logs/relay-error.log',
+      out_file: 'logs/relay-out.log',
+      merge_logs: true,
+    },
+  ],
+};

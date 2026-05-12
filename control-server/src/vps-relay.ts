@@ -75,6 +75,10 @@ app.get('/api/v1/relay/health', async () => {
   return { status: 'ok', uptime: process.uptime() };
 });
 
+app.get('/health', async () => {
+  return { status: 'ok', uptime: process.uptime() };
+});
+
 app.get('/api/v1/relay/stats', async () => {
   return bridge.getStats();
 });

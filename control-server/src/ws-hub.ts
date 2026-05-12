@@ -9,6 +9,7 @@ interface DeviceConnection {
   lastHeartbeat: Date;
   currentTaskId?: string;
   runtime?: string;
+  username?: string;
 }
 
 interface FrontendConnection {
@@ -20,9 +21,11 @@ class WsHub {
   #devices = new Map<string, DeviceConnection>();
   #frontends = new Set<FrontendConnection>();
   #deviceAuthToken: string;
+  #jwtSecret: string;
 
-  constructor(deviceAuthToken: string) {
+  constructor(deviceAuthToken: string, jwtSecret?: string) {
     this.#deviceAuthToken = deviceAuthToken;
+    this.#jwtSecret = jwtSecret || deviceAuthToken;
   }
 
   handleDeviceUpgrade(ws: WebSocket, req: any) {
@@ -51,17 +54,13 @@ class WsHub {
       }
     });
 
-    ws.on('error', () => {});
+    ws.on('error', () => { });
   }
 
   #handleDeviceMessage(conn: DeviceConnection, msg: any) {
     switch (msg.type) {
       case 'auth':
-        if (msg.token === this.#deviceAuthToken) {
-          conn.authenticated = true;
-          conn.deviceId = msg.device_id;
-          conn.publicIp = msg.public_ip || conn.publicIp;
-          conn.runtime = msg.runtime;
+        if (this.#tryAuthenticate(conn, msg)) {
           this.#devices.set(conn.deviceId, conn);
           conn.ws.send(JSON.stringify({
             type: 'auth_ok',
@@ -74,7 +73,7 @@ class WsHub {
             publicIp: conn.publicIp,
             model: msg.model,
             androidVersion: msg.android_version,
-            deekeVersion: msg.deeke_version,
+            deekeVersion: msg.deeke_version || msg.clientVersion,
             runtime: conn.runtime,
           });
         } else {
@@ -162,7 +161,7 @@ class WsHub {
       this.#frontends.delete(conn);
     });
 
-    ws.on('error', () => {});
+    ws.on('error', () => { });
   }
 
   sendToDevice(deviceId: string, message: object): boolean {
@@ -201,11 +200,40 @@ class WsHub {
       }
     }
   }
+
+  #tryAuthenticate(conn: DeviceConnection, msg: any): boolean {
+    const token = msg.token;
+    if (!token) return false;
+
+    // Try JWT verification first (APK login flow)
+    try {
+      const decoded = jwt.verify(token, this.#jwtSecret, { algorithms: ['HS256'] }) as any;
+      conn.authenticated = true;
+      conn.username = decoded.username;
+      conn.deviceId = msg.device_id || msg.deviceId || `device-${Date.now()}`;
+      conn.publicIp = msg.public_ip || msg.ipAddress || conn.publicIp;
+      conn.runtime = msg.runtime || 'phonefarm-native';
+      return true;
+    } catch {
+      // Not a valid JWT, try device auth token
+    }
+
+    // Fallback: device auth token (phonefarm-relay bridge or direct device connection)
+    if (token === this.#deviceAuthToken) {
+      conn.authenticated = true;
+      conn.deviceId = msg.device_id || msg.deviceId || `device-${Date.now()}`;
+      conn.publicIp = msg.public_ip || msg.ipAddress || conn.publicIp;
+      conn.runtime = msg.runtime || 'phonefarm-native';
+      return true;
+    }
+
+    return false;
+  }
 }
 
 export let wsHub: WsHub;
 
 export function initWsHub(deviceAuthToken: string): WsHub {
-  wsHub = new WsHub(deviceAuthToken);
+  wsHub = new WsHub(deviceAuthToken, process.env.JWT_SECRET);
   return wsHub;
 }

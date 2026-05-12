@@ -24,9 +24,11 @@
  * UDP :8444 → 音视频帧中继转发给 Control 隧道（二进制 message）
  */
 
-import { WebSocket } from 'ws';
 import { randomUUID } from 'crypto';
-import type { RemoteInfo, Socket as DgramSocket } from 'dgram';
+import type { Socket as DgramSocket, RemoteInfo } from 'dgram';
+import dgram from 'dgram';
+import jwt from 'jsonwebtoken';
+import { WebSocket } from 'ws';
 import { AiBridgeRouter } from '../ai-orchestrator/ai-bridge-router';
 import type { AiMessage } from '../ai-orchestrator/types';
 
@@ -106,7 +108,6 @@ export class BridgeServer {
   // ── UDP relay for A/V frames ──
 
   startUdpRelay(): void {
-    const dgram = require('dgram');
     const socket = dgram.createSocket('udp4');
     this.#udpSocket = socket;
 
@@ -301,7 +302,6 @@ export class BridgeServer {
             return failAuth('JWT authentication required');
           }
           try {
-            const jwt = require('jsonwebtoken');
             jwt.verify(m.token, this.#jwtSecret);
             authed = true;
             clearTimeout(authTimeout);

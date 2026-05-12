@@ -18,6 +18,7 @@ import com.phonefarm.client.ui.components.*
 import com.phonefarm.client.ui.theme.AccentColor
 import com.phonefarm.client.ui.theme.Error
 import com.phonefarm.client.ui.theme.Success
+import com.phonefarm.client.BuildConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,7 +28,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class SettingsUiState(
-    val serverUrl: String = "https://your-server:8443",
+    val serverUrl: String = BuildConfig.API_BASE_URL,
     val serverStatus: String = "已连接",
     val serverLatency: Long = 42,
     val deviceName: String = "Pixel 7 Pro",

@@ -1,7 +1,7 @@
 package com.phonefarm.client.network
 
+import com.phonefarm.client.BuildConfig
 import com.phonefarm.client.di.TokenHolder
-import com.phonefarm.client.network.security.CertificatePinnerFactory
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -43,12 +43,16 @@ object NetworkModule {
                 chain.proceed(request)
             }
             .addInterceptor(HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.BODY
+                level = if (BuildConfig.DEBUG) {
+                    HttpLoggingInterceptor.Level.BODY
+                } else {
+                    HttpLoggingInterceptor.Level.BASIC
+                }
             })
             .build()
 
         return Retrofit.Builder()
-            .baseUrl("https://server.phonefarm.io:8443/")
+            .baseUrl(BuildConfig.API_BASE_URL + "/")
             .client(authClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()

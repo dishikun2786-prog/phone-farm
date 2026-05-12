@@ -24,6 +24,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.phonefarm.client.BuildConfig
+import com.phonefarm.client.data.local.SecurePreferences
+import com.phonefarm.client.di.TokenHolder
+import com.phonefarm.client.network.ApiService
 import com.phonefarm.client.ui.theme.Error
 import com.phonefarm.client.ui.theme.Success
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -35,7 +39,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class LoginUiState(
-    val serverUrl: String = "",
+    val serverUrl: String = BuildConfig.API_BASE_URL,
     val username: String = "",
     val password: String = "",
     val isLoading: Boolean = false,
@@ -51,10 +55,17 @@ enum class ServerStatus {
 }
 
 @HiltViewModel
-class LoginViewModel @Inject constructor() : ViewModel() {
+class LoginViewModel @Inject constructor(
+    private val apiService: ApiService,
+    private val securePreferences: SecurePreferences,
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUiState())
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
+
+    companion object {
+        const val KEY_SERVER_URL = "server_url"
+    }
 
     fun updateServerUrl(url: String) {
         _uiState.value = _uiState.value.copy(serverUrl = url, errorMessage = null)
@@ -70,6 +81,14 @@ class LoginViewModel @Inject constructor() : ViewModel() {
 
     fun testConnection() {
         viewModelScope.launch {
+            val url = _uiState.value.serverUrl
+            if (url.isBlank()) {
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "请先填写服务器地址"
+                )
+                return@launch
+            }
+
             _uiState.value = _uiState.value.copy(
                 isTestingConnection = true,
                 serverStatus = ServerStatus.CHECKING,
@@ -77,14 +96,15 @@ class LoginViewModel @Inject constructor() : ViewModel() {
             )
 
             try {
-                // TODO: Call actual API to test connection
-                delay(1200) // Simulate network check
+                val startTime = System.currentTimeMillis()
+                val health = apiService.healthCheck()
+                val elapsed = System.currentTimeMillis() - startTime
 
                 _uiState.value = _uiState.value.copy(
                     isTestingConnection = false,
-                    serverStatus = ServerStatus.ONLINE,
-                    serverLatency = 42L,
-                    serverVersion = "2.1.0"
+                    serverStatus = if (health.status == "ok") ServerStatus.ONLINE else ServerStatus.OFFLINE,
+                    serverLatency = elapsed,
+                    serverVersion = health.version
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -107,11 +127,39 @@ class LoginViewModel @Inject constructor() : ViewModel() {
             _uiState.value = state.copy(isLoading = true, errorMessage = null)
 
             try {
-                // TODO: Actual API login call
-                delay(1000)
+                val response = apiService.login(
+                    com.phonefarm.client.network.LoginRequest(
+                        username = state.username,
+                        password = state.password
+                    )
+                )
+
+                TokenHolder.token = response.token
+                TokenHolder.refreshToken = response.refreshToken
+                securePreferences.putString(KEY_SERVER_URL, state.serverUrl)
 
                 _uiState.value = _uiState.value.copy(isLoading = false)
                 onSuccess()
+            } catch (e: retrofit2.HttpException) {
+                val msg = when (e.code()) {
+                    401 -> "用户名或密码错误"
+                    429 -> "请求过于频繁，请稍后再试"
+                    else -> "服务器错误 (${e.code()})"
+                }
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    errorMessage = msg
+                )
+            } catch (e: java.net.ConnectException) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    errorMessage = "无法连接服务器，请检查地址"
+                )
+            } catch (e: java.net.SocketTimeoutException) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    errorMessage = "连接超时，请检查网络"
+                )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -140,7 +188,6 @@ fun LoginScreen(
     ) {
         Spacer(modifier = Modifier.height(80.dp))
 
-        // App icon
         Surface(
             modifier = Modifier.size(72.dp),
             shape = MaterialTheme.shapes.large,
@@ -174,12 +221,11 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(40.dp))
 
-        // Server URL input
         OutlinedTextField(
             value = state.serverUrl,
             onValueChange = viewModel::updateServerUrl,
             label = { Text("服务器地址") },
-            placeholder = { Text("https://your-server:8443") },
+            placeholder = { Text("https://phone.openedskill.com") },
             leadingIcon = {
                 Icon(Icons.Default.Cloud, contentDescription = null)
             },
@@ -204,7 +250,6 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Username
         OutlinedTextField(
             value = state.username,
             onValueChange = viewModel::updateUsername,
@@ -226,7 +271,6 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Password
         OutlinedTextField(
             value = state.password,
             onValueChange = viewModel::updatePassword,
@@ -260,7 +304,6 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Error message
         AnimatedVisibility(
             visible = state.errorMessage != null,
             enter = fadeIn() + expandVertically(),
@@ -294,7 +337,6 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Login button
         Button(
             onClick = { viewModel.login(onLoginSuccess) },
             modifier = Modifier
@@ -316,7 +358,6 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Test connection button
         OutlinedButton(
             onClick = viewModel::testConnection,
             modifier = Modifier
@@ -352,14 +393,12 @@ private fun ServerStatusIndicator(
             ServerStatus.CHECKING -> MaterialTheme.colorScheme.outline
             ServerStatus.UNKNOWN -> MaterialTheme.colorScheme.outlineVariant
         }
-
         Surface(
             modifier = Modifier.size(8.dp),
             shape = MaterialTheme.shapes.extraSmall,
             color = dotColor
         ) {}
-
-        if (latency != null && status == ServerStatus.ONLINE) {
+        if (latency != null) {
             Spacer(modifier = Modifier.width(4.dp))
             Text(
                 text = "${latency}ms",
@@ -367,8 +406,7 @@ private fun ServerStatusIndicator(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-
-        if (version != null && status == ServerStatus.ONLINE) {
+        if (version != null) {
             Spacer(modifier = Modifier.width(4.dp))
             Text(
                 text = "v$version",

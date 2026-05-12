@@ -8,8 +8,11 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.phonefarm.client.BuildConfig
 import com.phonefarm.client.MainActivity
 import com.phonefarm.client.R
+import com.phonefarm.client.data.local.SecurePreferences
+import com.phonefarm.client.di.TokenHolder
 import com.phonefarm.client.network.WebSocketClient
 import com.phonefarm.client.network.ConnectionState
 import dagger.hilt.android.AndroidEntryPoint
@@ -25,6 +28,7 @@ import javax.inject.Inject
 class BridgeForegroundService : Service() {
 
     @Inject lateinit var webSocketClient: WebSocketClient
+    @Inject lateinit var securePreferences: SecurePreferences
 
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var isConnected = false
@@ -37,6 +41,7 @@ class BridgeForegroundService : Service() {
         const val CHANNEL_ID = NotificationHelper.CHANNEL_SYSTEM
         const val ACTION_STOP = "com.phonefarm.client.action.STOP_BRIDGE"
         const val EXTRA_DEVICE_NAME = "device_name"
+        const val KEY_SERVER_URL = "server_url"
     }
 
     override fun onCreate() {
@@ -65,9 +70,23 @@ class BridgeForegroundService : Service() {
 
         scope.launch {
             try {
-                // TODO: Read server URL and token from SecurePreferences
-                // webSocketClient.connect(serverUrl, token)
-                Log.d(TAG, "Service started — WebSocket connect deferred to CloudConfigSyncer")
+                val token = TokenHolder.token
+                if (token.isNullOrBlank()) {
+                    Log.w(TAG, "Cannot connect: no JWT token — user not logged in")
+                    return@launch
+                }
+
+                val savedUrl = securePreferences.getString(KEY_SERVER_URL)
+                val wsUrl = if (savedUrl != null) {
+                    savedUrl.replace("https://", "wss://")
+                        .replace("http://", "ws://")
+                        .trimEnd('/') + "/ws/device"
+                } else {
+                    BuildConfig.WS_URL
+                }
+
+                Log.d(TAG, "Connecting WebSocket to $wsUrl")
+                webSocketClient.connect(wsUrl, token)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to connect WebSocket", e)
             }
