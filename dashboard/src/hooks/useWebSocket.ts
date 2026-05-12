@@ -1,47 +1,63 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 
 type MessageHandler = (msg: any) => void;
+export type ConnectionState = 'connected' | 'connecting' | 'disconnected';
 
 export function useWebSocket(onMessage: MessageHandler) {
   const wsRef = useRef<WebSocket | null>(null);
   const handlersRef = useRef<MessageHandler>(onMessage);
+  const reconnectAttemptRef = useRef(0);
+  const [connectionState, setConnectionState] = useState<ConnectionState>('connecting');
 
   handlersRef.current = onMessage;
 
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws/frontend`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
 
-    ws.onopen = () => console.log('[WS] Frontend connected');
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        handlersRef.current(msg);
-      } catch { /* ignore */ }
-    };
-    ws.onclose = () => console.log('[WS] Frontend disconnected, reconnecting in 5s...');
-    ws.onerror = () => {};
-
-    // Reconnect on close
     let reconnectTimer: ReturnType<typeof setTimeout>;
-    const onClose = () => {
-      reconnectTimer = setTimeout(() => {
-        const newWs = new WebSocket(wsUrl);
-        wsRef.current = newWs;
-        newWs.onopen = ws.onopen;
-        newWs.onmessage = ws.onmessage;
-        newWs.onclose = onClose;
-        newWs.onerror = ws.onerror;
-      }, 5000);
+    let destroyed = false;
+
+    const connect = () => {
+      if (destroyed) return;
+      setConnectionState('connecting');
+
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('[WS] Frontend connected');
+        reconnectAttemptRef.current = 0;
+        if (!destroyed) setConnectionState('connected');
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          handlersRef.current(msg);
+        } catch { /* ignore */ }
+      };
+
+      ws.onclose = () => {
+        console.log('[WS] Frontend disconnected, reconnecting in 5s...');
+        if (!destroyed) {
+          setConnectionState('disconnected');
+          reconnectTimer = setTimeout(connect, 5000);
+        }
+      };
+
+      ws.onerror = () => {
+        reconnectAttemptRef.current++;
+        console.error(`[WS] Connection error (attempt #${reconnectAttemptRef.current})`);
+      };
     };
-    ws.addEventListener('close', onClose);
+
+    connect();
 
     return () => {
+      destroyed = true;
       clearTimeout(reconnectTimer);
-      ws.removeEventListener('close', onClose);
-      ws.close();
+      wsRef.current?.close();
     };
   }, []);
 
@@ -57,5 +73,5 @@ export function useWebSocket(onMessage: MessageHandler) {
     }
   }, []);
 
-  return { subscribe, unsubscribe };
+  return { subscribe, unsubscribe, connectionState };
 }

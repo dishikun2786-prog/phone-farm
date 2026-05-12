@@ -1,0 +1,185 @@
+openapi: "3.0.3"
+info:
+  title: PhoneFarm VLM Agent API
+  version: "0.1.0"
+  description: |
+    VLM-driven phone automation API. Coordinates the ClawGUI VLM Bridge
+    (Python) with PhoneFarm's device WebSocket hub (Node.js) to execute
+    natural language tasks on Android phones.
+
+servers:
+  - url: http://localhost:8445/api/v1
+    description: Dev server (JSON store)
+  - url: http://localhost:8443/api/v1
+    description: Production server (PostgreSQL)
+
+paths:
+  /vlm/execute:
+    post:
+      summary: Start a VLM task on a device
+      operationId: executeVlmTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deviceId, task]
+              properties:
+                deviceId:
+                  type: string
+                  format: uuid
+                  description: Target device ID
+                task:
+                  type: string
+                  description: Natural language task description
+                  example: "打开抖音，搜索美妆博主，关注前3个"
+                modelName:
+                  type: string
+                  description: Override VLM model name
+                  example: "qwen3-vl-8b"
+                maxSteps:
+                  type: integer
+                  default: 50
+                  description: Maximum steps before auto-stop
+                lang:
+                  type: string
+                  enum: [cn, en]
+                  default: cn
+      responses:
+        '200':
+          description: Task started successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  episodeId: { type: string }
+                  status: { type: string }
+                  modelName: { type: string }
+        '400':
+          description: Device offline or invalid request
+
+  /vlm/stop/{deviceId}:
+    post:
+      summary: Stop a running VLM task
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema: { type: string }
+
+  /vlm/episodes:
+    get:
+      summary: List all VLM episodes
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EpisodeSummary'
+
+  /vlm/episodes/{episodeId}:
+    get:
+      summary: Get episode detail with steps
+      parameters:
+        - name: episodeId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EpisodeDetail'
+
+  /vlm/episodes/{episodeId}/compile:
+    post:
+      summary: Compile episode to reusable DeekeScript
+      parameters:
+        - name: episodeId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scriptName: { type: string }
+                platform: { type: string, enum: [dy, ks, wx, xhs] }
+
+  /vlm/scripts:
+    get:
+      summary: List compiled VLM scripts
+
+  /vlm/scripts/{scriptId}:
+    get:
+      summary: Get script source code
+
+  /health:
+    get:
+      summary: Bridge health check (Python service)
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  model: { type: string }
+
+components:
+  schemas:
+    VLMAction:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [tap, swipe, type, back, home, launch, long_press, terminate, answer]
+        x: { type: integer }
+        y: { type: integer }
+        x2: { type: integer }
+        y2: { type: integer }
+        text: { type: string }
+        package: { type: string }
+        message: { type: string }
+
+    EpisodeSummary:
+      type: object
+      properties:
+        episodeId: { type: string }
+        status: { type: string }
+        totalSteps: { type: integer }
+        totalDurationMs: { type: integer }
+        message: { type: string }
+
+    EpisodeDetail:
+      type: object
+      properties:
+        episodeId: { type: string }
+        status: { type: string }
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/EpisodeStep'
+        totalSteps: { type: integer }
+        totalDurationMs: { type: integer }
+        message: { type: string }
+
+    EpisodeStep:
+      type: object
+      properties:
+        stepNumber: { type: integer }
+        success: { type: boolean }
+        finished: { type: boolean }
+        action: { $ref: '#/components/schemas/VLMAction' }
+        thinking: { type: string }
+        screenshotBase64: { type: string }
+        durationMs: { type: integer }
+        error: { type: string }

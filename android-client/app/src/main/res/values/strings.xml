@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PhoneFarm</string>
+    <string name="app_tagline">手机群控平台</string>
+
+    <!-- Splash -->
+    <string name="splash_loading">正在初始化…</string>
+
+    <!-- Login -->
+    <string name="login_title">欢迎回来</string>
+    <string name="login_server_url">服务器地址</string>
+    <string name="login_username">用户名</string>
+    <string name="login_password">密码</string>
+    <string name="login_submit">登 录</string>
+    <string name="login_test_connection">测试服务器连接</string>
+    <string name="login_no_account">没有账号？联系管理员获取卡密</string>
+    <string name="login_server_online">连接正常</string>
+    <string name="login_server_offline">连接失败</string>
+
+    <!-- Activation -->
+    <string name="activation_title">激活设备</string>
+    <string name="activation_hint">请输入 16 位卡密完成激活</string>
+    <string name="activation_submit">激 活</string>
+    <string name="activation_success">激活成功</string>
+    <string name="activation_expiry">到期时间</string>
+    <string name="activation_quota">设备配额</string>
+    <string name="activation_contact">遇到问题？联系客服</string>
+
+    <!-- Home -->
+    <string name="home_greeting">下午好</string>
+    <string name="home_connected">已连接</string>
+    <string name="home_disconnected">已断开</string>
+    <string name="home_reconnecting">重连中…</string>
+    <string name="home_scripts_deployed">已部署脚本</string>
+    <string name="home_tasks_today">今日执行</string>
+    <string name="home_quick_actions">快捷操作</string>
+    <string name="home_recent_tasks">最近任务</string>
+    <string name="home_execute_script">执行脚本</string>
+    <string name="home_check_updates">检查更新</string>
+    <string name="home_task_logs">任务日志</string>
+    <string name="home_reconnect">重新连接</string>
+    <string name="home_try_float_ai">试试浮窗 AI 助手</string>
+
+    <!-- Permission Guide -->
+    <string name="permission_title">配置设备权限</string>
+    <string name="permission_subtitle">完成以下步骤以启用全部功能</string>
+    <string name="permission_accessibility">无障碍服务</string>
+    <string name="permission_accessibility_desc">自动操作 APP 的核心权限，用于执行点击、滑动、输入等自动化动作</string>
+    <string name="permission_float_window">悬浮窗权限</string>
+    <string name="permission_float_window_desc">保持浮窗 AI 助手在前台运行</string>
+    <string name="permission_battery">电池优化豁免</string>
+    <string name="permission_battery_desc">防止系统在后台关闭 APP</string>
+    <string name="permission_notification">通知权限</string>
+    <string name="permission_notification_desc">接收任务完成和版本更新通知</string>
+    <string name="permission_go_enable">去开启</string>
+    <string name="permission_authorized">已授权</string>
+    <string name="permission_unauthorized">未授权</string>
+    <string name="permission_done">全部完成，进入主页</string>
+
+    <!-- Plugin Setup -->
+    <string name="plugin_title">正在配置运行环境</string>
+    <string name="plugin_subtitle">登录和权限已完成，正在安装组件…</string>
+    <string name="plugin_enter_home">进入主页</string>
+
+    <!-- Script Manager -->
+    <string name="script_title">脚本管理</string>
+    <string name="script_last_sync">上次同步</string>
+    <string name="script_check_updates">检查更新</string>
+    <string name="script_manage_plugins">管理插件</string>
+    <string name="script_filter_all">全部</string>
+
+    <!-- Task Log -->
+    <string name="tasklog_title">任务日志</string>
+    <string name="tasklog_empty">暂无执行记录</string>
+
+    <!-- Settings -->
+    <string name="settings_title">设置</string>
+    <string name="settings_server">服务器连接</string>
+    <string name="settings_device">设备</string>
+    <string name="settings_vlm">VLM 推理引擎</string>
+    <string name="settings_models">本地模型存储</string>
+    <string name="settings_plugins">插件管理</string>
+    <string name="settings_sync">同步</string>
+    <string name="settings_about">关于</string>
+    <string name="settings_privacy">隐私政策</string>
+    <string name="settings_user_agreement">用户协议</string>
+    <string name="settings_delete_data">删除我的数据</string>
+    <string name="settings_deactivate">注销设备</string>
+
+    <!-- VLM Agent -->
+    <string name="vlm_title">VLM AI 任务</string>
+    <string name="vlm_input_hint">输入自然语言任务…</string>
+    <string name="vlm_start">开始执行</string>
+    <string name="vlm_pause">暂停</string>
+    <string name="vlm_stop">停止</string>
+    <string name="vlm_recording">录制中</string>
+
+    <!-- Float Window -->
+    <string name="float_ai_ready">AI 助手已就绪</string>
+    <string name="float_configured">配置中</string>
+    <string name="float_idle">空闲</string>
+    <string name="float_executing">执行中</string>
+    <string name="float_input_hint">输入自然语言指令…</string>
+    <string name="float_task_complete">任务完成</string>
+    <string name="float_save_script">保存为脚本</string>
+    <string name="float_discard">丢弃</string>
+    <string name="float_more">更多</string>
+
+    <!-- Save Script Dialog -->
+    <string name="save_script_title">保存任务脚本</string>
+    <string name="save_script_name">脚本名称</string>
+    <string name="save_script_platform">平台</string>
+    <string name="save_script_category">分类</string>
+    <string name="save_script_sync">同步到云端</string>
+    <string name="save_script_quick_chip">设为快捷指令</string>
+    <string name="save_script_save">保存</string>
+
+    <!-- Notifications -->
+    <string name="notif_channel_task">任务通知</string>
+    <string name="notif_channel_system">系统通知</string>
+    <string name="notif_channel_promo">推广通知</string>
+    <string name="notif_foreground_title">PhoneFarm 运行中</string>
+    <string name="notif_foreground_body">正在监控设备状态</string>
+
+    <!-- Common -->
+    <string name="common_confirm">确定</string>
+    <string name="common_cancel">取消</string>
+    <string name="common_retry">重试</string>
+    <string name="common_delete">删除</string>
+    <string name="common_skip">跳过</string>
+    <string name="common_loading">加载中…</string>
+    <string name="common_empty">暂无数据</string>
+    <string name="common_error">出错了</string>
+    <string name="common_network_error">网络连接失败，请检查网络设置</string>
+    <string name="common_minutes_ago">分钟前</string>
+    <string name="common_hours_ago">小时前</string>
+</resources>

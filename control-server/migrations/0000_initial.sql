@@ -23,7 +23,7 @@ END $$;
 CREATE TABLE IF NOT EXISTS devices (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(128) NOT NULL,
-    tailscale_ip VARCHAR(45) NOT NULL,
+    public_ip VARCHAR(45) NOT NULL,
     deeke_version VARCHAR(32),
     model VARCHAR(128),
     android_version VARCHAR(16),
@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_devices_status ON devices(status);
-CREATE INDEX IF NOT EXISTS idx_devices_tailscale_ip ON devices(tailscale_ip);
+CREATE INDEX IF NOT EXISTS idx_devices_public_ip ON devices(public_ip);
 CREATE INDEX IF NOT EXISTS idx_tasks_device_id ON tasks(device_id);
 CREATE INDEX IF NOT EXISTS idx_executions_task_id ON executions(task_id);
 CREATE INDEX IF NOT EXISTS idx_executions_device_id ON executions(device_id);

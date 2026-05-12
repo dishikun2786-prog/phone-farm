@@ -8,3 +8,18 @@ control-server/.env.example
 .DS_Store
 Thumbs.db
 *.tsbuildinfo
+# Claude local config
+.claude/settings.local.json
+.claude/tasks.json
+# 3rd-party APKs
+operitai/
+# Python
+__pycache__/
+*.pyc
+# Android build artifacts
+android-client/app/build/
+android-client/build/
+android-client/.gradle/
+android-client/app/schemas/
+# Gradle
+*.gradle/

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- "P" letter on a clean background -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,30 L34,78 L52,78 C63,78 72,69 72,58 C72,47 63,38 52,38 L46,38 L46,30 Z M46,46 L52,46 C59,46 64,51 64,58 C64,65 59,70 52,70 L46,70 Z"/>
+    <!-- Signal bars hint -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M74,62 L80,62 L80,78 L74,78 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M82,50 L88,50 L88,78 L82,78 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M90,38 L96,38 L96,78 L90,78 Z"/>
+</vector>

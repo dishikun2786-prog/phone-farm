@@ -1,0 +1,39 @@
+# VPS Relay — 公网中继服务器（轻量，不需要 PostgreSQL/Redis）
+#
+# 手机设备 → VPS → 桥接隧道 → 本地控制服务器
+#
+# 启动: docker compose up -d
+
+version: '3.8'
+
+services:
+  relay:
+    build:
+      context: ../../control-server
+      dockerfile: ../deploy/vps-relay/Dockerfile
+    container_name: phonefarm-relay
+    restart: unless-stopped
+    environment:
+      RELAY_PORT: "8499"
+      RELAY_HOST: "0.0.0.0"
+      CONTROL_TOKEN: "${CONTROL_TOKEN:-control-token-change-me}"
+      DEVICE_AUTH_TOKEN: "${DEVICE_AUTH_TOKEN:-device-auth-token-change-me}"
+      JWT_SECRET: "${JWT_SECRET:-dev-secret-change-in-production}"
+      UDP_RELAY_PORT: "8444"
+      AI_AUTH_TOKEN: "${AI_AUTH_TOKEN:-ai-worker-token-change-me}"
+    ports:
+      - "8444:8444/udp"
+      - "127.0.0.1:8499:8499"
+
+  nginx:
+    image: nginx:alpine
+    container_name: phonefarm-relay-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - relay

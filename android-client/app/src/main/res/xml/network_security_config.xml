@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Production: cert pinning for api.phonefarm.io -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="false">api.phonefarm.io</domain>
+        <pin-set expiration="2027-01-01">
+            <!-- SHA-256 pins — replace with actual cert hashes before production -->
+            <pin digest="SHA-256">PLACEHOLDER_PIN_1_REPLACE_BEFORE_PRODUCTION</pin>
+            <pin digest="SHA-256">PLACEHOLDER_PIN_2_REPLACE_BEFORE_PRODUCTION</pin>
+        </pin-set>
+    </domain-config>
+
+    <!-- Staging: allow cleartext for local dev -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        <domain includeSubdomains="true">192.168.0.0/16</domain>
+    </domain-config>
+
+    <!-- Default: disallow cleartext -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
 
 const PLATFORM_OPTIONS = [
   { value: 'dy', label: '抖音' },
@@ -13,7 +13,10 @@ const PLATFORM_OPTIONS = [
 export default function TaskCreate() {
   const navigate = useNavigate();
   const templates = useStore(s => s.templates);
+  const templatesLoading = useStore(s => s.templatesLoading);
+  const templatesError = useStore(s => s.templatesError);
   const devices = useStore(s => s.devices);
+  const devicesLoading = useStore(s => s.devicesLoading);
   const loadTemplates = useStore(s => s.loadTemplates);
   const loadDevices = useStore(s => s.loadDevices);
   const createTask = useStore(s => s.createTask);
@@ -23,6 +26,7 @@ export default function TaskCreate() {
   const [deviceId, setDeviceId] = useState('');
   const [cronExpr, setCronExpr] = useState('');
   const [configJson, setConfigJson] = useState('{}');
+  const [jsonError, setJsonError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -32,15 +36,23 @@ export default function TaskCreate() {
   }, []);
 
   const selectedTemplate = templates.find(t => t.id === templateId);
-  const filteredTemplates = templateId
-    ? templates
-    : templates;
 
   const handleTemplateSelect = (id: string) => {
     setTemplateId(id);
     const tpl = templates.find(t => t.id === id);
     if (tpl && tpl.defaultConfig) {
       setConfigJson(JSON.stringify(tpl.defaultConfig, null, 2));
+      setJsonError('');
+    }
+  };
+
+  const handleConfigChange = (value: string) => {
+    setConfigJson(value);
+    setJsonError('');
+    try {
+      JSON.parse(value);
+    } catch {
+      setJsonError('JSON 格式无效');
     }
   };
 
@@ -48,11 +60,13 @@ export default function TaskCreate() {
     e.preventDefault();
     setError('');
 
+    if (jsonError) return;
+
     let config = {};
     try {
       config = JSON.parse(configJson);
     } catch {
-      setError('配置JSON格式无效');
+      setError('配置 JSON 格式无效');
       return;
     }
 
@@ -76,6 +90,7 @@ export default function TaskCreate() {
   };
 
   const onlineDevices = devices.filter(d => d.status === 'online');
+  const isLoading = templatesLoading || devicesLoading;
 
   return (
     <div className="max-w-2xl">
@@ -87,6 +102,10 @@ export default function TaskCreate() {
       </button>
 
       <h2 className="text-xl font-bold text-gray-900 mb-6">创建任务</h2>
+
+      {templatesError && (
+        <div className="bg-red-50 text-red-600 text-sm rounded-lg px-4 py-2 mb-4">{templatesError}</div>
+      )}
 
       {error && (
         <div className="bg-red-50 text-red-600 text-sm rounded-lg px-4 py-2 mb-4">{error}</div>
@@ -107,41 +126,59 @@ export default function TaskCreate() {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">任务类型</label>
-          <select
-            value={templateId}
-            onChange={e => handleTemplateSelect(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">-- 选择任务模板 --</option>
-            {PLATFORM_OPTIONS.map(plat => (
-              <optgroup key={plat.value} label={plat.label}>
-                {filteredTemplates.filter(t => t.platform === plat.value).map(t => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
+          {isLoading ? (
+            <div className="h-10 bg-gray-100 rounded-lg animate-pulse" />
+          ) : (
+            <>
+              <select
+                value={templateId}
+                onChange={e => handleTemplateSelect(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">-- 选择任务模板 --</option>
+                {PLATFORM_OPTIONS.map(plat => (
+                  <optgroup key={plat.value} label={plat.label}>
+                    {templates.filter(t => t.platform === plat.value).map(t => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </optgroup>
                 ))}
-              </optgroup>
-            ))}
-          </select>
-          {selectedTemplate && (
-            <p className="text-xs text-gray-500 mt-1">{selectedTemplate.description}</p>
+              </select>
+              {selectedTemplate && (
+                <p className="text-xs text-gray-500 mt-1">{selectedTemplate.description}</p>
+              )}
+            </>
           )}
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">目标设备</label>
-          <select
-            value={deviceId}
-            onChange={e => setDeviceId(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          >
-            <option value="">-- 选择设备 --</option>
-            {onlineDevices.map(d => (
-              <option key={d.id} value={d.id}>{d.name} ({d.tailscaleIp})</option>
-            ))}
-            {devices.filter(d => d.status !== 'online').map(d => (
-              <option key={d.id} value={d.id} disabled>{d.name} [离线]</option>
-            ))}
-          </select>
+          {devicesLoading ? (
+            <div className="h-10 bg-gray-100 rounded-lg animate-pulse" />
+          ) : (
+            <select
+              value={deviceId}
+              onChange={e => setDeviceId(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            >
+              <option value="">-- 选择设备 --</option>
+              {onlineDevices.length > 0 && (
+                <optgroup label="在线设备">
+                  {onlineDevices.map(d => (
+                    <option key={d.id} value={d.id}>{d.name} ({d.tailscaleIp})</option>
+                  ))}
+                </optgroup>
+              )}
+              {devices.filter(d => d.status !== 'online').length > 0 && (
+                <optgroup label="离线设备">
+                  {devices.filter(d => d.status !== 'online').map(d => (
+                    <option key={d.id} value={d.id} disabled>{d.name} [离线]</option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          )}
         </div>
 
         <div>
@@ -156,20 +193,33 @@ export default function TaskCreate() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">任务配置 (JSON)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            任务配置 (JSON)
+            {jsonError && (
+              <span className="inline-flex items-center gap-1 text-red-500 font-normal ml-2">
+                <AlertCircle size={12} />
+                {jsonError}
+              </span>
+            )}
+          </label>
           <textarea
             value={configJson}
-            onChange={e => setConfigJson(e.target.value)}
+            onChange={e => handleConfigChange(e.target.value)}
             rows={12}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className={`w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 ${
+              jsonError
+                ? 'border-red-300 focus:ring-red-500'
+                : 'border-gray-300 focus:ring-blue-500'
+            }`}
           />
         </div>
 
         <button
           type="submit"
-          disabled={submitting}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2.5 text-sm font-medium disabled:opacity-50 transition-colors"
+          disabled={submitting || !!jsonError}
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2.5 text-sm font-medium disabled:opacity-50 transition-colors inline-flex items-center justify-center gap-2"
         >
+          {submitting && <Loader2 size={16} className="animate-spin" />}
           {submitting ? '创建中...' : '创建任务'}
         </button>
       </form>

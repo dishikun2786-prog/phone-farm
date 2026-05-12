@@ -3,11 +3,12 @@ import { WebSocket } from 'ws';
 interface DeviceConnection {
   ws: WebSocket;
   deviceId: string;
-  tailscaleIp: string;
+  publicIp: string;
   authenticated: boolean;
   connectedAt: Date;
   lastHeartbeat: Date;
   currentTaskId?: string;
+  runtime?: string;
 }
 
 interface FrontendConnection {
@@ -28,7 +29,7 @@ class WsHub {
     const conn: DeviceConnection = {
       ws,
       deviceId: '',
-      tailscaleIp: req?.socket?.remoteAddress || req?.ip || 'unknown',
+      publicIp: req?.socket?.remoteAddress || req?.ip || 'unknown',
       authenticated: false,
       connectedAt: new Date(),
       lastHeartbeat: new Date(),
@@ -59,16 +60,22 @@ class WsHub {
         if (msg.token === this.#deviceAuthToken) {
           conn.authenticated = true;
           conn.deviceId = msg.device_id;
-          conn.tailscaleIp = msg.tailscale_ip || conn.tailscaleIp;
+          conn.publicIp = msg.public_ip || conn.publicIp;
+          conn.runtime = msg.runtime;
           this.#devices.set(conn.deviceId, conn);
-          conn.ws.send(JSON.stringify({ type: 'auth_ok' }));
+          conn.ws.send(JSON.stringify({
+            type: 'auth_ok',
+            udpPort: 8444,
+            natProbeEnabled: true,
+          }));
           this.#broadcastToFrontends({
             type: 'device_online',
             deviceId: conn.deviceId,
-            tailscaleIp: conn.tailscaleIp,
+            publicIp: conn.publicIp,
             model: msg.model,
             androidVersion: msg.android_version,
             deekeVersion: msg.deeke_version,
+            runtime: conn.runtime,
           });
         } else {
           conn.ws.send(JSON.stringify({ type: 'auth_error', message: 'Invalid token' }));
@@ -179,8 +186,9 @@ class WsHub {
     if (!conn) return null;
     return {
       deviceId: conn.deviceId,
-      tailscaleIp: conn.tailscaleIp,
+      publicIp: conn.publicIp,
       currentTaskId: conn.currentTaskId,
+      runtime: conn.runtime,
     };
   }
 

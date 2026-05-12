@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <files-path name="scripts" path="scripts/" />
+    <files-path name="plugins" path="plugins/" />
+    <files-path name="models" path="models/" />
+    <files-path name="updates" path="updates/" />
+    <cache-path name="cache" path="/" />
+    <external-files-path name="external_scripts" path="scripts/" />
+    <external-cache-path name="external_cache" path="/" />
+</paths>

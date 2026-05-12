@@ -6,6 +6,9 @@ import fastifyJwt from '@fastify/jwt';
 import { config } from './config.js';
 import { initWsHub } from './ws-hub.js';
 import { deviceRoutes, taskRoutes, accountRoutes } from './routes.js';
+import { registerVlmRoutes } from './vlm/vlm-routes.js';
+import { BridgeClient } from './relay/bridge-client.js';
+import type { WebSocket } from 'ws';
 import { db } from './db.js';
 import { taskTemplates } from './schema.js';
 
@@ -18,6 +21,30 @@ await app.register(fastifyWebsocket);
 
 // WebSocket hub
 const hub = initWsHub(config.DEVICE_AUTH_TOKEN);
+
+// ── VPS Bridge (optional — only when BRIDGE_RELAY_URL is set) ──
+const bridgeMode = !!process.env.BRIDGE_RELAY_URL;
+let bridgeClient: BridgeClient | null = null;
+if (bridgeMode) {
+  bridgeClient = new BridgeClient({
+    relayUrl: process.env.BRIDGE_RELAY_URL!,
+    controlToken: process.env.BRIDGE_CONTROL_TOKEN || 'control-token-change-me',
+  });
+
+  bridgeClient.onDeviceConnect = (vws, deviceId, remoteAddress) => {
+    console.log(`[Bridge] Injecting remote phone: ${deviceId} (${remoteAddress})`);
+    const fakeReq = { socket: { remoteAddress }, ip: remoteAddress };
+    hub.handleDeviceUpgrade(vws as unknown as WebSocket, fakeReq);
+  };
+
+  bridgeClient.onFrontendConnect = (vws) => {
+    console.log(`[Bridge] Injecting remote frontend`);
+    hub.handleFrontendUpgrade(vws as unknown as WebSocket, {});
+  };
+
+  bridgeClient.connect();
+  console.log(`[Bridge] Client connected to ${process.env.BRIDGE_RELAY_URL}`);
+}
 
 app.register(async function (scope) {
   scope.get('/ws/device', { websocket: true }, (socket, req) => {
@@ -33,6 +60,9 @@ app.register(async function (scope) {
 await app.register(deviceRoutes);
 await app.register(taskRoutes);
 await app.register(accountRoutes);
+
+// VLM Agent routes
+registerVlmRoutes(app, hub);
 
 // Auth
 app.post('/api/v1/auth/login', async (req, reply) => {
@@ -50,7 +80,14 @@ app.get('/api/v1/health', async () => {
     status: 'ok',
     uptime: process.uptime(),
     devicesOnline: hub.getOnlineDevices().length,
+    bridge: bridgeClient ? bridgeClient.getStatus() : { enabled: false },
   };
+});
+
+// Bridge status
+app.get('/api/v1/bridge/status', async () => {
+  if (!bridgeClient) return { enabled: false };
+  return { enabled: true, ...bridgeClient.getStatus() };
 });
 
 // Seed task templates
@@ -86,7 +123,19 @@ try {
   console.log(`Control server running on http://${config.HOST}:${config.PORT}`);
   console.log(`WebSocket: ws://${config.HOST}:${config.PORT}/ws/device`);
   console.log(`WebSocket: ws://${config.HOST}:${config.PORT}/ws/frontend`);
+  if (bridgeMode) {
+    console.log(`Bridge mode: connected to ${process.env.BRIDGE_RELAY_URL}`);
+  }
 } catch (err) {
   app.log.error(err);
   process.exit(1);
 }
+
+// Graceful shutdown
+const shutdown = () => {
+  console.log('\nShutting down...');
+  if (bridgeClient) bridgeClient.disconnect();
+  app.close().then(() => process.exit(0));
+};
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);

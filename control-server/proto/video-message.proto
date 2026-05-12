@@ -1,0 +1,50 @@
+// VideoMessage — binary video frame relay protocol
+// Replaces JSON wrapping for H.264 NAL unit delivery to browsers.
+// Each frame is a single protobuf-encoded message sent as a WebSocket binary frame.
+//
+// Benefits over JSON+base64:
+//   - No base64 inflation (33% size reduction)
+//   - Timestamp in native varint (not string)
+//   - Keyframe flag for seeking/sync
+//   - Extensible without breaking clients
+
+syntax = "proto3";
+
+package phonefarm.video;
+
+message VideoFrame {
+  // Device that produced this frame
+  string device_id = 1;
+
+  // Monotonic frame sequence number (wraps at uint32 max)
+  uint32 frame_seq = 2;
+
+  // Unix timestamp in milliseconds when frame was captured
+  int64 timestamp_ms = 3;
+
+  // Video codec identifier: "h264", "h265", "av1"
+  string codec = 4;
+
+  // Whether this frame is a keyframe (IDR for H.264)
+  bool is_keyframe = 5;
+
+  // H.264 NAL unit (Annex B format with start code) or coded frame data
+  bytes nal_data = 6;
+
+  // Presentation timestamp in microseconds (for sync)
+  int64 pts_us = 7;
+
+  // Frame duration in microseconds (0 if unknown)
+  int32 duration_us = 8;
+}
+
+// Device metadata sent once at session start
+message DeviceMeta {
+  string device_id = 1;
+  string device_name = 2;
+  int32 width = 3;
+  int32 height = 4;
+  string codec = 5;
+  int32 bit_rate = 6;
+  int32 max_fps = 7;
+}

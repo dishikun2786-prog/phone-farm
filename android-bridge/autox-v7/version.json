@@ -1,0 +1,38 @@
+{
+  "version": "1.0.0",
+  "runtime": "autox",
+  "minAutoXVersion": "7.0.0",
+  "description": "AutoX v7 (Rhino mode) OTA script manifest — PhoneFarm",
+  "files": {
+    "compat.js": {
+      "version": "1.0.0",
+      "sha256": "PLACEHOLDER",
+      "required": true,
+      "description": "DeekeScript → AutoX v7 API compatibility shim"
+    },
+    "remote-bridge.js": {
+      "version": "1.0.0",
+      "sha256": "PLACEHOLDER",
+      "required": true,
+      "description": "WebSocket bridge to control server (AutoX native rewrite)"
+    },
+    "app-automation.js": {
+      "version": "1.0.0",
+      "sha256": "PLACEHOLDER",
+      "required": true,
+      "description": "Multi-platform APP automation framework"
+    },
+    "node-inspector.js": {
+      "version": "1.0.0",
+      "sha256": "PLACEHOLDER",
+      "required": false,
+      "description": "Accessibility node tree inspector"
+    },
+    "inspect-at-coord.js": {
+      "version": "1.0.0",
+      "sha256": "PLACEHOLDER",
+      "required": false,
+      "description": "Coordinate → UI selector mapper (VLM compiler)"
+    }
+  }
+}

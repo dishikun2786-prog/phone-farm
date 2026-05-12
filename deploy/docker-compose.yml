@@ -1,21 +1,8 @@
 version: '3.8'
 
 services:
-  headscale:
-    image: headscale/headscale:0.28.0
-    container_name: headscale
-    restart: unless-stopped
-    volumes:
-      - ./headscale/config:/etc/headscale
-      - ./headscale/data:/var/lib/headscale
-    ports:
-      - "8080:8080"
-      - "50443:50443"
-      - "9090:9090"
-    command: headscale serve
-
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     container_name: phonefarm-postgres
     restart: unless-stopped
     environment:
@@ -31,6 +18,9 @@ services:
     image: redis:7-alpine
     container_name: phonefarm-redis
     restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis-secret}
+    volumes:
+      - redisdata:/data
     ports:
       - "127.0.0.1:6379:6379"
 
@@ -42,15 +32,16 @@ services:
       PORT: "8443"
       HOST: "0.0.0.0"
       DATABASE_URL: "postgresql://phonefarm:phonefarm_secret@postgres:5432/phonefarm"
-      REDIS_URL: "redis://redis:6379"
+      REDIS_URL: "redis://default:${REDIS_PASSWORD:-redis-secret}@redis:6379"
       JWT_SECRET: "${JWT_SECRET:-change-me-in-production}"
       DEVICE_AUTH_TOKEN: "${DEVICE_AUTH_TOKEN:-device-auth-token-change-me}"
-      HEADSCALE_API_URL: "http://headscale:8080"
+      UDP_RELAY_PORT: "8444"
     depends_on:
       - postgres
       - redis
     ports:
       - "127.0.0.1:8443:8443"
+      - "8444:8444/udp"
 
   nginx:
     image: nginx:alpine
@@ -68,3 +59,5 @@ services:
 
 volumes:
   pgdata:
+  redisdata:
+  redisdata:

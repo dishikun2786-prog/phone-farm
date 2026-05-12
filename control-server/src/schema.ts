@@ -3,11 +3,12 @@ import { pgTable, uuid, varchar, integer, boolean, timestamp, jsonb, text, pgEnu
 export const platformEnum = pgEnum('platform', ['dy', 'ks', 'wx', 'xhs']);
 export const deviceStatusEnum = pgEnum('device_status', ['online', 'offline', 'busy', 'error']);
 export const executionStatusEnum = pgEnum('execution_status', ['pending', 'running', 'completed', 'failed', 'stopped']);
+export const scriptValidationEnum = pgEnum('script_validation', ['untested', 'passed', 'failed']);
 
 export const devices = pgTable('devices', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: varchar('name', { length: 128 }).notNull(),
-  tailscaleIp: varchar('tailscale_ip', { length: 45 }).notNull(),
+  publicIp: varchar('public_ip', { length: 45 }).notNull(),
   deekeVersion: varchar('deeke_version', { length: 32 }),
   model: varchar('model', { length: 128 }),
   androidVersion: varchar('android_version', { length: 16 }),
@@ -75,4 +76,48 @@ export const users = pgTable('users', {
   passwordHash: varchar('password_hash', { length: 256 }).notNull(),
   role: varchar('role', { length: 32 }).default('operator').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// ── VLM Agent tables ──
+
+export const vlmEpisodes = pgTable('vlm_episodes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'set null' }),
+  deviceId: uuid('device_id').references(() => devices.id, { onDelete: 'cascade' }).notNull(),
+  modelName: varchar('model_name', { length: 128 }).notNull(),
+  taskPrompt: text('task_prompt').notNull(),
+  status: executionStatusEnum('status').default('pending').notNull(),
+  totalSteps: integer('total_steps').default(0),
+  stats: jsonb('stats').default({}),
+  errorMessage: text('error_message'),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  finishedAt: timestamp('finished_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const vlmSteps = pgTable('vlm_steps', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  episodeId: uuid('episode_id').references(() => vlmEpisodes.id, { onDelete: 'cascade' }).notNull(),
+  stepIndex: integer('step_index').notNull(),
+  screenshotPath: varchar('screenshot_path', { length: 512 }),
+  modelThinking: text('model_thinking'),
+  modelRawOutput: text('model_raw_output'),
+  action: jsonb('action').notNull(),
+  elementSelector: jsonb('element_selector'),
+  success: boolean('success').default(true),
+  durationMs: integer('duration_ms'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const vlmScripts = pgTable('vlm_scripts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  episodeId: uuid('episode_id').references(() => vlmEpisodes.id, { onDelete: 'set null' }),
+  name: varchar('name', { length: 256 }).notNull(),
+  platform: platformEnum('platform').notNull(),
+  sourceCode: text('source_code').notNull(),
+  selectorCount: integer('selector_count').default(0),
+  validationStatus: scriptValidationEnum('validation_status').default('untested').notNull(),
+  validationEpisodeId: uuid('validation_episode_id').references(() => vlmEpisodes.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });

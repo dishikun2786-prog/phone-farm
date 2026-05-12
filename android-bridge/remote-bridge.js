@@ -36,6 +36,8 @@ const CONFIG = {
 };
 
 // ============== 设备信息 ==============
+const SCRIPTS_DIR = '/sdcard/DeekeScript/scripts/';
+
 function getDeviceInfo() {
   return {
     device_id: Device.androidId || ('device-' + Device.serial),
@@ -43,7 +45,41 @@ function getDeviceInfo() {
     android_version: Device.release || 'Unknown',
     deeke_version: App.versionName || 'Unknown',
     tailscale_ip: Storage.get('tailscale_ip') || 'unknown',
+    script_version: getCurrentScriptVersion(),
   };
+}
+
+/** Read the installed script version from external scripts directory */
+function getCurrentScriptVersion() {
+  try {
+    var versionPath = SCRIPTS_DIR + 'version.json';
+    if (Files.exists(versionPath)) {
+      var raw = Files.read(versionPath);
+      var manifest = JSON.parse(raw);
+      return manifest.version || '0.0.0';
+    }
+  } catch (e) {}
+  return 'builtin'; // running from bundled APK scripts
+}
+
+/** Check if external scripts directory exists and has valid version.json */
+function hasExternalScripts() {
+  try {
+    return Files.exists(SCRIPTS_DIR + 'version.json');
+  } catch (e) {
+    return false;
+  }
+}
+
+/** Load a script from external directory, fall back to bundled */
+function requireScript(filename) {
+  var extPath = SCRIPTS_DIR + filename;
+  try {
+    if (Files.exists(extPath)) {
+      return Files.read(extPath);
+    }
+  } catch (e) {}
+  return null;
 }
 
 // ============== WebSocket 连接管理 ==============
@@ -115,6 +151,8 @@ function handleMessage(msg) {
       if (CONFIG.screenshotInterval > 0) {
         startScreenshot();
       }
+      // Report script versions so server knows what's installed
+      reportScriptVersions();
       FloatDialogs.toast('远程服务已连接');
       break;
 
@@ -141,6 +179,14 @@ function handleMessage(msg) {
 
     case 'set_config':
       updateConfig(msg);
+      break;
+
+    case 'deploy_scripts':
+      handleDeployScripts(msg);
+      break;
+
+    case 'check_scripts':
+      reportScriptVersions();
       break;
   }
 }
@@ -217,8 +263,15 @@ function startTask(msg) {
       Storage.put('remote_task_config_' + msg.task_id, JSON.stringify(msg.config));
     }
 
-    // 使用 DeekeScript 的脚本引擎执行任务
-    const scriptPath = 'tasks/' + msg.script + '.js';
+    // Use DeekeScript 的脚本引擎执行任务
+    // Prefer external (OTA-deployed) scripts, fall back to bundled
+    var scriptPath = SCRIPTS_DIR + msg.script + '.js';
+    if (!Files.exists(scriptPath)) {
+      scriptPath = 'tasks/' + msg.script + '.js';
+      Log.log('[RemoteBridge] 使用内置脚本: ' + scriptPath);
+    } else {
+      Log.log('[RemoteBridge] 使用外部脚本: ' + scriptPath);
+    }
     Engines.executeScript(scriptPath, msg.config || {});
 
     sendTaskStatus('running', 0, '任务已启动');
@@ -307,6 +360,110 @@ function updateConfig(msg) {
     Storage.put(msg.key, msg.value);
     Log.log('[RemoteBridge] 配置更新: ' + msg.key + ' = ' + msg.value);
   }
+}
+
+// ============== OTA 脚本部署 ==============
+
+/**
+ * Handle incoming script deployment from control server.
+ * msg.files: { "filename.js": "<base64-encoded-content>", ... }
+ * msg.version: "1.0.1"
+ */
+function handleDeployScripts(msg) {
+  Log.log('[RemoteBridge] 收到脚本部署包, 版本: ' + (msg.version || 'unknown'));
+  if (!msg.files || Object.keys(msg.files).length === 0) {
+    Log.log('[RemoteBridge] 部署包为空');
+    return;
+  }
+
+  var deployed = [];
+  var failed = [];
+
+  try {
+    // Ensure scripts directory exists
+    if (!Files.exists(SCRIPTS_DIR)) {
+      Files.create(SCRIPTS_DIR);
+    }
+
+    var filenames = Object.keys(msg.files);
+    for (var i = 0; i < filenames.length; i++) {
+      var filename = filenames[i];
+      try {
+        var content = Base64.decode(msg.files[filename]);
+        Files.write(SCRIPTS_DIR + filename, content);
+        deployed.push(filename);
+        Log.log('[RemoteBridge] 已部署: ' + filename);
+      } catch (e) {
+        failed.push(filename + ': ' + e.message);
+        Log.log('[RemoteBridge] 部署失败: ' + filename + ' - ' + e.message);
+      }
+    }
+
+    // Write version manifest
+    if (deployed.length > 0) {
+      try {
+        Files.write(SCRIPTS_DIR + 'deployed_at.txt', new Date().toISOString());
+      } catch (e) {}
+    }
+  } catch (e) {
+    Log.log('[RemoteBridge] 部署异常: ' + e.message);
+  }
+
+  // Report back
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'deploy_result',
+      version: msg.version || 'unknown',
+      deployed: deployed,
+      failed: failed,
+    }));
+  }
+
+  if (deployed.length > 0) {
+    FloatDialogs.toast('脚本已更新: ' + deployed.length + ' 个文件');
+  }
+}
+
+/** Report current script versions back to control server */
+function reportScriptVersions() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+  var versions = {};
+  var installedVersion = 'builtin';
+
+  try {
+    if (hasExternalScripts()) {
+      var raw = Files.read(SCRIPTS_DIR + 'version.json');
+      var manifest = JSON.parse(raw);
+      installedVersion = manifest.version || '0.0.0';
+
+      var filenames = Object.keys(manifest.files || {});
+      for (var i = 0; i < filenames.length; i++) {
+        var fn = filenames[i];
+        var extPath = SCRIPTS_DIR + fn;
+        versions[fn] = {
+          manifestVersion: manifest.files[fn].version || '0.0.0',
+          exists: Files.exists(extPath),
+        };
+      }
+    }
+
+    var deployedAt = '';
+    try {
+      if (Files.exists(SCRIPTS_DIR + 'deployed_at.txt')) {
+        deployedAt = Files.read(SCRIPTS_DIR + 'deployed_at.txt').trim();
+      }
+    } catch (e) {}
+  } catch (e) {}
+
+  ws.send(JSON.stringify({
+    type: 'script_versions',
+    installedVersion: installedVersion,
+    deployedAt: deployedAt,
+    files: versions,
+  }));
+
+  Log.log('[RemoteBridge] 脚本版本: ' + installedVersion + ' (deployed: ' + deployedAt + ')');
 }
 
 // ============== 清理函数 ==============

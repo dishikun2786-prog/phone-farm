@@ -1,0 +1,37 @@
+{
+  "version": "1.0.0",
+  "minDeekeVersion": "1.0.0",
+  "description": "PhoneFarm remote bridge scripts — version manifest for OTA updates",
+  "files": {
+    "remote-bridge.js": {
+      "version": "1.0.0",
+      "sha256": "240856B4DD77413C20ABA44CF16444DF676494D8D9C1029E258C155C12CA8C56",
+      "required": true
+    },
+    "app-automation.js": {
+      "version": "1.0.0",
+      "sha256": "2911173FA5527220B8CE7E032C032D16A10C9146B93BE7F910E9B747D3C8BA05",
+      "required": true
+    },
+    "node-inspector.js": {
+      "version": "1.0.0",
+      "sha256": "35B5ACE7FCAB1217D9F3A1B28A26A372B4EA9786ED19422FD6381D758F10A501",
+      "required": false
+    },
+    "task_dy_toker.js": {
+      "version": "1.0.0",
+      "sha256": "26F3CA2F63D3481F449E1A6562E464A7A9F1F41460FFF5A4B3C57CC3A054DA42",
+      "required": false
+    },
+    "inspect-at-coord.js": {
+      "version": "1.0.0",
+      "sha256": "26D017D2B3992284CC89B74270725569A6CB927F08DBF3BB9B38001BD7D2AE8F",
+      "required": false
+    },
+    "ad-deeke-tasks.json": {
+      "version": "1.0.0",
+      "sha256": "BCDB9700500DFE89CBCAA951ECAA1B11D41D32FFFC0D46E47C07D55FE6D9031F",
+      "required": false
+    }
+  }
+}
