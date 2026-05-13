@@ -1,6 +1,7 @@
 /**
  * PhoneFarm Remote Command Routes — 远程设备命令 REST API
  */
+import crypto from "crypto";
 import type { FastifyInstance } from "fastify";
 import { RemoteCommandHandler, type RemoteCommand } from "./remote-command-handler";
 
@@ -10,17 +11,19 @@ export async function remoteCommandRoutes(app: FastifyInstance): Promise<void> {
   // 发送远程命令到指定设备
   app.post("/api/v1/devices/:deviceId/command", async (req, reply) => {
     const { deviceId } = req.params as { deviceId: string };
-    const { command, params, timeoutMs } = req.body as {
-      command: RemoteCommand;
-      params: Record<string, unknown>;
-      timeoutMs?: number;
-    };
-    const { randomUUID } = await import("crypto");
-    const requestId = randomUUID();
+    const body = req.body as Record<string, unknown>;
+    const command = (body.command || body.action) as RemoteCommand;
+    const params = (body.params || {}) as Record<string, unknown>;
+    const timeoutMs = body.timeoutMs as number | undefined;
+    if (!command) {
+      return reply.status(400).send({ error: "command (or action) is required" });
+    }
+
+    const requestId = crypto.randomUUID();
 
     try {
       const result = await handler.execute({
-        requestId, command, params: params ?? {}, deviceId, timeoutMs,
+        requestId, command, params, deviceId, timeoutMs,
       });
       await handler.auditLog(command, deviceId, (req as any).user?.userId ?? "system", result);
       return reply.send(result);
@@ -36,18 +39,20 @@ export async function remoteCommandRoutes(app: FastifyInstance): Promise<void> {
 
   // 批量发送命令到多台设备
   app.post("/api/v1/devices/command/batch", async (req, reply) => {
-    const { deviceIds, command, params, timeoutMs } = req.body as {
-      deviceIds: string[];
-      command: RemoteCommand;
-      params: Record<string, unknown>;
-      timeoutMs?: number;
-    };
-    const { randomUUID } = await import("crypto");
+    const body = req.body as Record<string, unknown>;
+    const deviceIds = body.deviceIds as string[];
+    const command = (body.command || body.action) as RemoteCommand;
+    const params = (body.params || {}) as Record<string, unknown>;
+    const timeoutMs = body.timeoutMs as number | undefined;
+    if (!command) {
+      return reply.status(400).send({ error: "command (or action) is required" });
+    }
+
     const results = await Promise.allSettled(
       deviceIds.map((deviceId) =>
         handler.execute({
-          requestId: randomUUID(),
-          command, params: params ?? {}, deviceId, timeoutMs,
+          requestId: crypto.randomUUID(),
+          command, params, deviceId, timeoutMs,
         })
       )
     );

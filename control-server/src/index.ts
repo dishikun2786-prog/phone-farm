@@ -57,6 +57,8 @@ import { promptTemplateRoutes } from './vlm/prompt-template-routes.js';
 import { DEFAULT_MODEL_SEEDS, registerVlmModelRoutes, type VlmModelConfig } from './vlm/vlm-model-routes.js';
 import { webhookRoutes } from './webhook/webhook-routes.js';
 
+const APP_VERSION = "1.0.0";
+
 const app = Fastify({ logger: true });
 
 // Plugins
@@ -306,7 +308,7 @@ app.register(async function (adminScope) {
     return {
       status: 'ok',
       uptime: process.uptime(),
-      version: '1.0.0',
+      version: APP_VERSION,
       devicesOnline: hub.getOnlineDevices().length,
       bridge: bridgeClient ? bridgeClient.getStatus() : { enabled: false },
       authenticatedUser: user.username,

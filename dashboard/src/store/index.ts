@@ -15,6 +15,8 @@ interface Device {
   lastSeen: string;
   online?: boolean;
   runtime?: string;
+  screenWidth?: number;
+  screenHeight?: number;
 }
 
 interface TaskTemplate {
@@ -91,7 +93,7 @@ interface VlmModelConfig {
   id: string;
   name: string;
   modelName: string;
-  modelType: 'autoglm' | 'qwenvl' | 'uitars' | 'maiui' | 'guiowl';
+  modelType: 'autoglm' | 'qwenvl' | 'uitars' | 'maiui' | 'guiowl' | 'deepseek';
   apiUrl: string;
   apiKey?: string;
   maxTokens: number;

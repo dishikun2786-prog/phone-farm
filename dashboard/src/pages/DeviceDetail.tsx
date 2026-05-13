@@ -154,8 +154,8 @@ export default function DeviceDetail() {
         <ScrcpyPlayer
           deviceId={id!}
           tailscaleIp={device.tailscaleIp}
-          deviceWidth={1080}
-          deviceHeight={2400}
+          deviceWidth={device.screenWidth || 1080}
+          deviceHeight={device.screenHeight || 2400}
           groupId={activeGroupId || undefined}
         />
       )}

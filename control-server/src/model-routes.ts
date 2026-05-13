@@ -188,11 +188,11 @@ export async function modelRoutes(app: FastifyInstance): Promise<void> {
 
   // 上传新模型（管理员）
   app.post("/api/v1/models/upload", async (req, reply) => {
-    const data = req.body as any;
-    if (!data.displayName) {
-      return reply.status(400).send({ error: "displayName required" });
+    const data = req.body as Record<string, unknown>;
+    if (!data.displayName || typeof data.displayName !== "string") {
+      return reply.status(400).send({ error: "displayName (string) required" });
     }
-    const model = store.create(data);
+    const model = store.create(data as any);
     return reply.status(201).send(model);
   });
 

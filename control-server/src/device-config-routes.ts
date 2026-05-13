@@ -191,16 +191,11 @@ export async function deviceConfigRoutes(app: FastifyInstance): Promise<void> {
     const wsHub = (app as any).wsHub;
     let pushed = 0;
     if (wsHub) {
-      const results = await Promise.allSettled(
-        deviceIds.map((deviceId) =>
-          wsHub.sendToDevice(deviceId, {
-            type: "config_update",
-            config,
-            timestamp: Date.now(),
-          })
-        )
-      );
-      pushed = results.filter((r) => r.status === "fulfilled").length;
+      for (const deviceId of deviceIds) {
+        if (wsHub.sendToDevice(deviceId, { type: "config_update", config, timestamp: Date.now() })) {
+          pushed++;
+        }
+      }
     }
     return reply.send({ ok: true, total: deviceIds.length, pushed });
   });

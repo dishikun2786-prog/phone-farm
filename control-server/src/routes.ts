@@ -27,7 +27,7 @@ export async function deviceRoutes(app: FastifyInstance) {
   });
 
   // Get device detail
-  app.get<{ Params: { id: string } }>('/api/v1/devices/:id', async (req) => {
+  app.get<{ Params: { id: string } }>('/api/v1/devices/:id', async (req, reply) => {
     const [device] = await db.select().from(devices).where(eq(devices.id, req.params.id));
     if (!device) {
       return reply.status(404).send({ error: 'Device not found' });
@@ -151,19 +151,21 @@ export async function taskRoutes(app: FastifyInstance) {
   });
 }
 
+const createAccountSchema = z.object({
+  platform: z.enum(["dy", "ks", "wx", "xhs"]),
+  username: z.string(),
+  passwordEncrypted: z.string(),
+  deviceId: z.string().optional(),
+});
+
 export async function accountRoutes(app: FastifyInstance) {
   app.get('/api/v1/accounts', async () => {
     return db.select().from(accounts).orderBy(accounts.platform);
   });
 
   app.post('/api/v1/accounts', async (req, reply) => {
-    const body = req.body as any;
-    const [acct] = await db.insert(accounts).values({
-      platform: body.platform,
-      username: body.username,
-      passwordEncrypted: body.passwordEncrypted,
-      deviceId: body.deviceId,
-    }).returning();
+    const body = createAccountSchema.parse(req.body);
+    const [acct] = await db.insert(accounts).values(body).returning();
     return reply.status(201).send(acct);
   });
 

@@ -60,6 +60,9 @@ export async function deviceGroupRoutes(app: FastifyInstance): Promise<void> {
     const { name, description, deviceIds, tags } = req.body as {
       name: string; description?: string; deviceIds?: string[]; tags?: string[];
     };
+    if (!name || typeof name !== "string") {
+      return reply.status(400).send({ error: "name (string) required" });
+    }
     const group = store.create(name, description ?? "", deviceIds ?? [], tags ?? []);
     return reply.status(201).send(group);
   });

@@ -17,7 +17,17 @@ export type RemoteCommand =
   | "start_app"
   | "stop_app"
   | "clear_app_data"
-  | "modify_setting";
+  | "modify_setting"
+  | "home"
+  | "back"
+  | "tap"
+  | "swipe"
+  | "type"
+  | "launch"
+  | "start_task"
+  | "stop_task"
+  | "deploy_scripts"
+  | "config_push";
 
 export interface RemoteCommandRequest {
   requestId: string;
@@ -64,18 +74,19 @@ export class RemoteCommandHandler {
       // Send WebSocket message to device
       const hub = (this.fastify as any).wsHub;
       if (hub) {
-        hub.sendToDevice(req.deviceId, {
+        const sent = hub.sendToDevice(req.deviceId, {
           type: `remote_${req.command}`,
           requestId: req.requestId,
           ...req.params,
-        }).catch((err: Error) => {
+        });
+        if (!sent) {
           this.handleResult(req.requestId, {
             requestId: req.requestId,
             success: false,
-            error: `Failed to send to device: ${err.message}`,
+            error: "Device offline or unreachable",
             durationMs: 0,
           });
-        });
+        }
       }
     });
   }

@@ -188,7 +188,7 @@ export async function scriptsManifestRoutes(app: FastifyInstance): Promise<void>
     if (wsHub) {
       wsHub.sendToDevice(deviceId, {
         type: "deploy_scripts",
-        version: "2.1.0",
+        version: store.getManifest("phonefarm-native").version,
         files,
         timestamp: Date.now(),
       });
@@ -200,7 +200,18 @@ export async function scriptsManifestRoutes(app: FastifyInstance): Promise<void>
   app.post("/api/v1/scripts/deploy/group/:groupId", async (req, reply) => {
     const { groupId } = req.params as { groupId: string };
     const { files } = req.body as { files: Record<string, string> };
-    return reply.send({ ok: true, groupId, deployed: Object.keys(files).length });
+    const wsHub = (app as any).wsHub;
+    if (wsHub) {
+      let deployed = 0;
+      const deviceIds = wsHub.getOnlineDevices();
+      for (const deviceId of deviceIds) {
+        if (wsHub.sendToDevice(deviceId, { type: "deploy_scripts", version: store.getManifest("phonefarm-native").version, files, timestamp: Date.now() })) {
+          deployed++;
+        }
+      }
+      return reply.send({ ok: true, groupId, deployed, totalDevices: deviceIds.length });
+    }
+    return reply.send({ ok: true, groupId, deployed: 0 });
   });
 
   // 获取当前脚本版本号
