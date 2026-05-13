@@ -262,6 +262,29 @@ function AppInner() {
 
 function App() {
   const isAuthenticated = useStore(s => s.isAuthenticated);
+  const logout = useStore(s => s.logout);
+  const [tokenValidated, setTokenValidated] = useState(false);
+
+  // Validate stored token against current server on first mount.
+  // Since we switched to thin-client (VPS as single source of truth),
+  // any stale localhost JWT must be purged.
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) { setTokenValidated(true); return; }
+    api.health()
+      .then(() => setTokenValidated(true))
+      .catch(() => { logout(); setTokenValidated(true); });
+  }, []);
+
+  if (!tokenValidated) {
+    return (
+      <BrowserRouter>
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="text-gray-400 text-sm">验证登录状态...</div>
+        </div>
+      </BrowserRouter>
+    );
+  }
 
   return (
     <BrowserRouter>

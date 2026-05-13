@@ -53,7 +53,7 @@ export default function BatchOperationPanel() {
       const deviceIds = Array.from(selectedIds);
       const res = await api.request('/devices/command/batch', {
         method: 'POST',
-        body: JSON.stringify({ deviceIds, command: selectedCommand, params: params ? JSON.parse(params) : {} }),
+        body: JSON.stringify({ deviceIds, command: selectedCommand, params: (() => { try { return params ? JSON.parse(params) : {}; } catch { return {}; } })() }),
       }) as { results: typeof results; succeeded: number; failed: number };
       setResults(res.results || []);
       toast('success', `执行完成: ${res.succeeded} 成功, ${res.failed} 失败`);

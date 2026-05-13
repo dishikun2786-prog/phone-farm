@@ -92,7 +92,7 @@ export default function KeyMapPage() {
           </p>
         </div>
         <button
-          onClick={() => navigate('/keymaps/new')}
+          onClick={() => toast('info', '导入功能开发中，请通过 ScriptManager 部署键位脚本')}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 dark:bg-purple-700 text-white rounded-lg text-sm font-medium hover:bg-purple-700 dark:hover:bg-purple-600 transition-colors active:scale-95"
         >
           <Plus size={16} /> 导入键位

@@ -30,7 +30,7 @@ export async function deviceRoutes(app: FastifyInstance) {
   app.get<{ Params: { id: string } }>('/api/v1/devices/:id', async (req) => {
     const [device] = await db.select().from(devices).where(eq(devices.id, req.params.id));
     if (!device) {
-      return { error: 'Device not found' };
+      return reply.status(404).send({ error: 'Device not found' });
     }
     const online = wsHub.isDeviceOnline(device.id);
     return { ...device, online };

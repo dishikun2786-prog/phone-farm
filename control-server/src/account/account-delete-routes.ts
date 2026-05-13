@@ -99,7 +99,11 @@ class AccountDeletionStore {
   }
 }
 
-export async function accountDeleteRoutes(app: FastifyInstance): Promise<void> {
+import type { AuthService } from '../auth/auth-middleware.js';
+import { requireAuth } from '../auth/auth-middleware.js';
+
+export async function accountDeleteRoutes(app: FastifyInstance, authService?: AuthService): Promise<void> {
+  const auth = authService ? requireAuth(authService) : undefined;
   const store = new AccountDeletionStore(app);
 
   // 请求删除账号数据
@@ -122,7 +126,7 @@ export async function accountDeleteRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // 取消删除请求
-  app.post("/api/v1/account/delete-cancel", async (req, reply) => {
+  app.post("/api/v1/account/delete-cancel", { preHandler: auth ? [auth] : [] }, async (req, reply) => {
     const { username } = req.body as { username: string };
     if (!username) {
       return reply.status(400).send({ error: "username required" });
@@ -137,13 +141,13 @@ export async function accountDeleteRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // 管理员查看待删除账号列表
-  app.get("/api/v1/account/pending-deletions", async (_req, reply) => {
+  app.get("/api/v1/account/pending-deletions", { preHandler: auth ? [auth] : [] }, async (_req, reply) => {
     const pending = store.listPending();
     return reply.send({ pendingDeletions: pending });
   });
 
   // 管理员立即执行删除
-  app.post("/api/v1/account/force-delete/:userId", async (req, reply) => {
+  app.post("/api/v1/account/force-delete/:userId", { preHandler: auth ? [auth] : [] }, async (req, reply) => {
     const { userId } = req.params as { userId: string };
     const result = await store.forceDelete(userId);
     if (!result.success) {

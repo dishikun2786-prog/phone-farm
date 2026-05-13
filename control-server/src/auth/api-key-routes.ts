@@ -3,6 +3,8 @@
  */
 import crypto from "crypto";
 import type { FastifyInstance } from "fastify";
+import type { AuthService } from './auth-middleware.js';
+import { requireAuth } from './auth-middleware.js';
 
 export interface ApiKeyRecord {
   id: string;
@@ -103,8 +105,14 @@ export class ApiKeyStore {
   }
 }
 
-export async function apiKeyRoutes(app: FastifyInstance): Promise<void> {
+export async function apiKeyRoutes(app: FastifyInstance, authService?: AuthService): Promise<void> {
   const store = new ApiKeyStore(app);
+  const authPreHandler = authService ? requireAuth(authService) : undefined;
+
+  // All API key routes require authentication
+  if (authPreHandler) {
+    app.addHook('preHandler', authPreHandler);
+  }
 
   // 创建 API Key
   app.post("/api/v1/api-keys", async (req, reply) => {

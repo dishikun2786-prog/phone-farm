@@ -1,4 +1,4 @@
-import fastifyCors from '@fastify/cors';
+﻿import fastifyCors from '@fastify/cors';
 import fastifyJwt from '@fastify/jwt';
 import fastifyWebsocket from '@fastify/websocket';
 import bcrypt from 'bcryptjs';
@@ -185,15 +185,18 @@ await app.register(deviceRoutes);
 await app.register(taskRoutes);
 await app.register(accountRoutes);
 
+// ── Auth Service ──
+const authService = new AuthService(app, config.JWT_SECRET);
+
 // ── Modular Routes ──
 await app.register(activationRoutes);
 await app.register(deviceGroupRoutes);
-await app.register(apiKeyRoutes);
+await app.register(async function (scope) { await apiKeyRoutes(scope, authService); });
 await app.register(scriptsManifestRoutes);
 await app.register(platformAccountRoutes);
 await app.register(modelRoutes);
 await app.register(deviceConfigRoutes);
-await app.register(accountDeleteRoutes);
+await app.register(async function (scope) { await accountDeleteRoutes(scope, authService); });
 await app.register(remoteCommandRoutes);
 await app.register(alertRoutes);
 await app.register(queueRoutes);
@@ -205,6 +208,7 @@ await app.register(billingRoutes);
 await app.register(configRoutes);
 
 const avRelayManager = new AvRelayManager();
+avRelayManager.setDeviceSender((deviceId, msg) => hub.sendToDevice(deviceId, msg));
 registerScrcpyRoutes(app, avRelayManager);
 
 const vlmModelStore: VlmModelConfig[] = DEFAULT_MODEL_SEEDS.map((seed, i) => ({
@@ -252,9 +256,6 @@ await app.register(async function (scope: FastifyInstance) {
 // [DISABLED] AI Memory Scheduler - DeepSeek API JSON parse issue
 // aiMemoryScheduler.start();
 console.log("[AIMemory] Scheduler API registered, auto-scheduling DISABLED");
-
-// Auth
-const authService = new AuthService(app, config.JWT_SECRET);
 
 app.post('/api/v1/auth/login', async (req, reply) => {
   const { username, password } = req.body as any;

@@ -176,6 +176,15 @@ class WsHub {
     this.#broadcastToFrontends(message);
   }
 
+  broadcastToDevices(message: object): void {
+    const msg = JSON.stringify(message);
+    for (const conn of this.#devices.values()) {
+      if (conn.ws.readyState === WebSocket.OPEN) {
+        conn.ws.send(msg);
+      }
+    }
+  }
+
   isDeviceOnline(deviceId: string): boolean {
     const conn = this.#devices.get(deviceId);
     return !!(conn && conn.ws.readyState === WebSocket.OPEN);

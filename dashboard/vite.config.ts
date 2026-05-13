@@ -6,10 +6,16 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
-      '/api': 'http://localhost:8445',
+      '/api': {
+        target: 'https://phone.openedskill.com',
+        changeOrigin: true,
+        secure: true,
+      },
       '/ws': {
-        target: 'ws://localhost:8445',
+        target: 'https://phone.openedskill.com',
         ws: true,
+        changeOrigin: true,
+        secure: true,
       },
     },
   },

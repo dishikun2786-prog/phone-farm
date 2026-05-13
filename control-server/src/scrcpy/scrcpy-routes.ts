@@ -395,8 +395,12 @@ export function registerScrcpyRoutes(
     try {
       // Screenshot via native APK: request screenshot through WebSocket control message
       // The device APK captures and sends screenshot back via WebSocket
+      const wsHub = (app as any).wsHub;
+      if (wsHub) {
+        wsHub.sendToDevice(deviceId, { type: 'take_screenshot', timestamp: Date.now() });
+      }
       return reply.status(200).send({
-        message: 'Screenshot request sent to device. Use WebSocket screenshot response.',
+        message: 'Screenshot request sent to device',
         deviceId,
       });
     } catch (err: any) {

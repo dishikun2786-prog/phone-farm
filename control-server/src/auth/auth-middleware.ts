@@ -53,7 +53,7 @@ export class AuthService {
   signRefreshToken(user: AuthUser): string {
     const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
     const payload = Buffer.from(JSON.stringify({
-      userId: user.userId, type: "refresh",
+      userId: user.userId, username: user.username, role: user.role, type: "refresh",
       iat: Math.floor(Date.now() / 1000),
       exp: Math.floor(Date.now() / 1000) + 30 * 24 * 3600,
     })).toString("base64url");

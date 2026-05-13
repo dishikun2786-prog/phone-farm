@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
-import { useWebSocket } from '../hooks/useWebSocket';
+
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import ScrcpyPlayer from '../components/ScrcpyPlayer';
 import GroupControlPanel from '../components/GroupControlPanel';
@@ -38,7 +38,6 @@ export default function DeviceDetail() {
   const liveInfo = useStore(s => s.liveInfo);
   const sendCommand = useStore(s => s.sendCommand);
   const loadDevices = useStore(s => s.loadDevices);
-  const { subscribe } = useWebSocket(() => {});
 
   const device = devices.find(d => d.id === id);
   const live: any = (id && liveInfo[id]) || {};
@@ -49,7 +48,6 @@ export default function DeviceDetail() {
 
   useEffect(() => {
     loadDevices();
-    if (id) subscribe(id);
   }, [id]);
 
   const [deploying, setDeploying] = useState(false);

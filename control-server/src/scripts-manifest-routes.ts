@@ -186,12 +186,12 @@ export async function scriptsManifestRoutes(app: FastifyInstance): Promise<void>
     const { files } = req.body as { files: Record<string, string> };
     const wsHub = (app as any).wsHub;
     if (wsHub) {
-      await wsHub.sendToDevice(deviceId, {
+      wsHub.sendToDevice(deviceId, {
         type: "deploy_scripts",
         version: "2.1.0",
         files,
         timestamp: Date.now(),
-      }).catch(() => {});
+      });
     }
     return reply.send({ ok: true, deviceId, deployed: Object.keys(files).length });
   });

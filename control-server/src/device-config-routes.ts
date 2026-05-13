@@ -172,11 +172,11 @@ export async function deviceConfigRoutes(app: FastifyInstance): Promise<void> {
     // Push to device via WebSocket
     const wsHub = (app as any).wsHub;
     if (wsHub) {
-      await wsHub.sendToDevice(deviceId, {
+      wsHub.sendToDevice(deviceId, {
         type: "config_update",
         config,
         timestamp: Date.now(),
-      }).catch(() => {});
+      });
     }
     app.log.info(`[Config] Updated config for device ${deviceId}`);
     return reply.send({ ok: true, deviceId, config: getConfig(deviceId) });
@@ -225,11 +225,11 @@ export async function deviceConfigRoutes(app: FastifyInstance): Promise<void> {
     // Push to device
     const wsHub = (app as any).wsHub;
     if (wsHub) {
-      await wsHub.sendToDevice(deviceId, {
+      wsHub.sendToDevice(deviceId, {
         type: "vlm_routing_update",
         routing,
         timestamp: Date.now(),
-      }).catch(() => {});
+      });
     }
     return reply.send({ ok: true, deviceId, routing: getConfig(deviceId).vlm.routing });
   });

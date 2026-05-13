@@ -73,7 +73,7 @@ export class ClusterBridge {
         const wsHub = (this.fastify as any).wsHub;
         const deviceId = msg.payload.deviceId as string;
         const message = msg.payload.message as Record<string, unknown>;
-        wsHub?.sendToDevice(deviceId, message).catch(() => {});
+        wsHub?.sendToDevice(deviceId, message);
         break;
       }
       case "config_sync":
