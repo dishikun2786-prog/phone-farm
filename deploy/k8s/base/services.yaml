@@ -1,0 +1,212 @@
+---
+# Services and Ingress for PhoneFarm K8s deployment
+---
+# Control Server — Internal ClusterIP Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: phonefarm-control-server
+  labels:
+    app.kubernetes.io/name: control-server
+    app.kubernetes.io/component: api
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8443"
+    prometheus.io/path: "/api/v1/health"
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: control-server
+  ports:
+    - name: https
+      port: 8443
+      targetPort: 8443
+      protocol: TCP
+    - name: udp-relay
+      port: 8444
+      targetPort: 8444
+      protocol: UDP
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 300
+
+---
+# Edge Node — Internal ClusterIP Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: phonefarm-edge-node
+  labels:
+    app.kubernetes.io/name: edge-node
+    app.kubernetes.io/component: edge
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/health"
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: edge-node
+  ports:
+    - name: http
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+    - name: metrics
+      port: 9091
+      targetPort: 9091
+      protocol: TCP
+
+---
+# Python AI Service — ClusterIP for Ray worker / AI inference
+apiVersion: v1
+kind: Service
+metadata:
+  name: phonefarm-python-ai
+  labels:
+    app.kubernetes.io/name: python-ai
+    app.kubernetes.io/component: inference
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: python-ai
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+
+---
+# NATS Headless Service — for cluster peer discovery
+apiVersion: v1
+kind: Service
+metadata:
+  name: phonefarm-nats-headless
+  labels:
+    app.kubernetes.io/name: nats
+    app.kubernetes.io/component: messaging
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service for StatefulSet DNS
+  selector:
+    app.kubernetes.io/name: nats
+  ports:
+    - name: client
+      port: 4222
+      targetPort: 4222
+      protocol: TCP
+    - name: cluster
+      port: 6222
+      targetPort: 6222
+      protocol: TCP
+    - name: monitor
+      port: 8222
+      targetPort: 8222
+      protocol: TCP
+
+---
+# NATS Service — normal ClusterIP for clients
+apiVersion: v1
+kind: Service
+metadata:
+  name: phonefarm-nats
+  labels:
+    app.kubernetes.io/name: nats
+    app.kubernetes.io/component: messaging
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: nats
+  ports:
+    - name: client
+      port: 4222
+      targetPort: 4222
+      protocol: TCP
+    - name: monitor
+      port: 8222
+      targetPort: 8222
+      protocol: TCP
+
+---
+# MinIO Service — S3-compatible object storage
+apiVersion: v1
+kind: Service
+metadata:
+  name: phonefarm-minio
+  labels:
+    app.kubernetes.io/name: minio
+    app.kubernetes.io/component: storage
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: minio
+  ports:
+    - name: s3-api
+      port: 9000
+      targetPort: 9000
+      protocol: TCP
+    - name: console
+      port: 9001
+      targetPort: 9001
+      protocol: TCP
+
+---
+# Ingress — TLS-terminated external access via cert-manager
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: phonefarm-ingress
+  labels:
+    app.kubernetes.io/name: ingress
+    app.kubernetes.io/component: gateway
+  annotations:
+    # cert-manager will automatically provision Let's Encrypt TLS certificates
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # Traefik or nginx ingress depending on deployment
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    # WebSocket support
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/websocket-services: phonefarm-control-server
+spec:
+  tls:
+    - hosts:
+        - phonefarm.example.com
+        - api.phonefarm.example.com
+      secretName: phonefarm-tls
+  rules:
+    - host: api.phonefarm.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: phonefarm-control-server
+                port:
+                  number: 8443
+    - host: phonefarm.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: phonefarm-control-server
+                port:
+                  number: 8443
+    # MinIO Console
+    - host: minio.phonefarm.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: phonefarm-minio
+                port:
+                  number: 9001

@@ -1,5 +1,6 @@
 import { WebSocket } from 'ws';
 import jwt from 'jsonwebtoken';
+import zlib from 'zlib';
 
 interface DeviceConnection {
   ws: WebSocket;
@@ -18,11 +19,13 @@ interface FrontendConnection {
   subscribedDevices: Set<string>;
 }
 
-class WsHub {
+export class WsHub {
   #devices = new Map<string, DeviceConnection>();
   #frontends = new Set<FrontendConnection>();
   #deviceAuthToken: string;
   #jwtSecret: string;
+  #taskTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+  #TASK_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes default
 
   constructor(deviceAuthToken: string, jwtSecret?: string) {
     this.#deviceAuthToken = deviceAuthToken;
@@ -39,8 +42,22 @@ class WsHub {
       lastHeartbeat: new Date(),
     };
 
-    ws.on('message', (raw) => {
+    ws.on('message', (raw, isBinary) => {
       try {
+        // Handle compressed binary messages (0x08 prefix = gzipped JSON)
+        if (isBinary || (raw instanceof Buffer && raw.length > 0 && raw[0] === 0x08)) {
+          const buffer = raw instanceof Buffer ? raw : Buffer.from(raw as ArrayBuffer);
+          if (buffer.length > 1 && buffer[0] === 0x08) {
+            const decompressed = zlib.gunzipSync(buffer.subarray(1));
+            const msg = JSON.parse(decompressed.toString());
+            this.#handleDeviceMessage(conn, msg);
+            return;
+          }
+          // Binary but not compressed — try as text
+          const msg = JSON.parse(buffer.toString());
+          this.#handleDeviceMessage(conn, msg);
+          return;
+        }
         const msg = JSON.parse(raw.toString());
         this.#handleDeviceMessage(conn, msg);
       } catch {
@@ -52,6 +69,7 @@ class WsHub {
       if (conn.deviceId) {
         this.#devices.delete(conn.deviceId);
         this.#broadcastToFrontends({ type: 'device_offline', deviceId: conn.deviceId });
+        this.#publishNatsDeviceOffline(conn.deviceId);
       }
     });
 
@@ -77,6 +95,13 @@ class WsHub {
             deekeVersion: msg.deeke_version || msg.clientVersion,
             runtime: conn.runtime,
           });
+          this.#publishNatsDeviceOnline(conn.deviceId, {
+            publicIp: conn.publicIp,
+            model: msg.model,
+            androidVersion: msg.android_version,
+            deekeVersion: msg.deeke_version || msg.clientVersion,
+            runtime: conn.runtime,
+          });
         } else {
           conn.ws.send(JSON.stringify({ type: 'auth_error', message: 'Invalid token' }));
         }
@@ -85,6 +110,10 @@ class WsHub {
       case 'heartbeat':
         if (!conn.authenticated) return;
         conn.lastHeartbeat = new Date();
+        // Ack the heartbeat so the device can track connection health
+        if (msg.seq != null) {
+          conn.ws.send(JSON.stringify({ type: 'heartbeat_ack', seq: msg.seq }));
+        }
         this.#broadcastToFrontends({
           type: 'device_heartbeat',
           deviceId: conn.deviceId,
@@ -97,6 +126,9 @@ class WsHub {
       case 'task_status':
         if (!conn.authenticated) return;
         conn.currentTaskId = msg.status === 'running' ? msg.task_id : undefined;
+        if (msg.status === 'running' && msg.task_id) {
+          this.#scheduleTaskTimeout(conn.deviceId, msg.task_id);
+        }
         this.#broadcastToFrontends({
           type: 'task_status_update',
           deviceId: conn.deviceId,
@@ -109,6 +141,7 @@ class WsHub {
 
       case 'task_result':
         if (!conn.authenticated) return;
+        this.#clearTaskTimeout(msg.task_id);
         conn.currentTaskId = undefined;
         this.#broadcastToFrontends({
           type: 'task_result',
@@ -136,6 +169,18 @@ class WsHub {
           level: msg.level,
           message: msg.message,
         });
+        break;
+
+      default:
+        // ── WebRTC signaling relay (Phase 2) ──
+        // Dynamic check for webrtc_* message types — routed via signaling-relay.ts
+        if (typeof msg.type === 'string' && msg.type.startsWith('webrtc_')) {
+          if (!conn.authenticated) return;
+          try {
+            const { handleWebrtcSignaling } = require('./webrtc/signaling-relay.js');
+            handleWebrtcSignaling(this, msg, conn.deviceId);
+          } catch { /* signaling relay optional */ }
+        }
         break;
     }
   }
@@ -205,6 +250,55 @@ class WsHub {
     };
   }
 
+  /** Schedule graceful task timeout — send stop_task, wait 5s, force-clear. */
+  #scheduleTaskTimeout(deviceId: string, taskId: string): void {
+    // Clear any existing timeout for this task
+    this.#clearTaskTimeout(taskId);
+
+    const timer = setTimeout(() => {
+      const conn = this.#devices.get(deviceId);
+      if (!conn || conn.currentTaskId !== taskId) {
+        this.#taskTimeouts.delete(taskId);
+        return;
+      }
+
+      // Phase 1: send stop_task
+      conn.ws.send(JSON.stringify({
+        type: 'stop_task',
+        task_id: taskId,
+        reason: 'timeout',
+      }));
+
+      // Phase 2: wait 5s, then force cancel
+      setTimeout(() => {
+        const currentConn = this.#devices.get(deviceId);
+        if (currentConn?.currentTaskId === taskId) {
+          currentConn.currentTaskId = undefined;
+          currentConn.ws.send(JSON.stringify({
+            type: 'task_complete',
+            payload: {
+              taskId,
+              status: 'timeout',
+              message: 'Task timed out after graceful shutdown',
+            },
+          }));
+          this.#taskTimeouts.delete(taskId);
+        }
+      }, 5000);
+    }, this.#TASK_TIMEOUT_MS);
+
+    this.#taskTimeouts.set(taskId, timer);
+  }
+
+  /** Clear the timeout for a completed/cancelled task. */
+  #clearTaskTimeout(taskId: string): void {
+    const timer = this.#taskTimeouts.get(taskId);
+    if (timer) {
+      clearTimeout(timer);
+      this.#taskTimeouts.delete(taskId);
+    }
+  }
+
   #broadcastToFrontends(message: object, onlyForDevice?: string) {
     const msg = JSON.stringify(message);
     for (const conn of this.#frontends) {
@@ -242,6 +336,26 @@ class WsHub {
     }
 
     return false;
+  }
+
+  // ── NATS integration hooks (no-op when NATS is disabled) ──
+
+  #publishNatsDeviceOnline(deviceId: string, info: Record<string, unknown>): void {
+    try {
+      const { natsSync } = require('./nats/nats-sync.js');
+      if (natsSync?.isConnected) {
+        natsSync.publishDeviceOnline(deviceId, info as any);
+      }
+    } catch { /* NATS optional */ }
+  }
+
+  #publishNatsDeviceOffline(deviceId: string): void {
+    try {
+      const { natsSync } = require('./nats/nats-sync.js');
+      if (natsSync?.isConnected) {
+        natsSync.publishDeviceOffline(deviceId);
+      }
+    } catch { /* NATS optional */ }
   }
 }
 

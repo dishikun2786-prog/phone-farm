@@ -2,10 +2,13 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../lib/api';
 import { useStore } from '../store';
 import { useWebSocket } from '../hooks/useWebSocket';
+import InfraStatusCard from '../components/InfraStatusCard';
+import FeatureFlagToggle from '../components/FeatureFlagToggle';
 import {
   Server, Database, Radio, Wifi, Shield, HardDrive,
   Play, Pause, Trash2, Zap, Activity, Clock, Cpu,
-  Smartphone, ListTodo,
+  Smartphone, ListTodo, Box, Antenna, Monitor, Search,
+  Download,
 } from 'lucide-react';
 
 interface HealthData {
@@ -35,6 +38,11 @@ export default function SystemControlPanel() {
 
   const devices = useStore(s => s.devices);
   const loadDevices = useStore(s => s.loadDevices);
+  const infraStatus = useStore(s => s.infraStatus);
+  const loadInfraStatus = useStore(s => s.loadInfraStatus);
+  const featureFlags = useStore(s => s.featureFlags);
+  const loadFeatureFlags = useStore(s => s.loadFeatureFlags);
+  const toggleFeatureFlag = useStore(s => s.toggleFeatureFlag);
 
   const activeTaskCount = devices.filter(d => d.status === 'busy').length;
 
@@ -95,6 +103,9 @@ export default function SystemControlPanel() {
         addLog('error', `健康检查失败: ${err.message}`);
       })
       .finally(() => setHealthLoading(false));
+
+    loadInfraStatus();
+    loadFeatureFlags();
   }, []);
 
   useEffect(() => {
@@ -138,62 +149,27 @@ export default function SystemControlPanel() {
     },
   ];
 
-  const serviceCards = [
-    {
-      name: 'Control Server',
-      icon: Server,
-      status: isHealthy,
-      info: health ? `v${health.version || '2.1.0'}` : '未知',
-      subInfo: health ? `uptime: ${formatUptime(health.uptime)}` : '',
-      actionLabel: '重启',
-      actionSoon: true,
-    },
-    {
-      name: 'PostgreSQL',
-      icon: Database,
-      status: isHealthy,
-      info: 'phonefarm DB',
-      subInfo: health ? `${health.devicesOnline || 0} devices` : '',
-      actionLabel: '查看',
-      actionSoon: false,
-    },
-    {
-      name: 'Redis',
-      icon: Zap,
-      status: isHealthy,
-      info: 'running',
-      subInfo: '队列/缓存',
-      actionLabel: '查看',
-      actionSoon: false,
-    },
-    {
-      name: 'WebSocket Hub',
-      icon: Radio,
-      status: connectionState === 'connected',
-      info: connectionState === 'connected' ? 'connected' : 'disconnected',
-      subInfo: `状态: ${connectionState}`,
-      actionLabel: '查看',
-      actionSoon: false,
-    },
-    {
-      name: 'UDP Relay',
-      icon: Wifi,
-      status: isHealthy,
-      info: ':8444',
-      subInfo: '音视频帧转发',
-      actionLabel: '查看',
-      actionSoon: false,
-    },
-    {
-      name: 'HTTPS / Caddy',
-      icon: Shield,
-      status: isHealthy,
-      info: ':443',
-      subInfo: 'SSL 有效',
-      actionLabel: '查看',
-      actionSoon: false,
-    },
-  ];
+  const INFRA_ICONS: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+    control_server: Server,
+    postgresql: Database,
+    redis: Zap,
+    nats: Antenna,
+    minio: Box,
+    ray: Cpu,
+    webrtc: Wifi,
+    websocket: Radio,
+  };
+
+  const INFRA_NAMES: Record<string, string> = {
+    control_server: 'Control Server',
+    postgresql: 'PostgreSQL',
+    redis: 'Redis',
+    nats: 'NATS',
+    minio: 'MinIO',
+    ray: 'Ray',
+    webrtc: 'WebRTC',
+    websocket: 'WebSocket Hub',
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -230,42 +206,59 @@ export default function SystemControlPanel() {
         </div>
       )}
 
-      {/* Service Grid */}
+      {/* Infrastructure Status Grid */}
       <div>
-        <h2 className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-3">核心服务</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {serviceCards.map((svc, i) => (
-            <div
-              key={svc.name}
-              className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-4 hover:shadow-md transition-all duration-200 animate-scale-in"
-              style={{ animationDelay: `${i * 50}ms` }}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-2.5">
-                  <svc.icon size={18} className="text-gray-400 dark:text-slate-500" />
-                  <span className="text-sm font-medium text-gray-900 dark:text-slate-100">{svc.name}</span>
-                </div>
-                <span className={`w-2 h-2 rounded-full mt-1.5 ${
-                  svc.status ? 'bg-green-500 animate-pulse' : 'bg-red-500'
-                }`} />
-              </div>
-              <div className="space-y-0.5 mb-3">
-                <p className="text-xs text-gray-600 dark:text-slate-400">{svc.info}</p>
-                <p className="text-xs text-gray-400 dark:text-slate-500">{svc.subInfo}</p>
-              </div>
-              <button
-                className={`text-xs font-medium px-3 py-1 rounded-md transition-colors ${
-                  svc.actionSoon
-                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50'
-                    : 'bg-gray-50 dark:bg-slate-700 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-600'
-                }`}
-              >
-                {svc.actionLabel}
-              </button>
-            </div>
-          ))}
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-slate-300">基础设施状态</h2>
+          <button
+            onClick={loadInfraStatus}
+            className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            刷新
+          </button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          {infraStatus ? (
+            Object.entries(infraStatus).map(([key, svc]) => {
+              const Icon = INFRA_ICONS[key] || Shield;
+              return (
+                <InfraStatusCard
+                  key={key}
+                  name={INFRA_NAMES[key] || key}
+                  icon={Icon}
+                  connected={svc.connected}
+                  info={svc.info}
+                />
+              );
+            })
+          ) : (
+            <p className="col-span-full text-xs text-gray-400 dark:text-slate-500 text-center py-4">
+              加载基础设施状态中...
+            </p>
+          )}
         </div>
       </div>
+
+      {/* Feature Flags */}
+      {featureFlags && Object.keys(featureFlags).length > 0 && (
+        <div>
+          <h2 className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-3">功能开关</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {Object.entries(featureFlags).map(([key, flag]) => (
+              <FeatureFlagToggle
+                key={key}
+                flagKey={key}
+                displayName={flag.displayName || key}
+                enabled={flag.enabled}
+                source={flag.source}
+                categoryKey={flag.categoryKey}
+                readOnly={flag.source === 'env'}
+                onToggle={toggleFeatureFlag}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Log Stream */}
       <div>

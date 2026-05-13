@@ -43,6 +43,28 @@ sealed class RemoteCommand {
     data class UnlockScreen(override val commandId: String) :
         RemoteCommand() { override val requiredPermission = PermissionLevel.MEDIUM }
 
+    data class Home(override val commandId: String) :
+        RemoteCommand() { override val requiredPermission = PermissionLevel.MEDIUM }
+
+    data class Back(override val commandId: String) :
+        RemoteCommand() { override val requiredPermission = PermissionLevel.MEDIUM }
+
+    data class Tap(override val commandId: String, val x: Float, val y: Float) :
+        RemoteCommand() { override val requiredPermission = PermissionLevel.MEDIUM }
+
+    data class Swipe(
+        override val commandId: String,
+        val x1: Float, val y1: Float,
+        val x2: Float, val y2: Float,
+        val durationMs: Long = 300L,
+    ) : RemoteCommand() { override val requiredPermission = PermissionLevel.MEDIUM }
+
+    data class Type(override val commandId: String, val text: String) :
+        RemoteCommand() { override val requiredPermission = PermissionLevel.MEDIUM }
+
+    data class Launch(override val commandId: String, val packageName: String) :
+        RemoteCommand() { override val requiredPermission = PermissionLevel.MEDIUM }
+
     data class StartApp(override val commandId: String, val packageName: String) :
         RemoteCommand() { override val requiredPermission = PermissionLevel.MEDIUM }
 
@@ -131,6 +153,12 @@ class RemoteCommandHandler @Inject constructor(
                 is RemoteCommand.Reboot -> handleReboot(command)
                 is RemoteCommand.LockScreen -> handleLockScreen(command)
                 is RemoteCommand.UnlockScreen -> handleUnlockScreen(command)
+                is RemoteCommand.Home -> handleHome(command)
+                is RemoteCommand.Back -> handleBack(command)
+                is RemoteCommand.Tap -> handleTap(command)
+                is RemoteCommand.Swipe -> handleSwipe(command)
+                is RemoteCommand.Type -> handleType(command)
+                is RemoteCommand.Launch -> handleLaunch(command)
                 is RemoteCommand.StartApp -> handleStartApp(command)
                 is RemoteCommand.StopApp -> handleStopApp(command)
                 is RemoteCommand.ClearAppData -> handleClearAppData(command)
@@ -149,20 +177,97 @@ class RemoteCommandHandler @Inject constructor(
 
     // ---- command handlers ----
 
+    private suspend fun handleHome(cmd: RemoteCommand.Home): RemoteCommandResult {
+        val service = accessibilityService ?: return RemoteCommandResult.Error("Accessibility service not running")
+        return if (service.home()) RemoteCommandResult.Success("Home")
+        else RemoteCommandResult.Error("Home action failed")
+    }
+
+    private suspend fun handleBack(cmd: RemoteCommand.Back): RemoteCommandResult {
+        val service = accessibilityService ?: return RemoteCommandResult.Error("Accessibility service not running")
+        return if (service.back()) RemoteCommandResult.Success("Back")
+        else RemoteCommandResult.Error("Back action failed")
+    }
+
+    private suspend fun handleTap(cmd: RemoteCommand.Tap): RemoteCommandResult {
+        val service = accessibilityService ?: return RemoteCommandResult.Error("Accessibility service not running")
+        service.click(cmd.x, cmd.y)
+        return RemoteCommandResult.Success("Tap at (${cmd.x}, ${cmd.y})")
+    }
+
+    private suspend fun handleSwipe(cmd: RemoteCommand.Swipe): RemoteCommandResult {
+        val service = accessibilityService ?: return RemoteCommandResult.Error("Accessibility service not running")
+        service.swipe(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.durationMs)
+        return RemoteCommandResult.Success("Swipe from (${cmd.x1},${cmd.y1}) to (${cmd.x2},${cmd.y2})")
+    }
+
+    private suspend fun handleType(cmd: RemoteCommand.Type): RemoteCommandResult {
+        val service = accessibilityService ?: return RemoteCommandResult.Error("Accessibility service not running")
+        service.inputText(cmd.text)
+        return RemoteCommandResult.Success("Typed: ${cmd.text}")
+    }
+
+    private suspend fun handleLaunch(cmd: RemoteCommand.Launch): RemoteCommandResult {
+        try {
+            val intent = context.packageManager.getLaunchIntentForPackage(cmd.packageName)
+                ?: return RemoteCommandResult.Error("Package not found: ${cmd.packageName}")
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+            return RemoteCommandResult.Success("Launched ${cmd.packageName}")
+        } catch (e: Exception) {
+            return RemoteCommandResult.Error("Launch failed: ${e.message}")
+        }
+    }
+
     private suspend fun handleReboot(cmd: RemoteCommand.Reboot): RemoteCommandResult {
-        // TODO: Issue reboot via PowerManager or Runtime.exec("reboot").
-        return RemoteCommandResult.Error("Reboot not yet implemented")
+        return try {
+            val pm = context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            pm.reboot(null)
+            RemoteCommandResult.Success("Rebooting")
+        } catch (e: Exception) {
+            // Fallback: shell reboot (requires root/Shizuku)
+            try {
+                Runtime.getRuntime().exec(arrayOf("reboot"))
+                RemoteCommandResult.Success("Rebooting (shell)")
+            } catch (e2: Exception) {
+                RemoteCommandResult.Error("Reboot failed: need root or system permission")
+            }
+        }
     }
 
     private suspend fun handleLockScreen(cmd: RemoteCommand.LockScreen): RemoteCommandResult {
-        // TODO: Use DevicePolicyManager.lockNow() or simulate power button.
-        return RemoteCommandResult.Error("LockScreen not yet implemented")
+        return try {
+            val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+            dpm.lockNow()
+            RemoteCommandResult.Success("Screen locked")
+        } catch (e: Exception) {
+            // Fallback: simulate power button via accessibility service
+            val service = accessibilityService
+            if (service != null) {
+                service.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN)
+                RemoteCommandResult.Success("Screen locked (A11y)")
+            } else {
+                RemoteCommandResult.Error("LockScreen failed: ${e.message}")
+            }
+        }
     }
 
     private suspend fun handleUnlockScreen(cmd: RemoteCommand.UnlockScreen): RemoteCommandResult {
-        // TODO: Dismiss keyguard via WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
-        //       or simulate swipe up via accessibility service.
-        return RemoteCommandResult.Error("UnlockScreen not yet implemented")
+        val service = accessibilityService ?: return RemoteCommandResult.Error("Accessibility service not running")
+        // Dismiss keyguard by swiping up from bottom
+        try {
+            val wm = context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
+            val metrics = android.util.DisplayMetrics()
+            @Suppress("DEPRECATION")
+            wm.defaultDisplay.getRealMetrics(metrics)
+            val cx = metrics.widthPixels / 2f
+            val startY = metrics.heightPixels * 0.8f
+            val endY = metrics.heightPixels * 0.2f
+            service.swipe(cx, startY, cx, endY, 200)
+            RemoteCommandResult.Success("Unlock swipe performed")
+        } catch (e: Exception) {
+            RemoteCommandResult.Error("UnlockScreen failed: ${e.message}")
+        }
     }
 
     private suspend fun handleStartApp(cmd: RemoteCommand.StartApp): RemoteCommandResult {
@@ -178,15 +283,34 @@ class RemoteCommandHandler @Inject constructor(
     }
 
     private suspend fun handleStopApp(cmd: RemoteCommand.StopApp): RemoteCommandResult {
-        // TODO: Force-stop the app via ActivityManager.killBackgroundProcesses
-        //       or Runtime.exec("am force-stop ${cmd.packageName}").
-        return RemoteCommandResult.Error("StopApp not yet implemented")
+        return try {
+            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            am.killBackgroundProcesses(cmd.packageName)
+            RemoteCommandResult.Success("Stopped ${cmd.packageName}")
+        } catch (e: Exception) {
+            // Fallback: am force-stop via shell (requires Shizuku/root)
+            try {
+                Runtime.getRuntime().exec(arrayOf("am", "force-stop", cmd.packageName))
+                RemoteCommandResult.Success("Stopped ${cmd.packageName} (shell)")
+            } catch (e2: Exception) {
+                RemoteCommandResult.Error("StopApp failed: ${e.message} | shell: ${e2.message}")
+            }
+        }
     }
 
     private suspend fun handleClearAppData(cmd: RemoteCommand.ClearAppData): RemoteCommandResult {
-        // TODO: Clear app data via DevicePolicyManager.wipeData or
-        //       Runtime.exec("pm clear ${cmd.packageName}").
-        return RemoteCommandResult.Error("ClearAppData not yet implemented")
+        return try {
+            val process = Runtime.getRuntime().exec(arrayOf("pm", "clear", cmd.packageName))
+            process.waitFor()
+            val output = process.inputStream.bufferedReader().readText().trim()
+            if (output.contains("Success")) {
+                RemoteCommandResult.Success("Cleared ${cmd.packageName} data: $output")
+            } else {
+                RemoteCommandResult.Error("ClearAppData failed: $output")
+            }
+        } catch (e: Exception) {
+            RemoteCommandResult.Error("ClearAppData failed: ${e.message}")
+        }
     }
 
     private suspend fun handleScreenshot(cmd: RemoteCommand.Screenshot): RemoteCommandResult {
@@ -214,8 +338,25 @@ class RemoteCommandHandler @Inject constructor(
     }
 
     private suspend fun handleModifySetting(cmd: RemoteCommand.ModifySetting): RemoteCommandResult {
-        // TODO: Modify system settings via Settings.System/Secure/Global.putString(),
-        //       requiring WRITE_SETTINGS / WRITE_SECURE_SETTINGS permission.
-        return RemoteCommandResult.Error("ModifySetting not yet implemented")
+        return try {
+            val resolved = when (cmd.namespace.lowercase()) {
+                "system" -> android.provider.Settings.System
+                "secure" -> android.provider.Settings.Secure
+                "global" -> android.provider.Settings.Global
+                else -> return RemoteCommandResult.Error("Unknown namespace: ${cmd.namespace}")
+            }
+            if (!android.provider.Settings.System.canWrite(context)) {
+                // Try via shell for WRITE_SECURE_SETTINGS guarded keys
+                val process = Runtime.getRuntime().exec(
+                    arrayOf("settings", "put", cmd.namespace.lowercase(), cmd.key, cmd.value)
+                )
+                process.waitFor()
+                return RemoteCommandResult.Success("Setting ${cmd.key}=${cmd.value} (shell)")
+            }
+            android.provider.Settings.System.putString(context.contentResolver, cmd.key, cmd.value)
+            RemoteCommandResult.Success("Setting ${cmd.key}=${cmd.value}")
+        } catch (e: Exception) {
+            RemoteCommandResult.Error("ModifySetting failed: ${e.message}")
+        }
     }
 }

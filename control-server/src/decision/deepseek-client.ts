@@ -5,6 +5,7 @@
  * 与 QwenVLClient 暴露相同接口: decide(messages) → RawDecision
  */
 import { config } from "../config";
+import type { RuntimeConfig } from "../config-manager/runtime-config.js";
 import type { RawDecision } from "./types";
 
 export interface DeepSeekConfig {
@@ -13,6 +14,7 @@ export interface DeepSeekConfig {
   model?: string;
   maxTokens?: number;
   temperature?: number;
+  runtimeConfig?: RuntimeConfig;
 }
 
 interface ChatMessage {
@@ -27,13 +29,21 @@ export class DeepSeekClient {
   private maxTokens: number;
   private temperature: number;
   private totalTokensUsed = 0;
+  private rc: RuntimeConfig | undefined;
+  private maxRetries: number;
+  private requestTimeoutMs: number;
+  private retryBaseDelayMs: number;
 
   constructor(overrides?: DeepSeekConfig) {
+    this.rc = overrides?.runtimeConfig;
     this.apiKey = overrides?.apiKey || config.DEEPSEEK_API_KEY;
     this.apiUrl = overrides?.apiUrl || config.DEEPSEEK_API_URL;
     this.model = overrides?.model || config.DEEPSEEK_MODEL;
     this.maxTokens = overrides?.maxTokens ?? config.DEEPSEEK_MAX_TOKENS;
     this.temperature = overrides?.temperature ?? config.DEEPSEEK_TEMPERATURE;
+    this.maxRetries = this.rc?.getNumber("ai.deepseek.retry_max_attempts", 3) ?? 3;
+    this.requestTimeoutMs = this.rc?.getNumber("ai.deepseek.request_timeout_ms", 10000) ?? 10000;
+    this.retryBaseDelayMs = this.rc?.getNumber("ai.deepseek.retry_base_delay_ms", 1000) ?? 1000;
   }
 
   async decide(allMessages: ChatMessage[]): Promise<RawDecision> {
@@ -66,8 +76,8 @@ export class DeepSeekClient {
     return this.parseResponse(content);
   }
 
-  private async fetchWithRetry(body: Record<string, unknown>, retries = 3): Promise<any> {
-    for (let attempt = 1; attempt <= retries; attempt++) {
+  private async fetchWithRetry(body: Record<string, unknown>): Promise<any> {
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       try {
         const res = await fetch(this.apiUrl, {
           method: "POST",
@@ -76,13 +86,13 @@ export class DeepSeekClient {
             "Authorization": `Bearer ${this.apiKey}`,
           },
           body: JSON.stringify(body),
-          signal: AbortSignal.timeout(10000),
+          signal: AbortSignal.timeout(this.requestTimeoutMs),
         });
 
         if (!res.ok) {
           const errText = await res.text();
-          if ((res.status === 429 || res.status === 503 || res.status === 529) && attempt < retries) {
-            await sleep(1000 * Math.pow(2, attempt));
+          if ((res.status === 429 || res.status === 503 || res.status === 529) && attempt < this.maxRetries) {
+            await sleep(this.retryBaseDelayMs * Math.pow(2, attempt));
             continue;
           }
           throw new Error(`DeepSeek API ${res.status}: ${errText.slice(0, 200)}`);
@@ -90,8 +100,8 @@ export class DeepSeekClient {
 
         return await res.json();
       } catch (err) {
-        if (attempt === retries) throw err;
-        await sleep(1000 * Math.pow(2, attempt));
+        if (attempt === this.maxRetries) throw err;
+        await sleep(this.retryBaseDelayMs * Math.pow(2, attempt));
       }
     }
     throw new Error("Unreachable");

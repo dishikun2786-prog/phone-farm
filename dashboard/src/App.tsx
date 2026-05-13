@@ -27,6 +27,9 @@ import AuditLogViewer from './pages/admin/AuditLogViewer';
 import VlmUsageDashboard from './pages/admin/VlmUsageDashboard';
 import AlertRuleConfig from './pages/admin/AlertRuleConfig';
 import ServerHealthDashboard from './pages/admin/ServerHealthDashboard';
+import SystemConfigPage from './pages/admin/SystemConfigPage';
+import FeatureFlagsPage from './pages/admin/FeatureFlagsPage';
+import InfrastructureMonitorPage from './pages/admin/InfrastructureMonitorPage';
 import ConfigManagement from './pages/config/ConfigManagement';
 import ConfigGlobalEditor from './pages/config/ConfigGlobalEditor';
 import ConfigDeviceEditor from './pages/config/ConfigDeviceEditor';
@@ -57,6 +60,9 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/vlm-usage': 'VLM 用量统计',
   '/admin/alerts': '告警规则',
   '/admin/health': '服务健康监控',
+  '/admin/system-config': '系统配置管理',
+  '/admin/feature-flags': '功能开关管理',
+  '/admin/infrastructure': '基础设施监控',
   '/config': '配置管理',
   '/config/global': '全局配置编辑',
   '/config/device': '设备配置编辑',
@@ -249,6 +255,9 @@ function AppInner() {
         <Route path="/admin/vlm-usage" element={<VlmUsageDashboard />} />
         <Route path="/admin/alerts" element={<AlertRuleConfig />} />
         <Route path="/admin/health" element={<ServerHealthDashboard />} />
+        <Route path="/admin/system-config" element={<SystemConfigPage />} />
+        <Route path="/admin/feature-flags" element={<FeatureFlagsPage />} />
+        <Route path="/admin/infrastructure" element={<InfrastructureMonitorPage />} />
         <Route path="/config" element={<ConfigManagement />} />
         <Route path="/config/global" element={<ConfigGlobalEditor />} />
         <Route path="/config/device" element={<ConfigDeviceEditor />} />

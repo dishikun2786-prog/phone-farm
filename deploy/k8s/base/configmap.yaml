@@ -1,0 +1,143 @@
+---
+# ConfigMap — non-sensitive PhoneFarm configuration
+# Secrets managed externally via sealed-secrets, vault, or K8s secrets
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: phonefarm-config
+  labels:
+    app.kubernetes.io/name: config
+    app.kubernetes.io/component: configuration
+data:
+  # ── Server ──
+  PORT: "8443"
+  HOST: "0.0.0.0"
+  NODE_ENV: "production"
+
+  # ── Database ──
+  # DATABASE_URL is injected via Secret for security (contains credentials)
+  # Template: postgresql://phonefarm:password@postgres:5432/phonefarm
+
+  # ── Redis ──
+  # REDIS_URL is injected via Secret
+
+  # ── NATS ──
+  NATS_URL: "nats://phonefarm-nats:4222"
+  NATS_ENABLED: "true"
+
+  # ── MinIO ──
+  MINIO_ENDPOINT: "phonefarm-minio:9000"
+  MINIO_BUCKET: "phonefarm"
+  MINIO_USE_SSL: "false"
+  MINIO_ENABLED: "true"
+  # MINIO_ACCESS_KEY and MINIO_SECRET_KEY injected via Secret
+
+  # ── Ray Cluster ──
+  RAY_ADDRESS: "http://phonefarm-ray-head:8265"
+  RAY_ENABLED: "true"
+
+  # ── WebRTC / Signaling ──
+  STUN_SERVER_URL: "stun:stun.l.google.com:19302"
+  WEBRTC_ENABLED: "true"
+  # TURN_CREDENTIAL injected via Secret
+
+  # ── Edge Node ──
+  EDGE_NODE_ENABLED: "true"
+  EDGE_NODE_PORT: "9090"
+  EDGE_NODE_SERVICE: "phonefarm-edge-node:9090"
+
+  # ── Feature Flags ──
+  FF_DECISION_ENGINE: "true"
+  FF_QWEN_VL_FALLBACK: "true"
+  FF_STREAM_ON_DEMAND: "true"
+  FF_CROSS_DEVICE_MEMORY: "true"
+  FF_LEGACY_VLM: "false"
+  FF_WEBRTC_P2P: "true"
+  FF_NATS_SYNC: "true"
+  FF_RAY_SCHEDULER: "true"
+  FF_FEDERATED_LEARNING: "true"
+  FF_P2P_GROUP_CONTROL: "true"
+  FF_MODEL_HOT_UPDATE: "true"
+
+  # ── AI / DeepSeek ──
+  DEEPSEEK_API_URL: "https://api.deepseek.com/anthropic/messages"
+  DEEPSEEK_MODEL: "deepseek-v4-flash"
+  DEEPSEEK_MAX_TOKENS: "512"
+  DEEPSEEK_TEMPERATURE: "0.1"
+  # DEEPSEEK_API_KEY injected via Secret
+
+  # ── Qwen3-VL / DashScope ──
+  DASHSCOPE_API_URL: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+  DASHSCOPE_VL_MODEL: "qwen3-vl-plus"
+  DASHSCOPE_VL_MAX_TOKENS: "1024"
+  DASHSCOPE_VL_TEMPERATURE: "0.1"
+  # DASHSCOPE_API_KEY injected via Secret
+
+  # ── Routing Thresholds ──
+  ROUTER_CONFIDENCE_THRESHOLD: "0.7"
+  ROUTER_MAX_CONSECUTIVE_FAILURES: "3"
+  ROUTER_MAX_LOW_CONFIDENCE: "3"
+
+  # ── Edge State ──
+  EDGE_STATE_TTL_SEC: "300"
+
+  # ── Video Stream ──
+  STREAM_IDLE_TIMEOUT_SEC: "300"
+  STREAM_MAX_DURATION_SEC: "1800"
+
+  # ── Experience Compiler ──
+  EXPERIENCE_COMPILE_INTERVAL_MIN: "30"
+  EXPERIENCE_MIN_DEVICES: "3"
+
+  # ── Scrcpy ──
+  SCRCPY_MAX_SIZE: "1080"
+  SCRCPY_BIT_RATE: "4000000"
+  SCRCPY_MAX_FPS: "30"
+
+  # ── VLM Legacy ──
+  VLM_MAX_STEPS: "50"
+  VLM_TRACE_DIR: "data/episodes"
+
+  # ── Edge Node Go Config ──
+  EDGE_CONF: |
+    server:
+      port: 9090
+      metrics_port: 9091
+    nats:
+      url: "nats://phonefarm-nats:4222"
+      enabled: true
+    ray:
+      address: "http://phonefarm-ray-head:8265"
+      enabled: true
+    minio:
+      endpoint: "phonefarm-minio:9000"
+      bucket: "phonefarm"
+      use_ssl: false
+    feature_flags:
+      federated_learning: true
+      gpu_inference: true
+      local_model_cache: true
+
+---
+# Placeholder Secret — actual values managed externally
+# Use sealed-secrets or HashiCorp Vault for production
+apiVersion: v1
+kind: Secret
+metadata:
+  name: phonefarm-secrets
+  labels:
+    app.kubernetes.io/name: secrets
+    app.kubernetes.io/component: security
+type: Opaque
+stringData:
+  JWT_SECRET: "PLACEHOLDER-change-me-in-production-use-random-64-char-string"
+  DEVICE_AUTH_TOKEN: "PLACEHOLDER-device-auth-token-change-me"
+  DATABASE_URL: "postgresql://phonefarm:PLACEHOLDER@phonefarm-postgres:5432/phonefarm"
+  REDIS_URL: "redis://phonefarm-redis:6379"
+  NATS_TOKEN: "PLACEHOLDER-nats-token"
+  MINIO_ACCESS_KEY: "minioadmin"
+  MINIO_SECRET_KEY: "PLACEHOLDER-minio-secret"
+  DEEPSEEK_API_KEY: "PLACEHOLDER-deepseek-api-key"
+  DASHSCOPE_API_KEY: "PLACEHOLDER-dashscope-api-key"
+  TURN_USERNAME: "phonefarm"
+  TURN_CREDENTIAL: "PLACEHOLDER-turn-credential"

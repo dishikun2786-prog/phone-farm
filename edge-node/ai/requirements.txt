@@ -1,0 +1,54 @@
+# PhoneFarm Edge AI Service — Python Dependencies
+# Install: pip install -r requirements.txt
+# GPU support: pip install torch --index-url https://download.pytorch.org/whl/cu121
+
+# Web Framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+pydantic>=2.0.0
+
+# AI Inference
+ultralytics>=8.3.0        # YOLOv8 object detection
+paddleocr>=2.9.0          # OCR text recognition
+paddlepaddle>=3.0.0       # PaddlePaddle backend
+transformers>=4.46.0      # HuggingFace transformers (LLM)
+torch>=2.5.0              # PyTorch
+
+# MNN (Alibaba Mobile Neural Network) — for Qwen2-0.5B
+# Install via: pip install mnn
+# Or build from source: https://github.com/alibaba/MNN
+
+# NCNN (Tencent Neural Network) — for YOLO/OCR acceleration
+# ncnn Python bindings: pip install ncnn
+# Or build from source: https://github.com/Tencent/ncnn
+
+# Object Storage
+minio>=7.2.0              # S3-compatible client for MinIO
+
+# NATS Messaging
+nats-py>=0.8.0            # NATS Python client
+
+# State Management
+redis>=5.2.0              # Redis client (cache + queue)
+hiredis>=2.3.0            # Redis protocol parser (performance)
+
+# Monitoring
+prometheus-client>=0.21.0 # Prometheus metrics
+psutil>=6.0.0             # System resource monitoring
+
+# Utilities
+python-dotenv>=1.0.0      # .env file loading
+httpx>=0.28.0             # Async HTTP client
+pillow>=11.0.0            # Image processing
+numpy>=2.1.0              # Numerical computing
+opencv-python-headless>=4.10.0  # OpenCV (headless, no GUI)
+
+# Federated Learning
+# tensorflow-federated    # Optional: TFF for federated aggregation
+# flwr>=1.0.0             # Optional: Flower federated learning framework
+
+# Development
+pytest>=8.0.0
+pytest-asyncio>=0.24.0
+black>=24.0.0
+ruff>=0.7.0

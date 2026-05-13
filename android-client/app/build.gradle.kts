@@ -215,6 +215,12 @@ dependencies {
     implementation("androidx.camera:camera-camera2:1.4.1")
     implementation("androidx.camera:camera-lifecycle:1.4.1")
 
+    // WebRTC (Phase 2 — P2P communication)
+    implementation(libs.webrtc.core)
+
+    // NATS Java Client (Phase 2 — state sync)
+    implementation(libs.jnats)
+
     // Testing
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.mockk)

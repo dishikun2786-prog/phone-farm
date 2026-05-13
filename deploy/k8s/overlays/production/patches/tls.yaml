@@ -1,0 +1,19 @@
+---
+# Production TLS configuration — cert-manager annotation overrides
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: phonefarm-ingress
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/hsts: "true"
+    nginx.ingress.kubernetes.io/hsts-max-age: "31536000"
+    nginx.ingress.kubernetes.io/hsts-include-subdomains: "true"
+spec:
+  tls:
+    - hosts:
+        - phonefarm.example.com
+        - api.phonefarm.example.com
+      secretName: phonefarm-tls-production

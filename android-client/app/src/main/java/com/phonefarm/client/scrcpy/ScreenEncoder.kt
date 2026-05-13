@@ -51,6 +51,9 @@ class ScreenEncoder @Inject constructor(
     private val _isEncoding = MutableStateFlow(false)
     val isEncoding: StateFlow<Boolean> = _isEncoding.asStateFlow()
 
+    /** Callback invoked for each encoded H.264 frame. Receiver should send via WebSocket. */
+    var onFrameEncoded: ((ByteArray, Boolean) -> Unit)? = null
+
     private var mediaProjection: MediaProjection? = null
     private var mediaCodec: MediaCodec? = null
     private var virtualDisplay: VirtualDisplay? = null
@@ -207,12 +210,8 @@ class ScreenEncoder @Inject constructor(
                     val frameData = ByteArray(bufferInfo.size)
                     outputBuffer.get(frameData, bufferInfo.offset, bufferInfo.size)
 
-                    // TODO: Send frameData to WebSocket as binary message.
-                    //       Wrap in scrcpy protocol header:
-                    //       - PTS (8 bytes)
-                    //       - Frame size (4 bytes)
-                    //       - Keyframe flag (1 byte if I-frame)
-                    //       - H.264 NAL units
+                    val isKeyFrame = (bufferInfo.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME) != 0
+                    onFrameEncoded?.invoke(frameData, isKeyFrame)
 
                     codec.releaseOutputBuffer(outputIndex, false)
                 }

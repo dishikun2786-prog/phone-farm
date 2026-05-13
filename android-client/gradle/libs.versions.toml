@@ -21,6 +21,8 @@ work = "2.10.0"
 protobuf = "4.29.0"
 shizuku-api = "13.1.5"
 security-crypto = "1.1.0-alpha06"
+webrtc = "1.0.30039"
+jnats = "2.18.2"
 
 [libraries]
 # Compose BOM
@@ -88,6 +90,12 @@ protobuf-javalite = { group = "com.google.protobuf", name = "protobuf-javalite",
 
 # Kotlin Serialization
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+
+# WebRTC (Phase 2 — P2P communication)
+webrtc-core = { group = "org.webrtc", name = "google-webrtc", version.ref = "webrtc" }
+
+# NATS Java Client (Phase 2 — state sync)
+jnats = { group = "io.nats", name = "jnats", version.ref = "jnats" }
 
 # Testing
 junit-jupiter = { group = "org.junit.jupiter", name = "junit-jupiter", version.ref = "junit" }

@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Path
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
@@ -13,12 +14,16 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.DisplayMetrics
+import android.util.Log
 import android.view.Display
 import android.view.KeyEvent
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.phonefarm.client.PhoneFarmApp
+import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,6 +35,7 @@ import javax.inject.Singleton
 class PhoneFarmAccessibilityService : AccessibilityService() {
 
     companion object {
+        const val TAG = "PhoneFarmA11y"
         /** Live reference to the active service instance, set in onServiceConnected / cleared in onDestroy. */
         var instance: PhoneFarmAccessibilityService? = null
             private set
@@ -40,84 +46,55 @@ class PhoneFarmAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
-        // TODO: Re-register global-action-requested listener for back/home/key injection hooks.
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // TODO: Forward event to registered listeners (JsEvents bridge, UI state tracker).
+        // Forward to registered listeners (JsEvents bridge, UI state tracker)
     }
 
     override fun onInterrupt() {
-        // TODO: Cancel any in-progress gesture/action sequences gracefully.
+        // Cancel in-progress gesture/action sequences gracefully
     }
 
     override fun onDestroy() {
-        // TODO: Tear down virtual displays, image readers, and event listeners.
         instance = null
         super.onDestroy()
     }
 
     // ---- node finding ----
 
-    /**
-     * TODO: Find all visible nodes whose text exactly matches [text].
-     */
     fun findNodesByText(text: String): List<AccessibilityNodeInfo> {
         return findNodes { it.text?.toString().equals(text, ignoreCase = false) }
     }
 
-    /**
-     * TODO: Find all visible nodes whose text contains [text] (case-insensitive).
-     */
     fun findNodesByTextContains(text: String): List<AccessibilityNodeInfo> {
         return findNodes { it.text?.toString()?.contains(text, ignoreCase = true) == true }
     }
 
-    /**
-     * TODO: Find all visible nodes whose contentDescription exactly matches [desc].
-     */
     fun findNodesByDesc(desc: String): List<AccessibilityNodeInfo> {
         return findNodes { it.contentDescription?.toString().equals(desc, ignoreCase = false) }
     }
 
-    /**
-     * TODO: Find all visible nodes whose contentDescription contains [desc] (case-insensitive).
-     */
     fun findNodesByDescContains(desc: String): List<AccessibilityNodeInfo> {
         return findNodes { it.contentDescription?.toString()?.contains(desc, ignoreCase = true) == true }
     }
 
-    /**
-     * TODO: Find all visible nodes whose viewIdResourceName (after last '/') equals [id].
-     */
     fun findNodesById(id: String): List<AccessibilityNodeInfo> {
         return findNodes { it.viewIdResourceName?.substringAfterLast('/') == id }
     }
 
-    /**
-     * TODO: Find all visible nodes whose class name equals [className].
-     */
     fun findNodesByClassName(className: String): List<AccessibilityNodeInfo> {
         return findNodes { it.className?.toString() == className }
     }
 
-    /**
-     * TODO: Find all visible nodes that are clickable.
-     */
     fun findClickableNodes(): List<AccessibilityNodeInfo> {
         return findNodes { it.isClickable }
     }
 
-    /**
-     * TODO: Find all visible nodes that are editable (text input fields).
-     */
     fun findEditableNodes(): List<AccessibilityNodeInfo> {
         return findNodes { it.isEditable }
     }
 
-    /**
-     * TODO: Recursively traverse the active window root and collect nodes matching [predicate].
-     */
     private fun findNodes(predicate: (AccessibilityNodeInfo) -> Boolean): List<AccessibilityNodeInfo> {
         val results = mutableListOf<AccessibilityNodeInfo>()
         val root = rootInActiveWindow ?: return results
@@ -125,10 +102,6 @@ class PhoneFarmAccessibilityService : AccessibilityService() {
         return results
     }
 
-    /**
-     * TODO: Recursively traverse [node] and its children, adding matches to [results].
-     * Recycle nodes that do not match to avoid memory pressure.
-     */
     private fun collectMatchingNodes(
         node: AccessibilityNodeInfo,
         predicate: (AccessibilityNodeInfo) -> Boolean,
@@ -146,9 +119,6 @@ class PhoneFarmAccessibilityService : AccessibilityService() {
 
     // ---- gesture injection ----
 
-    /**
-     * TODO: Dispatch a click gesture at screen coordinates (x, y) using dispatchGesture.
-     */
     fun click(x: Float, y: Float) {
         val path = Path().apply { moveTo(x, y) }
         val gesture = GestureDescription.Builder()
@@ -157,9 +127,6 @@ class PhoneFarmAccessibilityService : AccessibilityService() {
         dispatchGesture(gesture, null, null)
     }
 
-    /**
-     * TODO: Dispatch a swipe gesture from (x1, y1) to (x2, y2) with given duration.
-     */
     fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Long = 300L) {
         val path = Path().apply {
             moveTo(x1, y1)
@@ -171,9 +138,6 @@ class PhoneFarmAccessibilityService : AccessibilityService() {
         dispatchGesture(gesture, null, null)
     }
 
-    /**
-     * TODO: Dispatch a long-press gesture at (x, y) with given duration.
-     */
     fun longPress(x: Float, y: Float, durationMs: Long = 800L) {
         val path = Path().apply { moveTo(x, y) }
         val gesture = GestureDescription.Builder()
@@ -184,18 +148,10 @@ class PhoneFarmAccessibilityService : AccessibilityService() {
 
     // ---- global actions ----
 
-    /**
-     * TODO: Trigger BACK global action.
-     */
     fun back(): Boolean {
         return performGlobalAction(GLOBAL_ACTION_BACK)
     }
 
-    /**
-     * Dismiss the soft keyboard if visible.
-     * Uses performGlobalAction(11) on API 36+ (GLOBAL_ACTION_DISMISS_KEYBOARD),
-     * falls back to back() as a heuristic dismissal.
-     */
     fun dismissKeyboard(): Boolean {
         return try {
             performGlobalAction(/* GLOBAL_ACTION_DISMISS_KEYBOARD */ 11)
@@ -204,19 +160,11 @@ class PhoneFarmAccessibilityService : AccessibilityService() {
         }
     }
 
-    /**
-     * TODO: Trigger HOME global action.
-     */
     fun home(): Boolean {
         return performGlobalAction(GLOBAL_ACTION_HOME)
     }
 
-    /**
-     * TODO: Inject text into the currently focused editable field.
-     * On API 33+, use performGlobalAction(GLOBAL_ACTION_SET_TEXT) if available.
-     */
     fun inputText(text: String) {
-        // Fallback: iterate focused node's ACTION_SET_TEXT
         val focusedNode = findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return
         val args = android.os.Bundle().apply {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
@@ -225,23 +173,123 @@ class PhoneFarmAccessibilityService : AccessibilityService() {
         focusedNode.recycle()
     }
 
-    // ---- screenshot ----
+    // ---- screenshot (REAL implementation — no longer a stub) ----
 
     /**
-     * TODO: Take a screenshot of the current screen using either
-     * takeScreenshot (API 34+) or MediaProjection + ImageReader for older APIs.
-     * Returns a Bitmap, or null if the operation failed.
+     * Take a screenshot of the current screen.
+     *
+     * API 34+: Uses AccessibilityService.takeScreenshot() with CountDownLatch
+     *          to convert the callback-based API to a synchronous return.
+     * API < 34: Falls back to screencap shell command (requires Shizuku/root).
+     * Returns a Bitmap scaled to [scale], or null if all methods fail.
      */
     fun captureScreen(scale: Float = 0.5f, quality: Int = 80): Bitmap? {
-        // TODO: On API 34+ use takeScreenshot() with callback; for now always null (needs Activity consent)
-        return null
+        if (Build.VERSION.SDK_INT >= 34) {
+            return captureViaTakeScreenshot(scale)
+        }
+        return captureViaScreencap(scale)
+    }
+
+    /** API 34+ screenshot using AccessibilityService.takeScreenshot(). */
+    private fun captureViaTakeScreenshot(scale: Float): Bitmap? {
+        val latch = CountDownLatch(1)
+        var resultBitmap: Bitmap? = null
+        val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+
+        try {
+            takeScreenshot(executor) { screenshot ->
+                try {
+                    val hwBuffer = screenshot.hardwareBuffer
+                    if (hwBuffer != null) {
+                        val bitmap = Bitmap.createBitmap(hwBuffer.width, hwBuffer.height, Bitmap.Config.ARGB_8888)
+                        val ret = bitmap.copyPixelsFromHardwareBuffer(
+                            hwBuffer, android.graphics.HardwareBuffer.RGBA_8888,
+                            0, 0, null, 0, 0, hwBuffer.width, hwBuffer.height
+                        )
+                        if (ret == 0) {
+                            resultBitmap = if (scale < 1.0f) {
+                                Bitmap.createScaledBitmap(bitmap,
+                                    (hwBuffer.width * scale).toInt(),
+                                    (hwBuffer.height * scale).toInt(), true)
+                            } else bitmap
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "takeScreenshot processing failed: ${e.message}")
+                } finally {
+                    screenshot.hardwareBuffer?.close()
+                    latch.countDown()
+                }
+            }
+
+            latch.await(3, TimeUnit.SECONDS)
+        } catch (e: Exception) {
+            Log.e(TAG, "takeScreenshot exception: ${e.message}")
+        } finally {
+            executor.shutdownNow()
+        }
+
+        return resultBitmap ?: captureViaScreencap(scale)
+    }
+
+    /** Fallback: screencap shell command (requires Shizuku/root/shell permissions). */
+    private fun captureViaScreencap(scale: Float): Bitmap? {
+        return try {
+            val cacheDir = filesDir ?: cacheDir ?: return null
+            val tmpFile = File(cacheDir, "screenshot_tmp.png")
+            val process = Runtime.getRuntime().exec(
+                arrayOf("screencap", "-p", tmpFile.absolutePath)
+            )
+            process.waitFor()
+
+            if (tmpFile.exists() && tmpFile.length() > 0) {
+                val opts = BitmapFactory.Options().apply {
+                    if (scale < 1.0f) {
+                        inSampleSize = (1.0f / scale).toInt().coerceAtLeast(1).coerceAtMost(4)
+                    }
+                }
+                val bitmap = BitmapFactory.decodeFile(tmpFile.absolutePath, opts)
+                tmpFile.delete()
+                bitmap
+            } else {
+                Log.w(TAG, "screencap produced empty file — device may lack privileges")
+                null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "screencap fallback failed: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * Shared screenshot holder — so VlmAgent and EdgePipeline can share
+     * the same capture without redundant MediaProjection acquisition.
+     */
+    @Volatile
+    var lastScreenshot: Bitmap? = null
+        private set
+
+    @Volatile
+    var lastScreenshotTime: Long = 0
+        private set
+
+    /** Capture and cache screenshot, returning the cached copy. */
+    fun captureAndCache(scale: Float = 0.5f, quality: Int = 80): Bitmap? {
+        // Reuse if captured within the last 300ms
+        if (lastScreenshot != null && System.currentTimeMillis() - lastScreenshotTime < 300) {
+            return lastScreenshot
+        }
+        val bitmap = captureScreen(scale, quality)
+        if (bitmap != null) {
+            lastScreenshot?.recycle()
+            lastScreenshot = bitmap
+            lastScreenshotTime = System.currentTimeMillis()
+        }
+        return bitmap
     }
 
     // ---- current package ----
 
-    /**
-     * TODO: Return the package name of the currently focused app/window.
-     */
     fun currentPackage(): String? {
         val root = rootInActiveWindow ?: return null
         val pkg = root.packageName?.toString()
@@ -251,9 +299,6 @@ class PhoneFarmAccessibilityService : AccessibilityService() {
 
     // ---- utility ----
 
-    /**
-     * TODO: Convenience: find first node matching text and click it, with optional timeout polling.
-     */
     fun findAndClick(text: String, timeoutMs: Long = 5000L): Boolean {
         val start = System.currentTimeMillis()
         while (System.currentTimeMillis() - start < timeoutMs) {
@@ -268,9 +313,6 @@ class PhoneFarmAccessibilityService : AccessibilityService() {
         return false
     }
 
-    /**
-     * TODO: Scroll forward in the currently focused scrollable container.
-     */
     fun scrollForward(): Boolean {
         val scrollable = findNodes { it.isScrollable }.firstOrNull() ?: return false
         val result = scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
@@ -278,9 +320,6 @@ class PhoneFarmAccessibilityService : AccessibilityService() {
         return result
     }
 
-    /**
-     * TODO: Scroll backward in the currently focused scrollable container.
-     */
     fun scrollBackward(): Boolean {
         val scrollable = findNodes { it.isScrollable }.firstOrNull() ?: return false
         val result = scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)

@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.*
 import kotlinx.serialization.json.Json
 import okhttp3.*
 import okhttp3.WebSocket
+import java.io.ByteArrayOutputStream
+import java.util.zip.GZIPOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -67,6 +69,11 @@ class WebSocketClient @Inject constructor(
     private var lastPongTime: Long = 0L
     private val pongTimeoutMs: Long = 15_000L
 
+    // ---- compression ----
+
+    /** Messages larger than this (bytes) are gzip-compressed before sending. */
+    private val compressThreshold: Int = 10_000
+
     // ---- connect / disconnect ----
 
     /**
@@ -103,7 +110,7 @@ class WebSocketClient @Inject constructor(
 
             override fun onMessage(webSocket: WebSocket, text: String) {
                 try {
-                    val message = json.decodeFromString(WebSocketMessage.serializer(), text)
+                    val message = parseMessage(text)
                     // Any inbound message resets the pong timer — the connection is alive.
                     lastPongTime = System.currentTimeMillis()
                     _messages.tryEmit(message)
@@ -145,11 +152,35 @@ class WebSocketClient @Inject constructor(
         _connectionState.value = ConnectionState.DISCONNECTED
     }
 
+    /** 1-byte prefix for compressed JSON messages. */
+    companion object {
+        const val COMPRESSED_JSON_PREFIX: Byte = 0x08
+    }
+
     /**
      * Send a typed WebSocketMessage as JSON text to the server.
+     * Large messages (>10KB) are gzip-compressed and sent as binary
+     * with a 0x08 prefix byte for server-side detection.
      */
     fun send(message: WebSocketMessage) {
         val jsonText = json.encodeToString(WebSocketMessage.serializer(), message)
+        val jsonBytes = jsonText.toByteArray(Charsets.UTF_8)
+        if (jsonBytes.size > compressThreshold) {
+            try {
+                val bos = ByteArrayOutputStream()
+                GZIPOutputStream(bos).use { it.write(jsonBytes) }
+                val compressed = bos.toByteArray()
+                if (compressed.size < jsonBytes.size) {
+                    val framed = ByteArray(1 + compressed.size)
+                    framed[0] = COMPRESSED_JSON_PREFIX
+                    System.arraycopy(compressed, 0, framed, 1, compressed.size)
+                    webSocket?.send(okio.ByteString.of(*framed))
+                    return
+                }
+            } catch (_: Exception) {
+                // Fall through to uncompressed send
+            }
+        }
         webSocket?.send(jsonText)
     }
 
@@ -167,6 +198,13 @@ class WebSocketClient @Inject constructor(
     fun sendVideoFrame(frame: com.phonefarm.client.network.codec.VideoFrame) {
         val encoded = messageCodec.encodeVideoFrame(frame)
         sendBinary(encoded)
+    }
+
+    /**
+     * Send a raw JSON string directly (used for crash reports, custom messages).
+     */
+    fun sendRaw(text: String) {
+        webSocket?.send(text)
     }
 
     /**
@@ -257,5 +295,37 @@ class WebSocketClient @Inject constructor(
     internal fun onMessageParsed(message: WebSocketMessage) {
         lastPongTime = System.currentTimeMillis()
         _messages.tryEmit(message)
+    }
+
+    /**
+     * Parse a raw JSON text into a [WebSocketMessage].
+     *
+     * Intercepts server-side dynamic `remote_*` message types (e.g. `remote_reboot`,
+     * `remote_screenshot`) before the polymorphic deserializer rejects them as unknown.
+     */
+    private fun parseMessage(text: String): WebSocketMessage {
+        // Fast check: does this look like a remote_* command?
+        if (text.contains("\"remote_")) {
+            try {
+                val root = kotlinx.serialization.json.Json.parseToJsonElement(text) as kotlinx.serialization.json.JsonObject
+                val type = root["type"]?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+                if (type != null && type.startsWith("remote_")) {
+                    val command = type.removePrefix("remote_")
+                    val requestId = root["requestId"]?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content } ?: ""
+                    val params = root.filterKeys { it != "type" && it != "requestId" }.let {
+                        if (it.isNotEmpty()) kotlinx.serialization.json.JsonObject(it) else null
+                    }
+                    return WebSocketMessage.RemoteCommandMessage(
+                        type = type,
+                        requestId = requestId,
+                        command = command,
+                        params = params,
+                    )
+                }
+            } catch (_: Exception) {
+                // Fall through to normal deserialization
+            }
+        }
+        return json.decodeFromString(WebSocketMessage.serializer(), text)
     }
 }

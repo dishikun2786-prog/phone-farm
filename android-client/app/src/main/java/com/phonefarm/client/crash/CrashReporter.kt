@@ -50,6 +50,9 @@ class CrashReporter @Inject constructor(
     @Volatile
     var currentScriptName: String? = null
 
+    /** Callback invoked with crash report JSON. Wire to WebSocket sender. */
+    var onReportCrash: ((String) -> Unit)? = null
+
     // ---- public API ----
 
     /**
@@ -94,12 +97,21 @@ class CrashReporter @Inject constructor(
      * after a crash, or on a periodic retry schedule.
      */
     suspend fun reportPendingCrashes() {
+        val sender = onReportCrash ?: return
         val unreported = crashReportDao.getUnreported()
         for (crash in unreported) {
             try {
-                // TODO: Send crash report to control server via REST or WebSocket.
-                //       POST /api/v1/crashes with the crash data as JSON.
-                //       On success, mark as reported.
+                val crashJson = JSONObject().apply {
+                    put("type", "crash_report")
+                    put("crashType", crash.crashType)
+                    put("stackTrace", crash.stackTrace)
+                    put("deviceInfo", crash.deviceInfo)
+                    put("scriptName", crash.scriptName)
+                    put("memoryInfo", crash.memoryInfo)
+                    put("logSnapshot", crash.logSnapshot)
+                    put("timestamp", crash.timestamp)
+                }.toString()
+                sender(crashJson)
                 crashReportDao.markReported(crash.id)
             } catch (_: Exception) {
                 // Will retry on next invocation.

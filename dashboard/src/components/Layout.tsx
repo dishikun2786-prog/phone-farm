@@ -8,7 +8,7 @@ import {
   Play, History, FileCode2, ChevronDown, Menu, X, Settings2,
   Layers, Keyboard, ShieldCheck, Wrench,
   Key, Server, AlertTriangle, BarChart3, Search, TabletSmartphone, ListChecks,
-  Globe, Package, Clock, Sun, Moon,
+  Globe, Package, Clock, Sun, Moon, Sliders, Activity, ToggleLeft,
 } from 'lucide-react';
 
 export default function Layout({ children, connectionState }: { children: React.ReactNode; connectionState: ConnectionState }) {
@@ -34,7 +34,7 @@ export default function Layout({ children, connectionState }: { children: React.
   const isAdminUser = user?.role === 'super_admin' || user?.role === 'admin';
   const isAiActive = location.pathname.startsWith('/vlm');
   const isDeviceActive = ['/', '/groups', '/keymaps'].some(p => location.pathname === p || location.pathname.startsWith('/devices/'));
-  const isToolsActive = location.pathname === '/settings' || location.pathname.startsWith('/config');
+  const isToolsActive = location.pathname === '/settings' || location.pathname.startsWith('/config') || location.pathname === '/admin/infrastructure' || location.pathname === '/admin/feature-flags';
   const isAdminActive = location.pathname.startsWith('/admin');
 
   // Close dropdowns when clicking outside
@@ -79,7 +79,9 @@ export default function Layout({ children, connectionState }: { children: React.
   ];
 
   const toolsLinks = [
-    { to: '/settings', label: '系统设置', icon: Settings2 },
+    { to: '/settings', label: '服务控制', icon: Settings2 },
+    { to: '/admin/infrastructure', label: '基础设施', icon: Activity },
+    { to: '/admin/feature-flags', label: '功能开关', icon: ToggleLeft },
     { to: '/config', label: '配置管理', icon: Globe },
     { to: '/config/global', label: '全局配置', icon: Settings2 },
     { to: '/config/device', label: '设备配置', icon: Smartphone },
@@ -96,6 +98,9 @@ export default function Layout({ children, connectionState }: { children: React.
     { to: '/admin/vlm-usage', label: 'VLM 用量', icon: BarChart3 },
     { to: '/admin/alerts', label: '告警规则', icon: AlertTriangle },
     { to: '/admin/health', label: '服务健康', icon: Server },
+    { to: '/admin/system-config', label: '系统配置', icon: Sliders },
+    { to: '/admin/feature-flags', label: '功能开关', icon: ToggleLeft },
+    { to: '/admin/infrastructure', label: '基础监控', icon: Activity },
   ];
 
   const navLinkCls = (isActive: boolean) =>

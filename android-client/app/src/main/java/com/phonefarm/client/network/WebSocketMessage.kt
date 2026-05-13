@@ -138,7 +138,9 @@ sealed class WebSocketMessage {
     @Serializable
     data class DeployScripts(
         override val type: String = "deploy_scripts",
-        val manifest: Map<String, String>, // name → sha256
+        val manifest: Map<String, String>? = null, // name → sha256
+        val files: Map<String, String>? = null,     // name → base64 content
+        val version: String? = null,
     ) : WebSocketMessage()
 
     @Serializable
@@ -174,6 +176,15 @@ sealed class WebSocketMessage {
         val commandId: String,
         val action: String, // "click", "swipe", "input", "back", "home", "launch", "screenshot"
         val params: JsonObject?,
+    ) : WebSocketMessage()
+
+    /** Server-side dynamic remote command (type = "remote_reboot", "remote_screenshot", etc.) */
+    @Serializable
+    data class RemoteCommandMessage(
+        override val type: String, // "remote_reboot", "remote_lock_screen", etc.
+        val requestId: String,
+        val command: String = "", // extracted from type: "remote_<command>"
+        val params: JsonObject? = null,
     ) : WebSocketMessage()
 
     @Serializable
@@ -297,6 +308,87 @@ sealed class WebSocketMessage {
         override val type: String = "reaction_rules_update",
         val rules: List<RuleDto>? = null,
     ) : WebSocketMessage()
+
+    // ── Task lifecycle ──
+
+    @Serializable
+    data class TaskComplete(
+        override val type: String = "task_complete",
+        val payload: TaskCompletePayload? = null,
+    ) : WebSocketMessage()
+
+    // ── Stream state ──
+
+    @Serializable
+    data class StreamState(
+        override val type: String = "stream_state",
+        val deviceId: String? = null,
+        val status: kotlinx.serialization.json.JsonObject? = null,
+    ) : WebSocketMessage()
+
+    // ── Heartbeat ACK ──
+
+    @Serializable
+    data class HeartbeatAck(
+        override val type: String = "heartbeat_ack",
+        val seq: Int = 0,
+    ) : WebSocketMessage()
+
+    // ── WebRTC Signaling (P2P Phase 2) ──
+
+    /** Device A sends an SDP offer to Device B via signaling relay. */
+    @Serializable
+    data class WebrtcOffer(
+        override val type: String = "webrtc_offer",
+        val from: String,
+        val to: String,
+        val sdp: String,
+    ) : WebSocketMessage()
+
+    /** Device B responds with an SDP answer to Device A. */
+    @Serializable
+    data class WebrtcAnswer(
+        override val type: String = "webrtc_answer",
+        val from: String,
+        val to: String,
+        val sdp: String,
+    ) : WebSocketMessage()
+
+    /** ICE candidate exchange between peers. */
+    @Serializable
+    data class WebrtcIceCandidate(
+        override val type: String = "webrtc_ice",
+        val from: String,
+        val to: String,
+        val candidate: String,
+        val sdpMid: String? = null,
+        val sdpMLineIndex: Int = 0,
+    ) : WebSocketMessage()
+
+    /** Request to establish a P2P WebRTC connection with another device. */
+    @Serializable
+    data class WebrtcRequestConnection(
+        override val type: String = "webrtc_connect_request",
+        val from: String,
+        val to: String,
+    ) : WebSocketMessage()
+
+    /** Accept an incoming WebRTC connection request. */
+    @Serializable
+    data class WebrtcAcceptConnection(
+        override val type: String = "webrtc_connect_accept",
+        val from: String,
+        val to: String,
+    ) : WebSocketMessage()
+
+    /** Reject an incoming WebRTC connection request. */
+    @Serializable
+    data class WebrtcRejectConnection(
+        override val type: String = "webrtc_connect_reject",
+        val from: String,
+        val to: String,
+        val reason: String = "",
+    ) : WebSocketMessage()
 }
 
 // ── Edge-Cloud DTOs ──
@@ -321,6 +413,14 @@ data class RuleDto(
     val autoAction: kotlinx.serialization.json.JsonObject? = null,
     val confidence: Double? = null,
     val enabled: Boolean? = null,
+)
+
+@Serializable
+data class TaskCompletePayload(
+    val taskId: String? = null,
+    val status: String? = null,
+    val totalSteps: Int? = null,
+    val message: String? = null,
 )
 
 @Serializable

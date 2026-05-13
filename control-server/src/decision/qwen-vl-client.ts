@@ -13,6 +13,7 @@
  * 与 DeepSeekClient 暴露相同接口: decide(messages) → RawDecision
  */
 import { config } from "../config";
+import type { RuntimeConfig } from "../config-manager/runtime-config.js";
 import type { RawDecision } from "./types";
 
 export interface QwenVLConfig {
@@ -21,6 +22,7 @@ export interface QwenVLConfig {
   model?: string;
   maxTokens?: number;
   temperature?: number;
+  runtimeConfig?: RuntimeConfig;
 }
 
 interface ChatMessage {
@@ -41,13 +43,21 @@ export class QwenVLClient {
   private temperature: number;
   private totalTokensUsed = 0;
   private totalImagesProcessed = 0;
+  private rc: RuntimeConfig | undefined;
+  private maxRetries: number;
+  private requestTimeoutMs: number;
+  private retryBaseDelayMs: number;
 
   constructor(overrides?: QwenVLConfig) {
+    this.rc = overrides?.runtimeConfig;
     this.apiKey = overrides?.apiKey || config.DASHSCOPE_API_KEY;
     this.apiUrl = overrides?.apiUrl || config.DASHSCOPE_API_URL;
     this.model = overrides?.model || config.DASHSCOPE_VL_MODEL;
     this.maxTokens = overrides?.maxTokens ?? config.DASHSCOPE_VL_MAX_TOKENS;
     this.temperature = overrides?.temperature ?? config.DASHSCOPE_VL_TEMPERATURE;
+    this.maxRetries = this.rc?.getNumber("ai.qwen_vl.retry_max_attempts", 3) ?? 3;
+    this.requestTimeoutMs = this.rc?.getNumber("ai.qwen_vl.request_timeout_ms", 15000) ?? 15000;
+    this.retryBaseDelayMs = this.rc?.getNumber("ai.qwen_vl.retry_base_delay_ms", 2000) ?? 2000;
   }
 
   /**
@@ -83,8 +93,8 @@ export class QwenVLClient {
     return this.parseResponse(content);
   }
 
-  private async fetchWithRetry(body: Record<string, unknown>, retries = 3): Promise<DashScopeResponse> {
-    for (let attempt = 1; attempt <= retries; attempt++) {
+  private async fetchWithRetry(body: Record<string, unknown>): Promise<DashScopeResponse> {
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       try {
         const res = await fetch(this.apiUrl, {
           method: "POST",
@@ -94,13 +104,13 @@ export class QwenVLClient {
             "X-DashScope-OssResourceResolve": "disable",
           },
           body: JSON.stringify(body),
-          signal: AbortSignal.timeout(15_000),
+          signal: AbortSignal.timeout(this.requestTimeoutMs),
         });
 
         if (!res.ok) {
           const errText = await res.text();
-          if ((res.status === 429 || res.status === 503) && attempt < retries) {
-            await sleep(2000 * Math.pow(2, attempt));
+          if ((res.status === 429 || res.status === 503) && attempt < this.maxRetries) {
+            await sleep(this.retryBaseDelayMs * Math.pow(2, attempt));
             continue;
           }
           throw new Error(`Qwen3-VL API ${res.status}: ${errText}`);
@@ -108,8 +118,8 @@ export class QwenVLClient {
 
         return await res.json() as DashScopeResponse;
       } catch (err) {
-        if (attempt === retries) throw err;
-        await sleep(2000 * Math.pow(2, attempt));
+        if (attempt === this.maxRetries) throw err;
+        await sleep(this.retryBaseDelayMs * Math.pow(2, attempt));
       }
     }
     throw new Error("Unreachable");

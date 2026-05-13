@@ -21,6 +21,8 @@
  *   POST   /api/v1/config/import
  */
 import type { FastifyInstance } from "fastify";
+import type { AuthUser } from "../auth/auth-middleware.js";
+import { hasPermission } from "../auth/rbac.js";
 import { db } from "../db.js";
 import {
   configCategories,
@@ -35,11 +37,40 @@ import { eq, desc, and, sql } from "drizzle-orm";
 
 const resolver = new ConfigResolver();
 
+/** Device-facing config resolve — no JWT auth (devices use DEVICE_AUTH_TOKEN via WebSocket) */
+export async function deviceConfigResolveRoute(app: FastifyInstance): Promise<void> {
+  app.get("/api/v1/config/resolve/:deviceId", async (req, reply) => {
+    const { deviceId } = req.params as { deviceId: string };
+    const configs = await resolver.resolve({ deviceId });
+
+    const flat: Record<string, string> = {};
+    for (const c of configs) {
+      if (!c.isSecret) flat[c.key] = c.value;
+    }
+
+    return reply.send({ deviceId, config: flat, configs });
+  });
+}
+
 export async function configRoutes(app: FastifyInstance): Promise<void> {
+
+  function getUser(req: any): AuthUser {
+    return (req as any).user as AuthUser;
+  }
+
+  function checkPerm(req: any, reply: any, action: "read" | "write" | "delete" | "manage"): boolean {
+    const user = getUser(req);
+    if (!user || !hasPermission(user.role, "config", action)) {
+      reply.status(403).send({ error: `Permission denied — ${action} on config requires higher role` });
+      return false;
+    }
+    return true;
+  }
 
   // ── Categories ──
 
-  app.get("/api/v1/config/categories", async (_req, reply) => {
+  app.get("/api/v1/config/categories", async (req, reply) => {
+    if (!checkPerm(req, reply, "read")) return;
     const cats = await db
       .select()
       .from(configCategories)
@@ -50,6 +81,7 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
   // ── Definitions ──
 
   app.get("/api/v1/config/definitions", async (req, reply) => {
+    if (!checkPerm(req, reply, "read")) return;
     const { category } = req.query as Record<string, string>;
     let query = db.select().from(configDefinitions).$dynamic();
     if (category) {
@@ -67,6 +99,7 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/api/v1/config/definitions/:key", async (req, reply) => {
+    if (!checkPerm(req, reply, "read")) return;
     const { key } = req.params as { key: string };
     const [def] = await db
       .select()
@@ -80,8 +113,9 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
   // ── Resolve ──
 
   app.get("/api/v1/config/resolve", async (req, reply) => {
+    if (!checkPerm(req, reply, "read")) return;
     const { deviceId, groupId, templateId, planId } = req.query as Record<string, string>;
-    const userId = (req as any).user?.userId;
+    const userId = getUser(req).userId;
 
     const configs = await resolver.resolve({ userId, deviceId, groupId, templateId, planId });
 
@@ -96,22 +130,10 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ configs, grouped });
   });
 
-  app.get("/api/v1/config/resolve/:deviceId", async (req, reply) => {
-    const { deviceId } = req.params as { deviceId: string };
-    const configs = await resolver.resolve({ deviceId });
-
-    // Return as flat key-value map for device consumption
-    const flat: Record<string, string> = {};
-    for (const c of configs) {
-      if (!c.isSecret) flat[c.key] = c.value;
-    }
-
-    return reply.send({ deviceId, config: flat, configs });
-  });
-
   // ── Values (CRUD) ──
 
   app.get("/api/v1/config/values", async (req, reply) => {
+    if (!checkPerm(req, reply, "read")) return;
     const { scope, scopeId, definitionId } = req.query as Record<string, string>;
 
     let query = db.select().from(configValues).$dynamic();
@@ -124,6 +146,7 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get("/api/v1/config/values/:scope/:scopeId", async (req, reply) => {
+    if (!checkPerm(req, reply, "read")) return;
     const { scope, scopeId } = req.params as { scope: string; scopeId: string };
     const values = await db
       .select()
@@ -138,7 +161,8 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.put("/api/v1/config/values", async (req, reply) => {
-    const userId = (req as any).user?.userId;
+    if (!checkPerm(req, reply, "write")) return;
+    const userId = getUser(req).userId;
     const { definitionKey, scope, scopeId, value, changeReason } = req.body as {
       definitionKey: string;
       scope: string;
@@ -241,7 +265,8 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.delete("/api/v1/config/values/:id", async (req, reply) => {
-    const userId = (req as any).user?.userId;
+    if (!checkPerm(req, reply, "delete")) return;
+    const userId = getUser(req).userId;
     const { id } = req.params as { id: string };
 
     const [existing] = await db
@@ -271,7 +296,8 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Templates ──
 
-  app.get("/api/v1/config/templates", async (_req, reply) => {
+  app.get("/api/v1/config/templates", async (req, reply) => {
+    if (!checkPerm(req, reply, "read")) return;
     const templates = await db
       .select()
       .from(configTemplates)
@@ -281,7 +307,8 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/api/v1/config/templates", async (req, reply) => {
-    const userId = (req as any).user?.userId;
+    if (!checkPerm(req, reply, "write")) return;
+    const userId = getUser(req).userId;
     const { name, description, values } = req.body as {
       name: string;
       description?: string;
@@ -303,6 +330,7 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.put("/api/v1/config/templates/:id", async (req, reply) => {
+    if (!checkPerm(req, reply, "write")) return;
     const { id } = req.params as { id: string };
     const { name, description, values } = req.body as {
       name?: string;
@@ -332,6 +360,7 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.delete("/api/v1/config/templates/:id", async (req, reply) => {
+    if (!checkPerm(req, reply, "delete")) return;
     const { id } = req.params as { id: string };
     await db
       .update(configTemplates)
@@ -341,7 +370,8 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/api/v1/config/templates/:id/apply", async (req, reply) => {
-    const userId = (req as any).user?.userId;
+    if (!checkPerm(req, reply, "write")) return;
+    const userId = getUser(req).userId;
     const { id } = req.params as { id: string };
     const { targetScope, targetScopeId } = req.body as {
       targetScope: "device" | "group";
@@ -359,6 +389,7 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
   // ── Audit Log ──
 
   app.get("/api/v1/config/audit-log", async (req, reply) => {
+    if (!checkPerm(req, reply, "read")) return;
     const { configKey, scope, limit, offset } = req.query as Record<string, string>;
 
     let query = db.select().from(configChangeLog).$dynamic();
@@ -376,7 +407,8 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
 
   // ── Seed ──
 
-  app.post("/api/v1/config/seed", async (_req, reply) => {
+  app.post("/api/v1/config/seed", async (req, reply) => {
+    if (!checkPerm(req, reply, "manage")) return;
     // Seed categories
     for (const cat of CATEGORIES) {
       await db
@@ -422,6 +454,7 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
   // ── Export / Import ──
 
   app.post("/api/v1/config/export", async (req, reply) => {
+    if (!checkPerm(req, reply, "read")) return;
     const { scope, scopeId } = req.body as { scope?: string; scopeId?: string };
 
     let values;
@@ -447,7 +480,8 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/api/v1/config/import", async (req, reply) => {
-    const userId = (req as any).user?.userId;
+    if (!checkPerm(req, reply, "write")) return;
+    const userId = getUser(req).userId;
     const { values: importValues, templates: importTemplates, overwrite } = req.body as {
       values?: any[];
       templates?: any[];

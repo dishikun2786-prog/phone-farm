@@ -1,0 +1,252 @@
+# =============================================================================
+# PhoneFarm Ray Cluster Configuration
+# =============================================================================
+# Deploy a Ray cluster for distributed AI inference and federated learning.
+#
+# Usage:
+#   ray up ray-cluster.yaml -y
+#   ray submit ray-cluster.yaml my_job.py
+#   ray down ray-cluster.yaml -y
+#
+# Architecture:
+#   - 1 head node (CPU scheduling, dashboard)
+#   - 1-10 worker nodes (GPU-enabled, auto-scaling)
+#   - Runtime environment with ultralytics, paddleocr, transformers, torch
+# =============================================================================
+
+# An unique identifier for the head node and workers of this cluster.
+cluster_name: phonefarm-ray
+
+# The maximum number of workers nodes to launch in addition to the head node.
+max_workers: 10
+
+# Cloud provider configuration (AWS/GCP/Azure or local/docker).
+# For PhoneFarm production, we use self-hosted nodes with Docker.
+provider:
+  type: local
+  head_ip: 0.0.0.0
+  worker_ips: []
+
+# Override provider with docker for containerized deployment
+# provider:
+#   type: docker
+#   head_image: rayproject/ray:2.40.0-py310
+#   worker_image: rayproject/ray:2.40.0-py310-gpu
+
+# How Ray will authenticate with newly launched nodes.
+auth:
+  ssh_user: ubuntu
+  ssh_private_key: ~/.ssh/phonefarm_ray
+
+# File mounts: sync directories from local to cluster nodes.
+file_mounts:
+  ~/phonefarm-models: ./models
+  ~/phonefarm-scripts: ./scripts
+
+# List of shell commands to run to set up nodes.
+# These run BEFORE the Ray runtime starts.
+setup_commands:
+  # System dependencies
+  - sudo apt-get update -y
+  - sudo apt-get install -y build-essential curl libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1
+
+  # GPU drivers check (informational, won't fail if no GPU)
+  - command -v nvidia-smi && nvidia-smi || echo "No GPU detected"
+
+  # Python environment
+  - pip install --upgrade pip setuptools wheel
+
+  # Install PyTorch (CUDA 12.1 if GPU available, CPU otherwise)
+  - pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121 2>/dev/null || pip install torch torchvision
+
+  # Core inference packages
+  - pip install ultralytics>=8.3.0
+  - pip install paddlepaddle paddleocr
+  - pip install transformers>=4.45.0 tokenizers
+  - pip install sentencepiece
+
+  # Ray and cluster management
+  - pip install "ray[default]>=2.40.0"
+  - pip install prometheus-client
+
+  # Utilities
+  - pip install numpy pillow opencv-python-headless
+  - pip install aiohttp httpx
+  - pip install minio
+
+  # Optional: MNN for on-device inference (local mode)
+  - pip install mnn 2>/dev/null || echo "MNN not available for this platform"
+
+# Custom commands that will always be run before the Ray cluster is started
+# (run after setup_commands on all nodes).
+head_setup_commands:
+  - echo "Head node setup complete at $(date)"
+
+worker_setup_commands:
+  - echo "Worker node setup complete at $(date)"
+
+# Command to start Ray on the head node. You should not need to modify this.
+head_start_ray_commands:
+  - ray stop
+  - ray start --head --port=6379 --object-manager-port=8076 --autoscaling-config=~/ray_bootstrap_config.yaml --dashboard-host=0.0.0.0 --dashboard-port=8265 --num-cpus=8 --memory=17179869184
+
+# Command to start Ray on worker nodes. You should not need to modify this.
+worker_start_ray_commands:
+  - ray stop
+  - ray start --address=$RAY_HEAD_IP:6379 --object-manager-port=8076 --num-cpus=4 --num-gpus=1 --memory=8589934592
+
+# =============================================================================
+# Head Node Configuration
+# =============================================================================
+available_node_types:
+  ray.head.default:
+    resources:
+      CPU: 8
+      memory: 17179869184  # 16 GiB
+    node_config:
+      # Head node runs: dashboard, GCS, Raylet, scheduler
+      ImageId: latest
+      InstanceType: c5.2xlarge  # 8 vCPU, 16 GiB
+
+  ray.worker.gpu:
+    resources:
+      CPU: 4
+      GPU: 1
+      memory: 8589934592  # 8 GiB
+    node_config:
+      InstanceType: g4dn.xlarge  # 4 vCPU, 16 GiB, 1x T4 GPU
+      # Spot instances for cost savings (optional, commented out)
+      # InstanceMarketOptions:
+      #   MarketType: spot
+    min_workers: 1
+    max_workers: 10
+
+  ray.worker.cpu:
+    resources:
+      CPU: 8
+      memory: 17179869184  # 16 GiB
+    node_config:
+      InstanceType: c5.2xlarge  # 8 vCPU, 16 GiB
+    min_workers: 0
+    max_workers: 5
+
+# =============================================================================
+# Head Node (required)
+# =============================================================================
+head_node_type: ray.head.default
+
+# =============================================================================
+# Auto-scaling Configuration
+# =============================================================================
+# Scale up when more than 80% of resources are used, scale down idle workers
+# after 5 minutes to save costs.
+autoscaling_config:
+  # Minimum number of worker nodes to always keep running
+  min_workers: 1
+
+  # Maximum number of worker nodes (not counting head)
+  max_workers: 10
+
+  # Idle timeout before terminating a worker (seconds)
+  idle_timeout_minutes: 5
+
+  # How often to check for scaling decisions (seconds)
+  upscaling_speed: 1.0
+  downscaling_speed: 1.0
+
+# =============================================================================
+# Runtime Environment
+# =============================================================================
+# This defines the Python environment used when submitting Ray jobs.
+# Packages specified here are installed in an isolated virtualenv per-job.
+runtime_env:
+  working_dir: "./"
+  pip:
+    - ultralytics>=8.3.0
+    - paddleocr
+    - transformers>=4.45.0
+    - torch>=2.4.0
+    - numpy>=1.26.0
+    - pillow>=10.4.0
+    - aiohttp>=3.9.0
+    - prometheus-client>=0.20.0
+    - minio>=7.2.0
+  env_vars:
+    PYTHONUNBUFFERED: "1"
+    OMP_NUM_THREADS: "4"
+    MKL_NUM_THREADS: "4"
+    PHONEFARM_ENV: "production"
+
+# =============================================================================
+# Health Check Configuration
+# =============================================================================
+# Ray will periodically check node health and restart if needed.
+health_check:
+  # Health check interval in seconds
+  interval: 30
+  # Timeout for health check
+  timeout: 10
+  # Initial delay before starting health checks
+  initial_delay: 60
+
+# =============================================================================
+# Logging and Monitoring
+# =============================================================================
+# Ray dashboard provides built-in monitoring at http://<head-ip>:8265
+# Additional Prometheus metrics are scraped from each node.
+head_node:
+  # Dashboard port (accessible at http://<head-ip>:8265)
+  dashboard_port: 8265
+
+  # Ray internal ports
+  ray_client_server_port: 10001
+  redis_port: 6379
+
+  # Prometheus metrics export
+  metrics_export_port: 8080
+
+# =============================================================================
+# Network Configuration
+# =============================================================================
+# For cross-region deployment, configure firewall rules to allow:
+#   - Port 6379 (Redis/GCS)
+#   - Port 8265 (Dashboard)
+#   - Port 10001 (Ray Client)
+#   - Ports 8076, 8077, 8078, 8079 (Object store / worker communication)
+#   - Port 8080 (Prometheus metrics)
+
+# Docker network mode (when using docker provider)
+# docker:
+#   network: host
+#   head_image: rayproject/ray:2.40.0-py310
+#   worker_image: rayproject/ray:2.40.0-py310-gpu
+
+# =============================================================================
+# Advanced Options
+# =============================================================================
+# Environment variables for all nodes
+worker_env:
+  PYTHONUNBUFFERED: "1"
+  OMP_NUM_THREADS: "4"
+
+# Custom initialization commands for Ray
+initialization_commands:
+  - echo "PhoneFarm Ray cluster initialized at $(date)"
+  - ray status
+
+# =============================================================================
+# Notes for PhoneFarm deployment:
+# =============================================================================
+# 1. For local testing:
+#      ray start --head --port=6379
+#      ray start --address=<head-ip>:6379
+#
+# 2. For Docker-based deployment:
+#      Uncomment the docker provider section above and run:
+#      ray up ray-cluster.yaml --provider=docker -y
+#
+# 3. The edge nodes (Go service) connect to Ray as clients via:
+#      ray.init(address="ray://<head-ip>:10001")
+#
+# 4. Model files should be pre-downloaded to ~/phonefarm-models/ on all nodes,
+#    or use MinIO for lazy-loading as configured in the AI service.

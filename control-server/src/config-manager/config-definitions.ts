@@ -48,6 +48,8 @@ export const CATEGORIES: ConfigCategorySeed[] = [
   { key: "notification", displayName: "通知告警", description: "Webhook、邮件、APP 推送", icon: "Bell", sortOrder: 13 },
   { key: "scrcpy", displayName: "Scrcpy 配置", description: "ADB 屏幕镜像参数", icon: "Monitor", sortOrder: 14 },
   { key: "ai_models", displayName: "AI 模型配置", description: "DeepSeek、QwenVL、本地模型参数", icon: "Cpu", sortOrder: 15 },
+  { key: "infrastructure", displayName: "基础设施", description: "NATS、MinIO、Ray、WebRTC 服务配置", icon: "Network", sortOrder: 0 },
+  { key: "relay", displayName: "中继服务", description: "Relay/Bridge 服务器超时、缓冲区配置", icon: "Radio", sortOrder: 16 },
 ];
 
 export const DEFINITIONS: ConfigDefinitionSeed[] = [
@@ -550,5 +552,427 @@ export const DEFINITIONS: ConfigDefinitionSeed[] = [
     description: "llama.cpp 卸载到 GPU 的层数（-1=全部）", valueType: "number", defaultValue: "-1",
     validationRule: { min: -1, max: 100, required: true },
     isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group", "device"], tags: ["android", "vlm", "local"], sortOrder: 11,
+  },
+
+  // ═══ INFRASTRUCTURE — NATS ═══
+  {
+    categoryKey: "infrastructure", key: "infra.nats.url", displayName: "NATS URL",
+    description: "NATS 服务器连接地址", valueType: "url", defaultValue: "nats://localhost:4222",
+    isSecret: false, isOverridable: false, allowedScopes: ["global"], tags: ["server", "nats"], sortOrder: 1,
+  },
+  {
+    categoryKey: "infrastructure", key: "infra.nats.token", displayName: "NATS Token",
+    description: "NATS 认证 Token", valueType: "secret", defaultValue: "",
+    isSecret: true, isOverridable: false, allowedScopes: ["global"], tags: ["server", "nats"], sortOrder: 2,
+  },
+  {
+    categoryKey: "infrastructure", key: "infra.nats.enabled", displayName: "NATS 启用",
+    description: "是否启用 NATS 状态同步", valueType: "boolean", defaultValue: "false",
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "nats"], sortOrder: 3,
+  },
+  {
+    categoryKey: "infrastructure", key: "infra.nats.reconnect_wait_ms", displayName: "NATS 重连等待",
+    description: "NATS 断线重连等待时间（毫秒）", valueType: "number", defaultValue: "2000",
+    validationRule: { min: 100, max: 30000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "nats"], sortOrder: 4,
+  },
+  {
+    categoryKey: "infrastructure", key: "infra.nats.max_bytes", displayName: "NATS JetStream 最大存储",
+    description: "JetStream Stream 最大存储字节数", valueType: "number", defaultValue: "1073741824",
+    validationRule: { min: 1048576, max: 107374182400, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "nats"], sortOrder: 5,
+  },
+
+  // ═══ INFRASTRUCTURE — MinIO ═══
+  {
+    categoryKey: "infrastructure", key: "infra.minio.endpoint", displayName: "MinIO Endpoint",
+    description: "MinIO 服务器地址（host:port）", valueType: "string", defaultValue: "localhost:9000",
+    isSecret: false, isOverridable: false, allowedScopes: ["global"], tags: ["server", "minio"], sortOrder: 6,
+  },
+  {
+    categoryKey: "infrastructure", key: "infra.minio.access_key", displayName: "MinIO Access Key",
+    description: "MinIO 访问密钥", valueType: "secret", defaultValue: "minioadmin",
+    isSecret: true, isOverridable: false, allowedScopes: ["global"], tags: ["server", "minio"], sortOrder: 7,
+  },
+  {
+    categoryKey: "infrastructure", key: "infra.minio.secret_key", displayName: "MinIO Secret Key",
+    description: "MinIO 秘密密钥", valueType: "secret", defaultValue: "minioadmin",
+    isSecret: true, isOverridable: false, allowedScopes: ["global"], tags: ["server", "minio"], sortOrder: 8,
+  },
+  {
+    categoryKey: "infrastructure", key: "infra.minio.bucket", displayName: "MinIO Bucket",
+    description: "MinIO 默认存储桶名称", valueType: "string", defaultValue: "phonefarm",
+    isSecret: false, isOverridable: false, allowedScopes: ["global"], tags: ["server", "minio"], sortOrder: 9,
+  },
+  {
+    categoryKey: "infrastructure", key: "infra.minio.use_ssl", displayName: "MinIO SSL",
+    description: "MinIO 连接是否使用 HTTPS", valueType: "boolean", defaultValue: "false",
+    isSecret: false, isOverridable: false, allowedScopes: ["global"], tags: ["server", "minio"], sortOrder: 10,
+  },
+  {
+    categoryKey: "infrastructure", key: "infra.minio.enabled", displayName: "MinIO 启用",
+    description: "是否启用 MinIO 对象存储", valueType: "boolean", defaultValue: "false",
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "minio"], sortOrder: 11,
+  },
+
+  // ═══ INFRASTRUCTURE — Ray ═══
+  {
+    categoryKey: "infrastructure", key: "infra.ray.address", displayName: "Ray Dashboard 地址",
+    description: "Ray Dashboard HTTP API 地址", valueType: "url", defaultValue: "http://localhost:8265",
+    isSecret: false, isOverridable: false, allowedScopes: ["global"], tags: ["server", "ray"], sortOrder: 12,
+  },
+  {
+    categoryKey: "infrastructure", key: "infra.ray.enabled", displayName: "Ray 启用",
+    description: "是否启用 Ray 分布式任务调度", valueType: "boolean", defaultValue: "false",
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "ray"], sortOrder: 13,
+  },
+  {
+    categoryKey: "infrastructure", key: "infra.ray.retry_max_attempts", displayName: "Ray 重试次数",
+    description: "Ray API 请求最大重试次数", valueType: "number", defaultValue: "3",
+    validationRule: { min: 0, max: 10, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "ray"], sortOrder: 14,
+  },
+  {
+    categoryKey: "infrastructure", key: "infra.ray.retry_base_delay_ms", displayName: "Ray 重试基础延迟",
+    description: "Ray 重试指数退避基础延迟（毫秒）", valueType: "number", defaultValue: "1000",
+    validationRule: { min: 100, max: 30000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "ray"], sortOrder: 15,
+  },
+  {
+    categoryKey: "infrastructure", key: "infra.ray.task_timeout_ms", displayName: "Ray 任务超时",
+    description: "Ray 任务默认超时时间（毫秒）", valueType: "number", defaultValue: "300000",
+    validationRule: { min: 10000, max: 3600000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "ray"], sortOrder: 16,
+  },
+  {
+    categoryKey: "infrastructure", key: "infra.ray.poll_interval_ms", displayName: "Ray 轮询间隔",
+    description: "Ray 任务状态轮询间隔（毫秒）", valueType: "number", defaultValue: "1000",
+    validationRule: { min: 100, max: 10000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "ray"], sortOrder: 17,
+  },
+  {
+    categoryKey: "infrastructure", key: "infra.ray.request_timeout_ms", displayName: "Ray 请求超时",
+    description: "Ray 单次 HTTP 请求超时（毫秒）", valueType: "number", defaultValue: "30000",
+    validationRule: { min: 1000, max: 120000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "ray"], sortOrder: 18,
+  },
+
+  // ═══ INFRASTRUCTURE — WebRTC ═══
+  {
+    categoryKey: "infrastructure", key: "infra.webrtc.turn_server", displayName: "TURN 服务器地址",
+    description: "WebRTC TURN 服务器 URL", valueType: "url", defaultValue: "turn:localhost:3478",
+    isSecret: false, isOverridable: false, allowedScopes: ["global"], tags: ["server", "webrtc"], sortOrder: 19,
+  },
+  {
+    categoryKey: "infrastructure", key: "infra.webrtc.turn_username", displayName: "TURN 用户名",
+    description: "TURN 服务器认证用户名", valueType: "string", defaultValue: "phonefarm",
+    isSecret: false, isOverridable: false, allowedScopes: ["global"], tags: ["server", "webrtc"], sortOrder: 20,
+  },
+  {
+    categoryKey: "infrastructure", key: "infra.webrtc.turn_credential", displayName: "TURN 密码",
+    description: "TURN 服务器认证密码", valueType: "secret", defaultValue: "",
+    isSecret: true, isOverridable: false, allowedScopes: ["global"], tags: ["server", "webrtc"], sortOrder: 21,
+  },
+  {
+    categoryKey: "infrastructure", key: "infra.webrtc.stun_server", displayName: "STUN 服务器地址",
+    description: "WebRTC STUN 服务器 URL", valueType: "url", defaultValue: "stun:stun.l.google.com:19302",
+    isSecret: false, isOverridable: false, allowedScopes: ["global"], tags: ["server", "webrtc"], sortOrder: 22,
+  },
+  {
+    categoryKey: "infrastructure", key: "infra.webrtc.enabled", displayName: "WebRTC 启用",
+    description: "是否启用 WebRTC P2P 通信", valueType: "boolean", defaultValue: "false",
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "webrtc"], sortOrder: 23,
+  },
+
+  // ═══ INFRASTRUCTURE — Edge Node ═══
+  {
+    categoryKey: "infrastructure", key: "infra.edge_node.enabled", displayName: "边缘节点启用",
+    description: "是否启用 Go 边缘节点服务", valueType: "boolean", defaultValue: "false",
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "edge"], sortOrder: 24,
+  },
+  {
+    categoryKey: "infrastructure", key: "infra.edge_node.port", displayName: "边缘节点端口",
+    description: "Go 边缘节点 HTTP 服务端口", valueType: "number", defaultValue: "9090",
+    validationRule: { min: 1024, max: 65535, required: true },
+    isSecret: false, isOverridable: false, allowedScopes: ["global"], tags: ["server", "edge"], sortOrder: 25,
+  },
+
+  // ═══ PHASE 2-5 FEATURE FLAGS ═══
+  {
+    categoryKey: "feature_flags", key: "ff.webrtc_p2p", displayName: "WebRTC P2P",
+    description: "启用 WebRTC P2P 屏幕镜像与 DataChannel 控制", valueType: "boolean", defaultValue: "false",
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server"], sortOrder: 7,
+  },
+  {
+    categoryKey: "feature_flags", key: "ff.nats_sync", displayName: "NATS 状态同步",
+    description: "使用 NATS JetStream 替代 WebSocket 广播进行设备状态同步", valueType: "boolean", defaultValue: "false",
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server"], sortOrder: 8,
+  },
+  {
+    categoryKey: "feature_flags", key: "ff.ray_scheduler", displayName: "Ray AI 调度",
+    description: "启用 Ray 分布式 AI 任务调度", valueType: "boolean", defaultValue: "false",
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server"], sortOrder: 9,
+  },
+  {
+    categoryKey: "feature_flags", key: "ff.federated_learning", displayName: "联邦学习",
+    description: "启用跨设备联邦学习模型聚合", valueType: "boolean", defaultValue: "false",
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server"], sortOrder: 10,
+  },
+  {
+    categoryKey: "feature_flags", key: "ff.p2p_group_control", displayName: "P2P 群控",
+    description: "启用设备间直连 P2P 群控同步", valueType: "boolean", defaultValue: "false",
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server"], sortOrder: 11,
+  },
+  {
+    categoryKey: "feature_flags", key: "ff.model_hot_update", displayName: "模型热更新",
+    description: "允许不重发 APK 即可动态更新 AI 模型文件", valueType: "boolean", defaultValue: "true",
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group"], tags: ["server", "android"], sortOrder: 12,
+  },
+
+  // ═══ LEGACY VLM ═══
+  {
+    categoryKey: "vlm", key: "vlm.legacy.api_url", displayName: "旧版 VLM API URL",
+    description: "旧版 VLM Agent API 端点", valueType: "url", defaultValue: "http://localhost:5000/api/vlm/execute",
+    isSecret: false, isOverridable: false, allowedScopes: ["global"], tags: ["server", "vlm"], sortOrder: 12,
+  },
+  {
+    categoryKey: "vlm", key: "vlm.legacy.model_name", displayName: "旧版 VLM 模型名",
+    description: "旧版 VLM 使用的模型名称", valueType: "string", defaultValue: "autoglm-phone-9b",
+    isSecret: false, isOverridable: false, allowedScopes: ["global"], tags: ["server", "vlm"], sortOrder: 13,
+  },
+  {
+    categoryKey: "vlm", key: "vlm.trace_dir", displayName: "VLM Trace 目录",
+    description: "VLM 执行轨迹文件存储目录", valueType: "string", defaultValue: "data/episodes",
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "vlm"], sortOrder: 14,
+  },
+
+  // ═══ RELAY ═══
+  {
+    categoryKey: "relay", key: "relay.idle_timeout_ms", displayName: "Relay 空闲超时",
+    description: "Relay 连接空闲自动断开时间（毫秒）", valueType: "number", defaultValue: "300000",
+    validationRule: { min: 10000, max: 3600000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "relay"], sortOrder: 1,
+  },
+  {
+    categoryKey: "relay", key: "relay.sweep_interval_ms", displayName: "Relay 清扫间隔",
+    description: "Relay 过期连接清扫间隔（毫秒）", valueType: "number", defaultValue: "30000",
+    validationRule: { min: 5000, max: 300000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "relay"], sortOrder: 2,
+  },
+  {
+    categoryKey: "relay", key: "relay.max_payload_bytes", displayName: "Relay 最大载荷",
+    description: "Relay 单次消息最大字节数", valueType: "number", defaultValue: "16777216",
+    validationRule: { min: 1048576, max: 104857600, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "relay"], sortOrder: 3,
+  },
+
+  // ═══ BRIDGE ═══
+  {
+    categoryKey: "relay", key: "bridge.idle_timeout_ms", displayName: "Bridge 空闲超时",
+    description: "VPS Bridge 连接空闲超时（毫秒）", valueType: "number", defaultValue: "300000",
+    validationRule: { min: 10000, max: 3600000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "bridge"], sortOrder: 4,
+  },
+  {
+    categoryKey: "relay", key: "bridge.sweep_interval_ms", displayName: "Bridge 清扫间隔",
+    description: "Bridge 过期连接清扫间隔（毫秒）", valueType: "number", defaultValue: "30000",
+    validationRule: { min: 5000, max: 300000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "bridge"], sortOrder: 5,
+  },
+  {
+    categoryKey: "relay", key: "bridge.auth_timeout_ms", displayName: "Bridge 认证超时",
+    description: "Bridge 设备认证等待超时（毫秒）", valueType: "number", defaultValue: "10000",
+    validationRule: { min: 1000, max: 60000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "bridge"], sortOrder: 6,
+  },
+
+  // ═══ STORAGE LIFECYCLE ═══
+  {
+    categoryKey: "infrastructure", key: "storage.screenshots.retention_days", displayName: "截图保留天数",
+    description: "截图文件在 MinIO 中的保留天数", valueType: "number", defaultValue: "7",
+    validationRule: { min: 1, max: 365, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group"], tags: ["server", "minio"], sortOrder: 26,
+  },
+  {
+    categoryKey: "infrastructure", key: "storage.logs.retention_days", displayName: "日志保留天数",
+    description: "设备日志在 MinIO 中的保留天数", valueType: "number", defaultValue: "30",
+    validationRule: { min: 1, max: 365, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group"], tags: ["server", "minio"], sortOrder: 27,
+  },
+  {
+    categoryKey: "infrastructure", key: "storage.models.keep_versions", displayName: "模型保留版本数",
+    description: "每个模型类型保留的最新版本数量", valueType: "number", defaultValue: "3",
+    validationRule: { min: 1, max: 20, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "minio"], sortOrder: 28,
+  },
+  {
+    categoryKey: "infrastructure", key: "storage.default_expiry_seconds", displayName: "签名URL默认过期",
+    description: "MinIO 预签名 URL 默认有效时间（秒）", valueType: "number", defaultValue: "3600",
+    validationRule: { min: 60, max: 86400, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "minio"], sortOrder: 29,
+  },
+
+  // ═══ HARD-CODED CONSTANTS — Decision Engine ═══
+  {
+    categoryKey: "decision", key: "decision.safety.action_history_max", displayName: "安全动作历史上限",
+    description: "安全守卫保留的最近动作历史数量", valueType: "number", defaultValue: "20",
+    validationRule: { min: 5, max: 200, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group"], tags: ["server", "decision"], sortOrder: 7,
+  },
+  {
+    categoryKey: "decision", key: "decision.safety.dedup_window_ms", displayName: "去重窗口",
+    description: "安全守卫操作去重时间窗口（毫秒）", valueType: "number", defaultValue: "10000",
+    validationRule: { min: 1000, max: 60000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group"], tags: ["server", "decision"], sortOrder: 8,
+  },
+  {
+    categoryKey: "decision", key: "decision.safety.max_input_text_len", displayName: "输入文本最大长度",
+    description: "安全守卫检查的输入文本最大长度", valueType: "number", defaultValue: "500",
+    validationRule: { min: 50, max: 5000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "decision"], sortOrder: 9,
+  },
+
+  // ═══ HARD-CODED CONSTANTS — AI Model Retry/Timeout ═══
+  {
+    categoryKey: "ai_models", key: "ai.deepseek.retry_max_attempts", displayName: "DeepSeek 重试次数",
+    description: "DeepSeek API 请求失败最大重试次数", valueType: "number", defaultValue: "3",
+    validationRule: { min: 0, max: 10, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group"], tags: ["server", "deepseek"], sortOrder: 11,
+  },
+  {
+    categoryKey: "ai_models", key: "ai.deepseek.request_timeout_ms", displayName: "DeepSeek 请求超时",
+    description: "DeepSeek 单次 API 请求超时（毫秒）", valueType: "number", defaultValue: "10000",
+    validationRule: { min: 1000, max: 60000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group"], tags: ["server", "deepseek"], sortOrder: 12,
+  },
+  {
+    categoryKey: "ai_models", key: "ai.deepseek.retry_base_delay_ms", displayName: "DeepSeek 重试延迟",
+    description: "DeepSeek 重试指数退避基础延迟（毫秒）", valueType: "number", defaultValue: "1000",
+    validationRule: { min: 100, max: 30000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "deepseek"], sortOrder: 13,
+  },
+  {
+    categoryKey: "ai_models", key: "ai.qwen_vl.retry_max_attempts", displayName: "QwenVL 重试次数",
+    description: "QwenVL API 请求失败最大重试次数", valueType: "number", defaultValue: "3",
+    validationRule: { min: 0, max: 10, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group"], tags: ["server", "qwenvl"], sortOrder: 14,
+  },
+  {
+    categoryKey: "ai_models", key: "ai.qwen_vl.request_timeout_ms", displayName: "QwenVL 请求超时",
+    description: "QwenVL 单次 API 请求超时（毫秒）", valueType: "number", defaultValue: "15000",
+    validationRule: { min: 1000, max: 60000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group"], tags: ["server", "qwenvl"], sortOrder: 15,
+  },
+  {
+    categoryKey: "ai_models", key: "ai.qwen_vl.retry_base_delay_ms", displayName: "QwenVL 重试延迟",
+    description: "QwenVL 重试指数退避基础延迟（毫秒）", valueType: "number", defaultValue: "2000",
+    validationRule: { min: 100, max: 30000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "qwenvl"], sortOrder: 16,
+  },
+
+  // ═══ HARD-CODED CONSTANTS — Task Queue ═══
+  {
+    categoryKey: "task", key: "task.queue.max_retries", displayName: "队列最大重试",
+    description: "BullMQ 任务队列最大重试次数", valueType: "number", defaultValue: "3",
+    validationRule: { min: 0, max: 20, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "bullmq"], sortOrder: 6,
+  },
+  {
+    categoryKey: "task", key: "task.timeout.ws_hub_ms", displayName: "WS Hub 任务超时",
+    description: "WebSocket Hub 中任务执行最大等待时间（毫秒）", valueType: "number", defaultValue: "1800000",
+    validationRule: { min: 60000, max: 86400000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server"], sortOrder: 7,
+  },
+
+  // ═══ HARD-CODED CONSTANTS — Webhook ═══
+  {
+    categoryKey: "notification", key: "webhook.retry_max_attempts", displayName: "Webhook 最大重试",
+    description: "Webhook 发送失败最大重试次数", valueType: "number", defaultValue: "3",
+    validationRule: { min: 0, max: 10, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "webhook"], sortOrder: 3,
+  },
+  {
+    categoryKey: "notification", key: "webhook.retry_base_delay_ms", displayName: "Webhook 重试延迟",
+    description: "Webhook 重试基础延迟（毫秒）", valueType: "number", defaultValue: "2000",
+    validationRule: { min: 500, max: 30000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "webhook"], sortOrder: 4,
+  },
+  {
+    categoryKey: "notification", key: "webhook.request_timeout_ms", displayName: "Webhook 请求超时",
+    description: "Webhook 单次请求超时（毫秒）", valueType: "number", defaultValue: "10000",
+    validationRule: { min: 1000, max: 60000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "webhook"], sortOrder: 5,
+  },
+
+  // ═══ HARD-CODED CONSTANTS — Alerts ═══
+  {
+    categoryKey: "notification", key: "alert.evaluation_interval_ms", displayName: "告警评估间隔",
+    description: "告警规则评估周期（毫秒）", valueType: "number", defaultValue: "30000",
+    validationRule: { min: 5000, max: 300000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "alert"], sortOrder: 6,
+  },
+
+  // ═══ HARD-CODED CONSTANTS — AI Memory ═══
+  {
+    categoryKey: "decision", key: "ai.memory.check_interval_ms", displayName: "AI 内存检查间隔",
+    description: "AI Memory 调度器检查间隔（毫秒）", valueType: "number", defaultValue: "60000",
+    validationRule: { min: 10000, max: 600000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "ai-memory"], sortOrder: 10,
+  },
+  {
+    categoryKey: "decision", key: "ai.memory.cooldown_ms", displayName: "AI 内存冷却时间",
+    description: "AI Memory 操作后冷却时间（毫秒）", valueType: "number", defaultValue: "120000",
+    validationRule: { min: 10000, max: 600000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "ai-memory"], sortOrder: 11,
+  },
+
+  // ═══ HARD-CODED CONSTANTS — AI Bridge ═══
+  {
+    categoryKey: "task", key: "ai.bridge.auth_timeout_ms", displayName: "AI Bridge 认证超时",
+    description: "AI Bridge 设备认证超时（毫秒）", valueType: "number", defaultValue: "10000",
+    validationRule: { min: 1000, max: 60000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "ai-bridge"], sortOrder: 8,
+  },
+  {
+    categoryKey: "task", key: "ai.bridge.task_timeout_ms", displayName: "AI Bridge 任务超时",
+    description: "AI Bridge 任务执行超时（毫秒）", valueType: "number", defaultValue: "1800000",
+    validationRule: { min: 60000, max: 86400000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "ai-bridge"], sortOrder: 9,
+  },
+  {
+    categoryKey: "task", key: "ai.bridge.sweep_interval_ms", displayName: "AI Bridge 清扫间隔",
+    description: "AI Bridge 过期连接清扫间隔（毫秒）", valueType: "number", defaultValue: "30000",
+    validationRule: { min: 5000, max: 300000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "ai-bridge"], sortOrder: 10,
+  },
+
+  // ═══ HARD-CODED CONSTANTS — Scrcpy ═══
+  {
+    categoryKey: "scrcpy", key: "scrcpy.h264_buffer_max_bytes", displayName: "H.264 缓冲区大小",
+    description: "Scrcpy H.264 解码缓冲区最大字节数", valueType: "number", defaultValue: "2097152",
+    validationRule: { min: 524288, max: 10485760, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group", "device"], tags: ["server", "scrcpy"], sortOrder: 4,
+  },
+  {
+    categoryKey: "scrcpy", key: "scrcpy.max_chunks", displayName: "Scrcpy 最大分片",
+    description: "Scrcpy 单帧最大分片数", valueType: "number", defaultValue: "200",
+    validationRule: { min: 50, max: 500, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group", "device"], tags: ["server", "scrcpy"], sortOrder: 5,
+  },
+
+  // ═══ HARD-CODED CONSTANTS — Remote Command ═══
+  {
+    categoryKey: "task", key: "remote.command_timeout_ms", displayName: "远程命令超时",
+    description: "远程 ADB 命令默认超时（毫秒）", valueType: "number", defaultValue: "15000",
+    validationRule: { min: 1000, max: 120000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group", "device"], tags: ["server", "remote"], sortOrder: 11,
+  },
+
+  // ═══ HARD-CODED CONSTANTS — Server Health ═══
+  {
+    categoryKey: "system", key: "system.health.cache_ttl_sec", displayName: "健康检查缓存 TTL",
+    description: "服务健康检查结果缓存时间（秒）", valueType: "number", defaultValue: "5",
+    validationRule: { min: 1, max: 120, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "health"], sortOrder: 6,
   },
 ];

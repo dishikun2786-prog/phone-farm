@@ -1,0 +1,57 @@
+# Production overlay for PhoneFarm K8s deployment
+# Higher replica counts, production resources, TLS, monitoring
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Inherit from base
+resources:
+  - ../../base
+
+# Target namespace
+namespace: phonefarm-prod
+
+# Apply the namespace to all resources
+# namePrefix: prod-
+
+# Patch replica counts, resource limits, TLS for production
+patchesStrategicMerge:
+  - patches/replicas.yaml
+  - patches/resource-limits.yaml
+  - patches/tls.yaml
+
+# Generate TLS certificate via cert-manager
+# Certificate resource handled separately
+
+# Prometheus ServiceMonitor and PodMonitor
+# Included in base/monitoring.yaml
+
+commonLabels:
+  environment: production
+  phonefarm.io/tier: production
+
+commonAnnotations:
+  phonefarm.io/deploy-region: primary
+  phonefarm.io/monitoring: enabled
+
+# Image tag override for production
+images:
+  - name: phonefarm/control-server
+    newTag: stable
+  - name: phonefarm/edge-node
+    newTag: stable
+  - name: phonefarm/python-ai
+    newTag: stable
+
+# ConfigMap overrides for production
+configMapGenerator:
+  - name: phonefarm-config-production
+    behavior: merge
+    literals:
+      - NODE_ENV=production
+      - MINIO_USE_SSL="true"
+      - MINIO_BUCKET="phonefarm-prod"
+      - FF_LEGACY_VLM="false"
+      - SCRCPY_MAX_SIZE="1080"
+      - SCRCPY_BIT_RATE="8000000"
+      - STREAM_MAX_DURATION_SEC="3600"
+      - EXPERIENCE_COMPILE_INTERVAL_MIN="15"

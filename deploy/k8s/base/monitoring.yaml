@@ -1,0 +1,287 @@
+---
+# Monitoring Stack — Prometheus ServiceMonitors, Alert Rules, Grafana
+# Requires: prometheus-operator / kube-prometheus-stack
+---
+# ServiceMonitor for control-server metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: phonefarm-control-server
+  labels:
+    app.kubernetes.io/name: control-server
+    app.kubernetes.io/component: monitoring
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: control-server
+  endpoints:
+    - port: https
+      path: /api/v1/health
+      scheme: HTTPS
+      interval: 15s
+      scrapeTimeout: 10s
+      tlsConfig:
+        insecureSkipVerify: true
+  namespaceSelector:
+    matchNames:
+      - phonefarm-prod
+
+---
+# PodMonitor for edge-node metrics
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: phonefarm-edge-node
+  labels:
+    app.kubernetes.io/name: edge-node
+    app.kubernetes.io/component: monitoring
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: edge-node
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+    - port: http
+      path: /health
+      interval: 30s
+
+---
+# PodMonitor for NATS metrics
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: phonefarm-nats
+  labels:
+    app.kubernetes.io/name: nats
+    app.kubernetes.io/component: monitoring
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nats
+  podMetricsEndpoints:
+    - port: monitor
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+
+---
+# PodMonitor for MinIO metrics
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: phonefarm-minio
+  labels:
+    app.kubernetes.io/name: minio
+    app.kubernetes.io/component: monitoring
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: minio
+  podMetricsEndpoints:
+    - port: s3-api
+      path: /minio/metrics/v2
+      interval: 30s
+      scrapeTimeout: 10s
+
+---
+# PrometheusRule — alert rules for PhoneFarm critical conditions
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: phonefarm-alerts
+  labels:
+    app.kubernetes.io/name: alerts
+    app.kubernetes.io/component: monitoring
+    release: kube-prometheus-stack
+    severity: critical
+spec:
+  groups:
+    - name: phonefarm-device.rules
+      interval: 30s
+      rules:
+        # Alert: No devices online for 5 minutes (or sudden drop)
+        - alert: PhoneFarmDeviceOffline
+          expr: |
+            phonefarm_devices_online < 1
+          for: 5m
+          labels:
+            severity: critical
+            component: device
+          annotations:
+            summary: "All PhoneFarm devices are offline"
+            description: "No devices have been online for more than 5 minutes. Cluster: {{ $labels.cluster }}. Last value: {{ $value }}."
+            runbook_url: "https://wiki.phonefarm.example.com/runbooks/device-offline"
+
+        # Alert: Device count dropped by more than 20% in 10 minutes
+        - alert: PhoneFarmDeviceCountDrop
+          expr: |
+            (phonefarm_devices_online offset 10m) - phonefarm_devices_online > (phonefarm_devices_online offset 10m) * 0.2
+          for: 5m
+          labels:
+            severity: warning
+            component: device
+          annotations:
+            summary: "PhoneFarm device count dropped significantly"
+            description: "Device count decreased by more than 20% in the last 10 minutes. Current: {{ $value }}."
+
+    - name: phonefarm-task.rules
+      interval: 30s
+      rules:
+        # Alert: Task failure rate > 10% over 15 minutes
+        - alert: PhoneFarmHighTaskFailureRate
+          expr: |
+            (
+              rate(phonefarm_tasks_failed_total[15m])
+              /
+              rate(phonefarm_tasks_total[15m])
+            ) > 0.10
+          for: 10m
+          labels:
+            severity: warning
+            component: task
+          annotations:
+            summary: "PhoneFarm task failure rate exceeds 10%"
+            description: "Task failure rate is {{ $value | humanizePercentage }} over the last 15 minutes. Component: {{ $labels.script_name }}."
+            runbook_url: "https://wiki.phonefarm.example.com/runbooks/high-failure-rate"
+
+        # Alert: Task queue depth > 1000
+        - alert: PhoneFarmTaskQueueBacklog
+          expr: |
+            phonefarm_task_queue_depth > 1000
+          for: 5m
+          labels:
+            severity: warning
+            component: task
+          annotations:
+            summary: "PhoneFarm task queue backlog exceeded"
+            description: "Task queue has {{ $value }} pending tasks."
+
+    - name: phonefarm-api.rules
+      interval: 30s
+      rules:
+        # Alert: API P95 latency > 2 seconds
+        - alert: PhoneFarmHighAPILatency
+          expr: |
+            histogram_quantile(0.95, rate(phonefarm_http_request_duration_seconds_bucket[5m])) > 2
+          for: 5m
+          labels:
+            severity: warning
+            component: api
+          annotations:
+            summary: "PhoneFarm API P95 latency exceeds 2 seconds"
+            description: "API P95 latency is {{ $value }}s for endpoint {{ $labels.endpoint }}."
+
+        # Alert: API error rate > 5%
+        - alert: PhoneFarmHighAPIErrorRate
+          expr: |
+            (
+              rate(phonefarm_http_requests_errors_total[5m])
+              /
+              rate(phonefarm_http_requests_total[5m])
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: critical
+            component: api
+          annotations:
+            summary: "PhoneFarm API error rate exceeds 5%"
+            description: "Error rate is {{ $value | humanizePercentage }}."
+
+    - name: phonefarm-nats.rules
+      interval: 30s
+      rules:
+        # Alert: NATS connection drops
+        - alert: PhoneFarmNATSConnectionDrops
+          expr: |
+            rate(nats_connections_closed_total[5m]) > 10
+          for: 5m
+          labels:
+            severity: warning
+            component: messaging
+          annotations:
+            summary: "NATS connection drops detected"
+            description: "NATS connections closing at rate {{ $value }}/s."
+
+        # Alert: NATS disconnected from cluster
+        - alert: PhoneFarmNATSClusterDown
+          expr: |
+            nats_server_route_count < 2
+          for: 2m
+          labels:
+            severity: critical
+            component: messaging
+          annotations:
+            summary: "NATS cluster connectivity degraded"
+            description: "NATS server has fewer than 2 route connections. Only {{ $value }} routes active."
+
+    - name: phonefarm-storage.rules
+      interval: 30s
+      rules:
+        # Alert: Disk usage > 85%
+        - alert: PhoneFarmHighDiskUsage
+          expr: |
+            (1 - (node_filesystem_avail_bytes{mountpoint="/data"} / node_filesystem_size_bytes{mountpoint="/data"})) > 0.85
+          for: 10m
+          labels:
+            severity: warning
+            component: storage
+          annotations:
+            summary: "PhoneFarm disk usage exceeds 85%"
+            description: "Disk usage on {{ $labels.instance }} at {{ $value | humanizePercentage }}."
+
+    - name: phonefarm-pod.rules
+      interval: 30s
+      rules:
+        # Alert: Pod in CrashLoopBackOff
+        - alert: PhoneFarmPodCrashLooping
+          expr: |
+            kube_pod_container_status_waiting_reason{reason="CrashLoopBackOff"} > 0
+          for: 5m
+          labels:
+            severity: critical
+            component: infrastructure
+          annotations:
+            summary: "PhoneFarm pod {{ $labels.pod }} is crash looping"
+            description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been crash looping for 5 minutes."
+
+        # Alert: Pod OOMKilled
+        - alert: PhoneFarmPodOOMKilled
+          expr: |
+            increase(kube_pod_container_status_terminated_reason{reason="OOMKilled"}[10m]) > 0
+          labels:
+            severity: critical
+            component: infrastructure
+          annotations:
+            summary: "PhoneFarm pod was OOMKilled"
+            description: "Pod {{ $labels.pod }} was terminated due to OOM."
+
+---
+# Grafana Dashboard ConfigMap (placeholder — import via Grafana UI or provisioning)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: phonefarm-grafana-dashboard
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/component: monitoring
+    grafana_dashboard: "1"
+data:
+  phonefarm-overview.json: |
+    {
+      "title": "PhoneFarm Overview",
+      "uid": "phonefarm-overview",
+      "panels": [],
+      "templating": {
+        "list": [
+          { "name": "cluster", "type": "prometheus", "query": "label_values(up, cluster)" },
+          { "name": "namespace", "type": "prometheus", "query": "label_values(up, namespace)" }
+        ]
+      }
+    }

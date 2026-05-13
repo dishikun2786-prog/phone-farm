@@ -28,7 +28,8 @@ export type Resource =
   | "api_keys"
   | "stats"
   | "platform_accounts"
-  | "system";
+  | "system"
+  | "config";
 
 export type Action = "read" | "write" | "delete" | "manage";
 
@@ -54,6 +55,7 @@ const PERMISSIONS: Record<Role, Partial<Record<Resource, Action[]>>> = {
     stats: ["read"],
     platform_accounts: ["read", "write", "delete", "manage"],
     system: ["read", "manage"],
+    config: ["read", "write", "manage"],
   },
   admin: {
     devices: ["read", "write", "manage"],
@@ -75,6 +77,7 @@ const PERMISSIONS: Record<Role, Partial<Record<Resource, Action[]>>> = {
     stats: ["read"],
     platform_accounts: ["read", "write", "manage"],
     system: ["read"],
+    config: ["read", "write"],
   },
   operator: {
     devices: ["read", "write"],
@@ -96,6 +99,7 @@ const PERMISSIONS: Record<Role, Partial<Record<Resource, Action[]>>> = {
     stats: ["read"],
     platform_accounts: ["read", "write"],
     system: [],
+    config: ["read"],
   },
   viewer: {
     devices: ["read"],
@@ -117,6 +121,7 @@ const PERMISSIONS: Record<Role, Partial<Record<Resource, Action[]>>> = {
     stats: ["read"],
     platform_accounts: ["read"],
     system: [],
+    config: ["read"],
   },
 };
 
@@ -157,6 +162,7 @@ export const ADMIN_MENU_ITEMS: Record<Resource, { label: string; icon: string; p
   stats: { label: "用量统计", icon: "bar-chart", path: "/stats" },
   platform_accounts: { label: "平台账号", icon: "at-sign", path: "/platform-accounts" },
   system: { label: "系统设置", icon: "settings", path: "/system" },
+  config: { label: "配置管理", icon: "sliders", path: "/config" },
 };
 
 /** Build the visible menu tree for a given role */

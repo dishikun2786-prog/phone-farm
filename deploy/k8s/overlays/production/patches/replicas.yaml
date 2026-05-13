@@ -1,0 +1,29 @@
+---
+# Production replica count overrides
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: phonefarm-control-server
+spec:
+  replicas: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: phonefarm-edge-node
+spec:
+  replicas: 4
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: phonefarm-python-ai
+spec:
+  replicas: 4
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: phonefarm-nats
+spec:
+  replicas: 3

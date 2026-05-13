@@ -8,6 +8,7 @@
  *   4. 连续重复动作检测 -> 标记 (3次相同 -> 路由切换到 VLM)
  *   5. 操作频率限制 -> 最小间隔 300ms
  */
+import type { RuntimeConfig } from "../config-manager/runtime-config.js";
 import type { DeviceAction } from "./types";
 
 const BLACKLIST_PACKAGES = [
@@ -31,7 +32,15 @@ export class SafetyViolation extends Error {
 
 export class SafetyGuard {
   private actionHistory = new Map<string, ActionRecord[]>();
-  private readonly MAX_HISTORY = 20;
+  private maxHistory: number;
+  private dedupWindowMs: number;
+  private maxTextLength: number;
+
+  constructor(rc?: RuntimeConfig) {
+    this.maxHistory = rc?.getNumber("decision.safety.action_history_max", 20) ?? 20;
+    this.dedupWindowMs = rc?.getNumber("decision.safety.dedup_window_ms", 10000) ?? 10000;
+    this.maxTextLength = rc?.getNumber("decision.safety.max_input_text_len", 500) ?? 500;
+  }
 
   validate(
     action: DeviceAction,
@@ -61,8 +70,8 @@ export class SafetyGuard {
       }
 
       case "type": {
-        if (action.text && action.text.length > 500) {
-          action.text = action.text.slice(0, 500);
+        if (action.text && action.text.length > this.maxTextLength) {
+          action.text = action.text.slice(0, this.maxTextLength);
         }
         break;
       }
@@ -83,13 +92,13 @@ export class SafetyGuard {
       this.actionHistory.set(deviceId, history);
     }
 
-    // 清理 10 秒前的记录
-    history = history.filter(r => now - r.time < 10_000);
+    // 清理过期记录
+    history = history.filter(r => now - r.time < this.dedupWindowMs);
 
     const recentSame = history.filter(r => r.hash === hash).length;
     history.push({ hash, time: now });
 
-    if (history.length > this.MAX_HISTORY) {
+    if (history.length > this.maxHistory) {
       history.shift();
     }
 

@@ -203,6 +203,26 @@ interface AppState {
   createModel: (data: Record<string, unknown>) => Promise<void>;
   updateModel: (id: string, data: Record<string, unknown>) => Promise<void>;
   deleteModel: (id: string) => Promise<void>;
+
+  // System Config
+  systemConfig: Record<string, { key: string; value: string; source: string; displayName: string; categoryKey: string }> | null;
+  systemConfigLoading: boolean;
+  systemConfigError: string;
+  loadSystemConfig: () => Promise<void>;
+  updateSystemConfig: (key: string, value: string, reason?: string) => Promise<void>;
+
+  // Feature Flags
+  featureFlags: Record<string, { enabled: boolean; source: string; displayName: string; categoryKey: string }> | null;
+  featureFlagsLoading: boolean;
+  featureFlagsError: string;
+  loadFeatureFlags: () => Promise<void>;
+  toggleFeatureFlag: (key: string, enabled: boolean) => Promise<void>;
+
+  // Infrastructure Status
+  infraStatus: Record<string, { connected: boolean; info: Record<string, any> }> | null;
+  infraStatusLoading: boolean;
+  infraStatusError: string;
+  loadInfraStatus: () => Promise<void>;
 }
 
 function getInitialTheme(): Theme {
@@ -497,6 +517,88 @@ export const useStore = create<AppState>((set, get) => ({
       const msg = err instanceof ApiError ? err.message : '删除模型失败';
       toast('error', msg);
       throw err;
+    }
+  },
+
+  // System Config
+  systemConfig: null,
+  systemConfigLoading: false,
+  systemConfigError: '',
+
+  loadSystemConfig: async () => {
+    set({ systemConfigLoading: true, systemConfigError: '' });
+    try {
+      const data = await api.systemGetConfig();
+      const byKey: Record<string, any> = {};
+      for (const e of data.entries || []) {
+        byKey[e.key] = e;
+      }
+      set({ systemConfig: byKey, systemConfigLoading: false });
+    } catch (err: any) {
+      const msg = err instanceof ApiError ? err.message : '加载系统配置失败';
+      set({ systemConfigLoading: false, systemConfigError: msg });
+    }
+  },
+
+  updateSystemConfig: async (key, value, reason) => {
+    try {
+      await api.systemUpdateConfig(key, value, reason);
+      toast('success', `配置 ${key} 已更新`);
+      await get().loadSystemConfig();
+    } catch (err: any) {
+      const msg = err instanceof ApiError ? err.message : '更新配置失败';
+      toast('error', msg);
+      throw err;
+    }
+  },
+
+  // Feature Flags
+  featureFlags: null,
+  featureFlagsLoading: false,
+  featureFlagsError: '',
+
+  loadFeatureFlags: async () => {
+    set({ featureFlagsLoading: true, featureFlagsError: '' });
+    try {
+      const data = await api.systemGetFeatureFlags();
+      set({ featureFlags: data.flags, featureFlagsLoading: false });
+    } catch (err: any) {
+      const msg = err instanceof ApiError ? err.message : '加载功能开关失败';
+      set({ featureFlagsLoading: false, featureFlagsError: msg });
+    }
+  },
+
+  toggleFeatureFlag: async (key, enabled) => {
+    // Optimistic update
+    const prev = get().featureFlags;
+    if (prev?.[key]) {
+      set({ featureFlags: { ...prev, [key]: { ...prev[key], enabled } } });
+    }
+    try {
+      await api.systemToggleFeatureFlag(key, enabled);
+      toast('success', `${key} ${enabled ? '已开启' : '已关闭'}`);
+    } catch (err: any) {
+      // Rollback on failure
+      if (prev) set({ featureFlags: prev });
+      const msg = err instanceof ApiError ? err.message : '切换功能开关失败';
+      toast('error', msg);
+      throw err;
+    }
+  },
+
+  // Infrastructure Status
+  infraStatus: null,
+  infraStatusLoading: false,
+  infraStatusError: '',
+
+  loadInfraStatus: async () => {
+    set({ infraStatusLoading: true, infraStatusError: '' });
+    try {
+      const data = await api.systemGetInfrastructureStatus();
+      set({ infraStatus: data.status, infraStatusLoading: false });
+    } catch (err: any) {
+      const msg = err instanceof ApiError ? err.message : '加载基础设施状态失败';
+      set({ infraStatusLoading: false, infraStatusError: msg });
     }
   },
 }));

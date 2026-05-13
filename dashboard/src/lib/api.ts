@@ -386,6 +386,23 @@ export const api = {
   configImport: (data: { values?: any[]; templates?: any[]; overwrite?: boolean }) =>
     request("/config/import", { method: "POST", body: JSON.stringify(data) }),
 
+  // ── System Config ──
+  systemGetConfig: () => request("/system/config"),
+  systemGetConfigKey: (key: string) => request(`/system/config/${encodeURIComponent(key)}`),
+  systemUpdateConfig: (key: string, value: string, changeReason?: string) =>
+    request(`/system/config/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      body: JSON.stringify({ value, changeReason }),
+    }),
+  systemReloadConfig: () => request("/system/config/reload", { method: "POST" }),
+  systemGetFeatureFlags: () => request("/system/feature-flags"),
+  systemToggleFeatureFlag: (key: string, enabled: boolean) =>
+    request(`/system/feature-flags/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      body: JSON.stringify({ value: String(enabled) }),
+    }),
+  systemGetInfrastructureStatus: () => request("/system/infrastructure/status"),
+
   // Generic request (used by admin pages and custom endpoints)
   request: (path: string, options?: RequestInit) => request(path, options),
 };

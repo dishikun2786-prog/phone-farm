@@ -1,0 +1,35 @@
+# Kustomize base for PhoneFarm Kubernetes deployment
+# Multi-region orchestration base layer
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - control-server-deployment.yaml
+  - edge-node-deployment.yaml
+  - services.yaml
+  - configmap.yaml
+  - hpa.yaml
+  - nats-statefulset.yaml
+  - minio-deployment.yaml
+  - monitoring.yaml
+
+commonLabels:
+  app.kubernetes.io/managed-by: kustomize
+  app.kubernetes.io/part-of: phonefarm
+  app.kubernetes.io/version: "1.0.0"
+
+commonAnnotations:
+  phonefarm.io/deploy-tool: kustomize
+  phonefarm.io/architecture-version: phase5
+
+# Generate ConfigMap from config files
+# configMapGenerator:
+#   - name: phonefarm-config
+#     files:
+#       - config/phonefarm.yaml
+
+# Secret generation managed externally via sealed-secrets or vault
+# secretGenerator:
+#   - name: phonefarm-secrets
+#     files:
+#       - secrets/.env.production

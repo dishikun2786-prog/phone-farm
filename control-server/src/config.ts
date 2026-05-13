@@ -58,6 +58,42 @@ const envSchema = z.object({
   SCRCPY_MAX_SIZE: z.coerce.number().default(1080),
   SCRCPY_BIT_RATE: z.coerce.number().default(4_000_000),
   SCRCPY_MAX_FPS: z.coerce.number().default(30),
+
+  // ── NATS State Sync ──
+  NATS_URL: z.string().default("nats://localhost:4222"),
+  NATS_TOKEN: z.string().default(""),
+  NATS_ENABLED: z.coerce.boolean().default(false),
+
+  // ── MinIO Object Storage ──
+  MINIO_ENDPOINT: z.string().default("localhost:9000"),
+  MINIO_ACCESS_KEY: z.string().default("minioadmin"),
+  MINIO_SECRET_KEY: z.string().default("minioadmin"),
+  MINIO_BUCKET: z.string().default("phonefarm"),
+  MINIO_USE_SSL: z.coerce.boolean().default(false),
+  MINIO_ENABLED: z.coerce.boolean().default(false),
+
+  // ── Ray Cluster ──
+  RAY_ADDRESS: z.string().default("http://localhost:8265"),
+  RAY_ENABLED: z.coerce.boolean().default(false),
+
+  // ── WebRTC / Signaling ──
+  TURN_SERVER_URL: z.string().default("turn:localhost:3478"),
+  TURN_USERNAME: z.string().default("phonefarm"),
+  TURN_CREDENTIAL: z.string().default(""),
+  STUN_SERVER_URL: z.string().default("stun:stun.l.google.com:19302"),
+  WEBRTC_ENABLED: z.coerce.boolean().default(false),
+
+  // ── Edge Node ──
+  EDGE_NODE_ENABLED: z.coerce.boolean().default(false),
+  EDGE_NODE_PORT: z.coerce.number().default(9090),
+
+  // ── Feature Flags (Phase 2-5) ──
+  FF_WEBRTC_P2P: z.coerce.boolean().default(false),
+  FF_NATS_SYNC: z.coerce.boolean().default(false),
+  FF_RAY_SCHEDULER: z.coerce.boolean().default(false),
+  FF_FEDERATED_LEARNING: z.coerce.boolean().default(false),
+  FF_P2P_GROUP_CONTROL: z.coerce.boolean().default(false),
+  FF_MODEL_HOT_UPDATE: z.coerce.boolean().default(true),
 });
 
 export const config = envSchema.parse(process.env);
