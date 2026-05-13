@@ -3,18 +3,26 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 type MessageHandler = (msg: any) => void;
 export type ConnectionState = 'connected' | 'connecting' | 'disconnected';
 
+const WS_PATHS = ['/ws/frontend'];
+
+function buildWsUrls(): string[] {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const primary = `${protocol}//${window.location.host}/ws/frontend`;
+  const bypass = `wss://ws-${window.location.host}/ws/frontend`;
+  return [primary, bypass];
+}
+
 export function useWebSocket(onMessage: MessageHandler) {
   const wsRef = useRef<WebSocket | null>(null);
   const handlersRef = useRef<MessageHandler>(onMessage);
   const reconnectAttemptRef = useRef(0);
+  const urlIndexRef = useRef(0);
   const [connectionState, setConnectionState] = useState<ConnectionState>('connecting');
 
   handlersRef.current = onMessage;
 
   useEffect(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws/frontend`;
-
+    const urls = buildWsUrls();
     let reconnectTimer: ReturnType<typeof setTimeout>;
     let destroyed = false;
 
@@ -22,12 +30,14 @@ export function useWebSocket(onMessage: MessageHandler) {
       if (destroyed) return;
       setConnectionState('connecting');
 
+      const wsUrl = urls[urlIndexRef.current % urls.length];
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('[WS] Frontend connected');
+        console.log(`[WS] Connected via ${wsUrl}`);
         reconnectAttemptRef.current = 0;
+        urlIndexRef.current = 0;
         if (!destroyed) setConnectionState('connected');
       };
 
@@ -39,7 +49,7 @@ export function useWebSocket(onMessage: MessageHandler) {
       };
 
       ws.onclose = () => {
-        console.log('[WS] Frontend disconnected, reconnecting in 5s...');
+        console.log('[WS] Disconnected, reconnecting...');
         if (!destroyed) {
           setConnectionState('disconnected');
           reconnectTimer = setTimeout(connect, 5000);
@@ -48,7 +58,12 @@ export function useWebSocket(onMessage: MessageHandler) {
 
       ws.onerror = () => {
         reconnectAttemptRef.current++;
-        console.error(`[WS] Connection error (attempt #${reconnectAttemptRef.current})`);
+        console.error(`[WS] Error on ${wsUrl} (attempt #${reconnectAttemptRef.current})`);
+        if (reconnectAttemptRef.current > 3) {
+          urlIndexRef.current++;
+          reconnectAttemptRef.current = 0;
+          console.log(`[WS] Switching to alternate URL...`);
+        }
       };
     };
 

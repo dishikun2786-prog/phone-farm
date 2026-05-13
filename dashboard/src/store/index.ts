@@ -115,9 +115,14 @@ interface UserInfo {
 
 function decodeJwt(token: string): UserInfo | null {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]!));
-    if (payload.username && payload.role) {
-      return { username: payload.username, role: payload.role };
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = parts[1]!;
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const json = atob(base64);
+    const data = JSON.parse(json);
+    if (data.username && data.role) {
+      return { username: data.username, role: data.role };
     }
     return null;
   } catch { return null; }
