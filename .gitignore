@@ -9,6 +9,8 @@ dist/
 # Keep deploy/.env.example — only ignore in subdirs
 control-server/.env.example
 deploy/keys/
+docs/*.key
+docs/*.pem
 .DS_Store
 Thumbs.db
 *.tsbuildinfo
