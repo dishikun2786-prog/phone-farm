@@ -2,6 +2,7 @@
  * PhoneFarm Cluster Bridge — Redis Pub/Sub 跨实例消息桥接（多实例架构预留）
  */
 import type { FastifyInstance } from "fastify";
+import { randomUUID } from "crypto";
 
 interface ClusterMessage {
   type: "ws_forward" | "config_sync" | "cache_invalidate" | "rate_limit";

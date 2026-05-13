@@ -1,6 +1,7 @@
 /**
  * PhoneFarm VLM Prompt Template Routes — Prompt 模板管理 + A/B 测试 API
  */
+import { randomUUID } from "crypto";
 import type { FastifyInstance } from "fastify";
 
 export interface PromptTemplate {
@@ -48,7 +49,6 @@ export class PromptTemplateStore {
 
   /** 创建模板 */
   create(data: Omit<PromptTemplate, "id" | "createdAt" | "updatedAt">): PromptTemplate {
-    const { randomUUID } = require("crypto");
     const t: PromptTemplate = {
       ...data,
       id: randomUUID(),

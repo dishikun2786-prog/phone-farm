@@ -378,12 +378,13 @@ async function main() {
     return { ...d, online: hub.isOnline(d.id) };
   });
 
-  app.post('/api/v1/devices/:id/command', async (req, reply) => {
-    const d = deviceIndex.get((req.params as Record<string, string>).id);
-    if (!d) return reply.status(404).send({ error: 'Not found' });
-    const body = req.body as any;
-    return { success: hub.sendToDevice(d.id, { type: 'command', action: body.action, params: body.params || {} }) };
-  });
+  // Send command to device (moved to remote/remote-command-routes.ts)
+  // app.post('/api/v1/devices/:id/command', async (req, reply) => {
+  //   const d = deviceIndex.get((req.params as Record<string, string>).id);
+  //   if (!d) return reply.status(404).send({ error: 'Not found' });
+  //   const body = req.body as any;
+  //   return { success: hub.sendToDevice(d.id, { type: 'command', action: body.action, params: body.params || {} }) };
+  // });
 
   // Task templates
   app.get('/api/v1/task-templates', async () => {

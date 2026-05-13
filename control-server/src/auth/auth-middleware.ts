@@ -4,6 +4,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Role, Resource, Action } from "./rbac";
 import { hasPermission } from "./rbac";
+import { createHmac } from "crypto";
 
 export interface AuthUser {
   userId: string;
@@ -30,7 +31,6 @@ export class AuthService {
       iat: Math.floor(Date.now() / 1000),
       exp: Math.floor(Date.now() / 1000) + 7 * 24 * 3600,
     })).toString("base64url");
-    const { createHmac } = require("crypto");
     const signature = createHmac("sha256", this.jwtSecret)
       .update(`${header}.${payload}`).digest("base64url");
     return `${header}.${payload}.${signature}`;
@@ -57,7 +57,6 @@ export class AuthService {
       iat: Math.floor(Date.now() / 1000),
       exp: Math.floor(Date.now() / 1000) + 30 * 24 * 3600,
     })).toString("base64url");
-    const { createHmac } = require("crypto");
     const signature = createHmac("sha256", this.jwtSecret)
       .update(`${header}.${payload}`).digest("base64url");
     return `${header}.${payload}.${signature}`;

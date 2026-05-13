@@ -1,6 +1,7 @@
 /**
  * PhoneFarm Device Group Routes — 设备分组 CRUD + 批量操作 API
  */
+import { randomUUID } from "crypto";
 import type { FastifyInstance } from "fastify";
 
 interface DeviceGroup {
@@ -22,7 +23,6 @@ export class DeviceGroupStore {
   }
 
   create(name: string, description: string, deviceIds: string[], tags: string[]): DeviceGroup {
-    const { randomUUID } = require("crypto");
     const group: DeviceGroup = {
       id: randomUUID(),
       name, description, deviceIds, tags,

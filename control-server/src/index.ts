@@ -1,9 +1,12 @@
 import fastifyCors from '@fastify/cors';
 import fastifyJwt from '@fastify/jwt';
 import fastifyWebsocket from '@fastify/websocket';
+import bcrypt from 'bcryptjs';
 import 'dotenv/config';
+import { eq } from 'drizzle-orm';
 import Fastify from 'fastify';
 import type { WebSocket } from 'ws';
+import { AuthService, requireAuth } from './auth/auth-middleware.js';
 import { config } from './config.js';
 import { db, pool } from './db.js';
 import { BridgeClient } from './relay/bridge-client.js';
@@ -11,48 +14,44 @@ import { accountRoutes, deviceRoutes, taskRoutes } from './routes.js';
 import { taskTemplates, users } from './schema.js';
 import { registerVlmRoutes } from './vlm/vlm-routes.js';
 import { initWsHub } from './ws-hub.js';
-import { eq } from 'drizzle-orm';
-import bcrypt from 'bcryptjs';
-import { AuthService, requireAuth } from './auth/auth-middleware.js';
 
 // ── Decision Engine (New Architecture) ──
 import { DecisionEngine } from './decision/decision-engine.js';
 import { DecisionRouter } from './decision/decision-router.js';
-import { DeepSeekClient } from './decision/deepseek-client.js';
-import { QwenVLClient } from './decision/qwen-vl-client.js';
-import { PromptBuilder } from './decision/prompt-builder.js';
-import { SafetyGuard } from './decision/safety-guard.js';
 import { registerDecisionRoutes } from './decision/decision-routes.js';
+import { DeepSeekClient } from './decision/deepseek-client.js';
+import { PromptBuilder } from './decision/prompt-builder.js';
+import { QwenVLClient } from './decision/qwen-vl-client.js';
+import { SafetyGuard } from './decision/safety-guard.js';
 
 // ── Cross-Device Memory ──
-import { MemoryStore } from './memory/memory-store.js';
-import { MemoryRetriever } from './memory/memory-retriever.js';
 import { ExperienceCompiler } from './memory/experience-compiler.js';
+import { MemoryRetriever } from './memory/memory-retriever.js';
 import { registerMemoryRoutes } from './memory/memory-routes.js';
+import { MemoryStore } from './memory/memory-store.js';
 
 // ── On-Demand Streaming ──
 import { StreamManager } from './stream/stream-manager.js';
 import { registerStreamRoutes } from './stream/stream-routes.js';
 
 // ── Modular Routes (newly registered) ──
-import { activationRoutes } from './activation/activation-routes.js';
-import { deviceGroupRoutes } from './device-group-routes.js';
-import { apiKeyRoutes } from './auth/api-key-routes.js';
-import { scriptsManifestRoutes } from './scripts-manifest-routes.js';
-import { platformAccountRoutes } from './platform-account-routes.js';
-import { modelRoutes } from './model-routes.js';
-import { deviceConfigRoutes } from './device-config-routes.js';
 import { accountDeleteRoutes } from './account/account-delete-routes.js';
-import { remoteCommandRoutes } from './remote/remote-command-routes.js';
+import { activationRoutes } from './activation/activation-routes.js';
 import { alertRoutes } from './alerts/alert-routes.js';
-import { queueRoutes } from './queue/queue-routes.js';
-import { webhookRoutes } from './webhook/webhook-routes.js';
-import { statsRoutes } from './stats/stats-routes.js';
-import { crashRoutes } from './crash/crash-routes.js';
-import { promptTemplateRoutes } from './vlm/prompt-template-routes.js';
-import { registerScriptDeployRoutes } from './scrcpy/script-deploy-routes.js';
+import { apiKeyRoutes } from './auth/api-key-routes.js';
 import { billingRoutes } from './billing/billing-routes.js';
 import { configRoutes } from './config-manager/config-routes.js';
+import { crashRoutes } from './crash/crash-routes.js';
+import { deviceConfigRoutes } from './device-config-routes.js';
+import { deviceGroupRoutes } from './device-group-routes.js';
+import { modelRoutes } from './model-routes.js';
+import { platformAccountRoutes } from './platform-account-routes.js';
+import { queueRoutes } from './queue/queue-routes.js';
+import { remoteCommandRoutes } from './remote/remote-command-routes.js';
+import { scriptsManifestRoutes } from './scripts-manifest-routes.js';
+import { statsRoutes } from './stats/stats-routes.js';
+import { promptTemplateRoutes } from './vlm/prompt-template-routes.js';
+import { webhookRoutes } from './webhook/webhook-routes.js';
 
 const app = Fastify({ logger: true });
 
@@ -191,9 +190,6 @@ await app.register(webhookRoutes);
 await app.register(statsRoutes);
 await app.register(crashRoutes);
 await app.register(promptTemplateRoutes);
-app.register(function (scope) {
-  registerScriptDeployRoutes(scope, hub);
-});
 await app.register(billingRoutes);
 await app.register(configRoutes);
 

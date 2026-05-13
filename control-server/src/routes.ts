@@ -1,9 +1,9 @@
+import { desc, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
-import { db } from './db.js';
-import { devices, tasks, taskTemplates, executions, accounts } from './schema.js';
-import { eq, desc } from 'drizzle-orm';
-import { wsHub } from './ws-hub.js';
 import { z } from 'zod';
+import { db } from './db.js';
+import { accounts, devices, executions, tasks, taskTemplates } from './schema.js';
+import { wsHub } from './ws-hub.js';
 
 const createTaskSchema = z.object({
   name: z.string(),
@@ -36,20 +36,20 @@ export async function deviceRoutes(app: FastifyInstance) {
     return { ...device, online };
   });
 
-  // Send command to device
-  app.post<{ Params: { id: string } }>('/api/v1/devices/:id/command', async (req, reply) => {
-    const body = sendCommandSchema.parse(req.body);
-    const [device] = await db.select().from(devices).where(eq(devices.id, req.params.id));
-    if (!device) {
-      return reply.status(404).send({ error: 'Device not found' });
-    }
-    const sent = wsHub.sendToDevice(device.id, {
-      type: 'command',
-      action: body.action,
-      params: body.params || {},
-    });
-    return { success: sent };
-  });
+  // Send command to device (moved to remote/remote-command-routes.ts)
+  // app.post<{ Params: { id: string } }>('/api/v1/devices/:id/command', async (req, reply) => {
+  //   const body = sendCommandSchema.parse(req.body);
+  //   const [device] = await db.select().from(devices).where(eq(devices.id, req.params.id));
+  //   if (!device) {
+  //     return reply.status(404).send({ error: 'Device not found' });
+  //   }
+  //   const sent = wsHub.sendToDevice(device.id, {
+  //     type: 'command',
+  //     action: body.action,
+  //     params: body.params || {},
+  //   });
+  //   return { success: sent };
+  // });
 }
 
 export async function taskRoutes(app: FastifyInstance) {

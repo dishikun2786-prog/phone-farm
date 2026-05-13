@@ -18,7 +18,7 @@ export interface TaskJob {
   maxRetries: number;
 }
 
-const QUEUE_NAME = "phonefarm:tasks";
+const QUEUE_NAME = "phonefarm-tasks";
 const MAX_RETRIES = 3;
 
 export class TaskQueueManager {

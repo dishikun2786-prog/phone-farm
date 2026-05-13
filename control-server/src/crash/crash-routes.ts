@@ -1,6 +1,7 @@
 /**
  * PhoneFarm Crash Routes — 崩溃报告接收 + 查询 API
  */
+import { randomUUID } from "crypto";
 import type { FastifyInstance } from "fastify";
 
 export interface CrashReport {
@@ -28,7 +29,6 @@ export class CrashReportStore {
 
   /** 接收设备上报的崩溃 */
   receive(report: Omit<CrashReport, "id">): CrashReport {
-    const { randomUUID } = require("crypto");
     const full: CrashReport = { id: randomUUID(), ...report };
     this.reports.push(full);
     if (this.reports.length > 5000) {
