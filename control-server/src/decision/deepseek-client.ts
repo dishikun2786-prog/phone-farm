@@ -73,8 +73,7 @@ export class DeepSeekClient {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-api-key": this.apiKey,
-            "anthropic-version": "2023-06-01",
+            "Authorization": `Bearer ${this.apiKey}`,
           },
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(10000),

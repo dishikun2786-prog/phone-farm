@@ -16,6 +16,7 @@ import { type FastifyInstance } from 'fastify';
 import { randomUUID } from 'crypto';
 import { runABTest, type ModelUnderTest } from './model-ab';
 import type { ModelType } from './vlm-client';
+import { config } from '../config';
 import { EpisodeRecorder } from './episode-recorder';
 
 export interface VlmModelConfig {
@@ -377,16 +378,56 @@ export function registerVlmModelRoutes(
     const start = Date.now();
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
+      const timeout = setTimeout(() => controller.abort(), 8000);
 
-      const res = await fetch(m.apiUrl.replace('/api/vlm/execute', '/health'), {
-        method: 'GET',
-        signal: controller.signal,
-      });
+      let res: Response;
+
+      if (m.modelType === 'deepseek' || m.modelType === 'qwenvl') {
+        // Cloud API: send a minimal POST request with auth to verify connectivity
+        const body = JSON.stringify({
+          model: m.modelName,
+          max_tokens: 1,
+          messages: [{ role: "user", content: "hi" }],
+        });
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        if (m.modelType === 'deepseek') {
+          headers["Authorization"] = `Bearer ${m.apiKey || config.DEEPSEEK_API_KEY}`;
+          // DeepSeek Anthropic Messages API format
+          const anthropicBody = JSON.stringify({
+            model: m.modelName,
+            max_tokens: 1,
+            messages: [{ role: "user", content: "hi" }],
+          });
+          res = await fetch(m.apiUrl, {
+            method: "POST",
+            headers,
+            body: anthropicBody,
+            signal: controller.signal,
+          });
+        } else {
+          // DashScope OpenAI-compatible format
+          headers["Authorization"] = `Bearer ${m.apiKey || config.DASHSCOPE_API_KEY}`;
+          res = await fetch(m.apiUrl, {
+            method: "POST",
+            headers,
+            body,
+            signal: controller.signal,
+          });
+        }
+      } else {
+        // Legacy local bridge: health check
+        res = await fetch(m.apiUrl.replace('/api/vlm/execute', '/health'), {
+          method: 'GET',
+          signal: controller.signal,
+        });
+      }
       clearTimeout(timeout);
 
       const latencyMs = Date.now() - start;
-      if (res.ok) {
+      // For cloud APIs, 2xx or 4xx (non-401/403) means connectivity works
+      if (res.ok || (res.status !== 401 && res.status !== 403)) {
         const body = await res.json().catch(() => ({}));
         return {
           success: true,
@@ -403,7 +444,7 @@ export function registerVlmModelRoutes(
     } catch (err: any) {
       const latencyMs = Date.now() - start;
       if (err.name === 'AbortError') {
-        return { success: false, latencyMs, error: '连接超时 (5s)' };
+        return { success: false, latencyMs, error: '连接超时 (8s)' };
       }
       return { success: false, latencyMs, error: err.message || '连接失败' };
     }
