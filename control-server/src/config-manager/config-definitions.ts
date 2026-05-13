@@ -457,7 +457,7 @@ export const DEFINITIONS: ConfigDefinitionSeed[] = [
   // ═══ AI MODELS ═══
   {
     categoryKey: "ai_models", key: "ai.deepseek.api_url", displayName: "DeepSeek API URL",
-    description: "DeepSeek API 端点地址", valueType: "url", defaultValue: "https://api.deepseek.com/v1/chat/completions",
+    description: "DeepSeek API 端点地址", valueType: "url", defaultValue: "https://api.deepseek.com/anthropic/messages",
     isSecret: false, isOverridable: false, allowedScopes: ["global"], tags: ["server", "deepseek"], sortOrder: 1,
   },
   {
@@ -468,8 +468,9 @@ export const DEFINITIONS: ConfigDefinitionSeed[] = [
   },
   {
     categoryKey: "ai_models", key: "ai.deepseek.model", displayName: "DeepSeek 模型",
-    description: "DeepSeek 使用的模型名称", valueType: "enum", defaultValue: "deepseek-chat",
+    description: "DeepSeek 使用的模型名称", valueType: "enum", defaultValue: "deepseek-v4-flash",
     enumOptions: [
+      { label: "DeepSeek-V4-Flash (推荐)", value: "deepseek-v4-flash" },
       { label: "DeepSeek-Chat (V4)", value: "deepseek-chat" },
       { label: "DeepSeek-Reasoner", value: "deepseek-reasoner" },
     ],
@@ -500,9 +501,11 @@ export const DEFINITIONS: ConfigDefinitionSeed[] = [
   },
   {
     categoryKey: "ai_models", key: "ai.qwen_vl.model", displayName: "QwenVL 模型",
-    description: "QwenVL 视觉模型名称", valueType: "enum", defaultValue: "qwen3-vl-flash",
+    description: "QwenVL 视觉模型名称", valueType: "enum", defaultValue: "qwen3-vl-plus",
     enumOptions: [
+      { label: "Qwen3-VL-Plus (推荐)", value: "qwen3-vl-plus" },
       { label: "Qwen3-VL-Flash", value: "qwen3-vl-flash" },
+      { label: "Qwen3-VL-Max", value: "qwen3-vl-max" },
       { label: "Qwen2.5-VL-72B", value: "qwen2.5-vl-72b" },
       { label: "Qwen2.5-VL-7B", value: "qwen2.5-vl-7b" },
     ],

@@ -129,6 +129,32 @@ export const DEFAULT_MODEL_SEEDS: Omit<VlmModelConfig, 'id' | 'createdAt' | 'upd
     isEnabled: false,
     description: 'GUI-Owl 视觉语言模型',
   },
+  {
+    name: 'DeepSeek V4 Flash',
+    modelName: 'deepseek-v4-flash',
+    modelType: 'deepseek',
+    apiUrl: 'https://api.deepseek.com/anthropic/messages',
+    apiKey: 'sk-234ab5238bf04fb4912d4f5899a0e6b0',
+    maxTokens: 512,
+    temperature: 0.1,
+    pricing: { inputPer1kTokens: 0.00014, outputPer1kTokens: 0.00028 },
+    isDefault: true,
+    isEnabled: true,
+    description: 'DeepSeek V4 Flash — 快速文本决策模型 (Anthropic Messages API)',
+  },
+  {
+    name: 'Qwen3-VL-Plus',
+    modelName: 'qwen3-vl-plus',
+    modelType: 'qwenvl',
+    apiUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+    apiKey: 'sk-fca6e6e3c0c545d18bd58d1fbec1eb8a',
+    maxTokens: 1024,
+    temperature: 0.1,
+    pricing: { inputPer1kTokens: 0.0015, outputPer1kTokens: 0.0045, perImage: 0.003 },
+    isDefault: false,
+    isEnabled: true,
+    description: 'Qwen3-VL-Plus — 千问视觉大模型均衡版 (阿里云百炼)',
+  },
 ];
 
 export function registerVlmModelRoutes(

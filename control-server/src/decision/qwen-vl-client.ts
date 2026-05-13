@@ -1,11 +1,11 @@
 /**
- * Qwen3-VL-Flash 客户端 — 阿里云百炼 DashScope API (OpenAI 兼容)。
+ * Qwen3-VL-Plus 客户端 — 阿里云百炼 DashScope API (OpenAI 兼容)。
  *
  * API 端点: https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
  * 认证: Bearer Token (DASHSCOPE_API_KEY)
- * 模型: qwen3-vl-flash (最快) / qwen3-vl-plus (均衡) / qwen3-vl-max (最强)
+ * 模型: qwen3-vl-plus (推荐) / qwen3-vl-flash (最快) / qwen3-vl-max (最强)
  *
- * Qwen3-VL-Flash 特性:
+ * Qwen3-VL-Plus 特性:
  *   - 多模态: 支持文本 + 图像输入
  *   - 中文优化: UI 界面理解能力强
  *   - 性价比: ¥0.002/千张图

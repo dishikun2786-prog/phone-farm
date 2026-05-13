@@ -41,7 +41,7 @@ export interface VLMResponse {
   rawContent: string;
 }
 
-export type ModelType = 'autoglm' | 'qwenvl' | 'uitars' | 'maiui' | 'guiowl';
+export type ModelType = 'autoglm' | 'qwenvl' | 'uitars' | 'maiui' | 'guiowl' | 'deepseek';
 
 export function detectModelType(modelName: string): ModelType {
   const lower = modelName.toLowerCase();
@@ -50,6 +50,7 @@ export function detectModelType(modelName: string): ModelType {
   if (lower.includes('uitars') || lower.includes('tars')) return 'uitars';
   if (lower.includes('maiui') || lower.includes('mai')) return 'maiui';
   if (lower.includes('guiowl') || lower.includes('gui')) return 'guiowl';
+  if (lower.includes('deepseek')) return 'deepseek';
   return 'autoglm';
 }
 

@@ -97,7 +97,7 @@ let decisionEngine: DecisionEngine | null = null;
 let streamManager: StreamManager | null = null;
 let experienceCompiler: ExperienceCompiler | null = null;
 
-if (config.FF_DECISION_ENGINE && config.DEEPSEEK_API_KEY) {
+if (config.FF_DECISION_ENGINE && (config.DEEPSEEK_API_KEY || config.DASHSCOPE_API_KEY)) {
   const memoryStore = new MemoryStore(pool);
   const memoryRetriever = new MemoryRetriever(memoryStore);
   experienceCompiler = new ExperienceCompiler(memoryStore);
@@ -159,6 +159,13 @@ if (config.FF_DECISION_ENGINE && config.DEEPSEEK_API_KEY) {
   });
 
   if (experienceCompiler) experienceCompiler.start();
+
+  if (!config.DEEPSEEK_API_KEY) {
+    console.log('[Decision] DeepSeek API key not configured — all decisions routed to Qwen3-VL-Plus');
+  }
+  if (!config.DASHSCOPE_API_KEY) {
+    console.log('[Decision] DashScope API key not configured — vision fallback unavailable');
+  }
 
   console.log('[Decision] Engine initialized (DeepSeek + Qwen3-VL)');
 }
