@@ -272,10 +272,10 @@ export function registerScrcpyRoutes(
 
   app.post('/api/v1/groups', async (req, reply) => {
     const { name, deviceIds } = req.body as { name: string; deviceIds: string[] };
-    if (!name || !deviceIds?.length) {
-      return reply.status(400).send({ error: 'name and deviceIds required' });
+    if (!name) {
+      return reply.status(400).send({ error: 'name required' });
     }
-    const group = groupControl.create(name, deviceIds);
+    const group = groupControl.create(name, deviceIds || []);
     return reply.status(201).send(group);
   });
 

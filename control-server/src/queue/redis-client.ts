@@ -10,10 +10,10 @@ export function getRedisClient(): Redis {
   if (!client) {
     const url = process.env.REDIS_URL || "redis://localhost:6379";
     client = new Redis(url, {
-      maxRetriesPerRequest: 3,
+      maxRetriesPerRequest: null,
       lazyConnect: true,
       retryStrategy(times) {
-        if (times > 5) return null; // stop retrying after 5 attempts
+        if (times > 5) return null;
         return Math.min(times * 200, 3000);
       },
     });

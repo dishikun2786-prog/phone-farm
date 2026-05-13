@@ -3,8 +3,6 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 type MessageHandler = (msg: any) => void;
 export type ConnectionState = 'connected' | 'connecting' | 'disconnected';
 
-const WS_PATHS = ['/ws/frontend'];
-
 function buildWsUrls(): string[] {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const primary = `${protocol}//${window.location.host}/ws/frontend`;

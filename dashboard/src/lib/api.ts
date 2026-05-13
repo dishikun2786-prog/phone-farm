@@ -85,7 +85,7 @@ export const api = {
 
   // Task Templates
   getTemplates: () => request('/task-templates'),
-  seedTemplates: () => request('/seed-templates', { method: 'POST' }),
+  seedTemplates: () => request('/admin/seed-templates', { method: 'POST' }),
 
   // Accounts
   getAccounts: () => request('/accounts'),

@@ -18,8 +18,8 @@ const envSchema = z.object({
 
   // ── DeepSeek V4 Flash (主模型, 文本决策 ~90%) ──
   DEEPSEEK_API_KEY: z.string().default(""),
-  DEEPSEEK_API_URL: z.string().default("https://api.deepseek.com/v1/chat/completions"),
-  DEEPSEEK_MODEL: z.string().default("deepseek-chat"),
+  DEEPSEEK_API_URL: z.string().default("https://api.deepseek.com/chat/completions"),
+  DEEPSEEK_MODEL: z.string().default("deepseek-v4-flash"),
   DEEPSEEK_MAX_TOKENS: z.coerce.number().default(512),
   DEEPSEEK_TEMPERATURE: z.coerce.number().default(0.1),
 

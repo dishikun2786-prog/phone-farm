@@ -254,6 +254,7 @@ function AppInner() {
         <Route path="/config/device" element={<ConfigDeviceEditor />} />
         <Route path="/config/templates" element={<ConfigTemplateEditor />} />
         <Route path="/config/audit" element={<ConfigAuditLog />} />
+        <Route path="/login" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>
   );

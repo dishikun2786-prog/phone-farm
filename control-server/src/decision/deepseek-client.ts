@@ -1,8 +1,8 @@
 /**
- * DeepSeek V4 Flash 客户端 — 纯文本决策 (OpenAI 兼容 API)。
+ * DeepSeek V4 Flash 客户端 (Anthropic API) — 纯文本决策。
  *
+ * 基于 Anthropic Messages API 标准，base_url: https://api.deepseek.com/anthropic
  * 与 QwenVLClient 暴露相同接口: decide(messages) → RawDecision
- * DecisionRouter 无需关心底层模型差异。
  */
 import { config } from "../config";
 import type { RawDecision } from "./types";
@@ -36,29 +36,31 @@ export class DeepSeekClient {
     this.temperature = overrides?.temperature ?? config.DEEPSEEK_TEMPERATURE;
   }
 
-  async decide(messages: ChatMessage[]): Promise<RawDecision> {
-    const filtered = messages.map(m => {
-      if (Array.isArray(m.content)) {
-        const textOnly = m.content.filter(p => p.type !== "image_url");
-        if (textOnly.length === 0) return null;
-        return { ...m, content: textOnly };
-      }
-      return m;
-    }).filter(Boolean) as ChatMessage[];
+  async decide(allMessages: ChatMessage[]): Promise<RawDecision> {
+    const systemMsg = allMessages.find(m => m.role === "system");
+    const userMsgs = allMessages.filter(m => m.role !== "system");
 
-    const body = {
+    const body: Record<string, unknown> = {
       model: this.model,
-      messages: filtered,
       max_tokens: this.maxTokens,
       temperature: this.temperature,
-      response_format: { type: "json_object" as const },
+      messages: userMsgs.map(m => ({
+        role: m.role,
+        content: typeof m.content === "string"
+          ? [{ type: "text", text: m.content }]
+          : m.content.filter((p: any) => p.type !== "image_url").map((p: any) => ({ type: "text", text: p.text })),
+      })),
     };
+    if (systemMsg && typeof systemMsg.content === "string") {
+      body.system = systemMsg.content;
+    }
 
     const response = await this.fetchWithRetry(body);
-    const content = response.choices?.[0]?.message?.content || "{}";
+    const textBlocks = response.content?.filter((c: any) => c.type === "text") || [];
+    const content = textBlocks.map((c: any) => c.text).join("\n") || "{}";
 
     if (response.usage) {
-      this.totalTokensUsed += response.usage.total_tokens || 0;
+      this.totalTokensUsed += (response.usage.input_tokens || 0) + (response.usage.output_tokens || 0);
     }
 
     return this.parseResponse(content);
@@ -71,19 +73,20 @@ export class DeepSeekClient {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${this.apiKey}`,
+            "x-api-key": this.apiKey,
+            "anthropic-version": "2023-06-01",
           },
           body: JSON.stringify(body),
-          signal: AbortSignal.timeout(10_000),
+          signal: AbortSignal.timeout(10000),
         });
 
         if (!res.ok) {
           const errText = await res.text();
-          if ((res.status === 429 || res.status === 503) && attempt < retries) {
+          if ((res.status === 429 || res.status === 503 || res.status === 529) && attempt < retries) {
             await sleep(1000 * Math.pow(2, attempt));
             continue;
           }
-          throw new Error(`DeepSeek API ${res.status}: ${errText}`);
+          throw new Error(`DeepSeek API ${res.status}: ${errText.slice(0, 200)}`);
         }
 
         return await res.json();

@@ -4,7 +4,7 @@ import fastifyWebsocket from '@fastify/websocket';
 import bcrypt from 'bcryptjs';
 import 'dotenv/config';
 import { eq } from 'drizzle-orm';
-import Fastify from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
 import type { WebSocket } from 'ws';
 import { AuthService, requireAuth } from './auth/auth-middleware.js';
 import { config } from './config.js';
@@ -37,6 +37,8 @@ import { registerStreamRoutes } from './stream/stream-routes.js';
 // ── Modular Routes (newly registered) ──
 import { accountDeleteRoutes } from './account/account-delete-routes.js';
 import { activationRoutes } from './activation/activation-routes.js';
+import { registerAiMemoryRoutes } from './ai-memory/ai-memory-routes.js';
+import { MemoryScheduler } from './ai-memory/memory-scheduler.js';
 import { alertRoutes } from './alerts/alert-routes.js';
 import { apiKeyRoutes } from './auth/api-key-routes.js';
 import { billingRoutes } from './billing/billing-routes.js';
@@ -48,9 +50,11 @@ import { modelRoutes } from './model-routes.js';
 import { platformAccountRoutes } from './platform-account-routes.js';
 import { queueRoutes } from './queue/queue-routes.js';
 import { remoteCommandRoutes } from './remote/remote-command-routes.js';
+import { AvRelayManager, registerScrcpyRoutes } from './scrcpy/index.js';
 import { scriptsManifestRoutes } from './scripts-manifest-routes.js';
 import { statsRoutes } from './stats/stats-routes.js';
 import { promptTemplateRoutes } from './vlm/prompt-template-routes.js';
+import { DEFAULT_MODEL_SEEDS, registerVlmModelRoutes, type VlmModelConfig } from './vlm/vlm-model-routes.js';
 import { webhookRoutes } from './webhook/webhook-routes.js';
 
 const app = Fastify({ logger: true });
@@ -193,8 +197,36 @@ await app.register(promptTemplateRoutes);
 await app.register(billingRoutes);
 await app.register(configRoutes);
 
+const avRelayManager = new AvRelayManager();
+registerScrcpyRoutes(app, avRelayManager);
+
+const vlmModelStore: VlmModelConfig[] = DEFAULT_MODEL_SEEDS.map((seed, i) => ({
+  ...seed,
+  id: `model-${i}`,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+}));
+const getVlmModels = () => vlmModelStore;
+const setVlmModels = (m: VlmModelConfig[]) => { vlmModelStore.length = 0; vlmModelStore.push(...m); };
+registerVlmModelRoutes(app, getVlmModels, setVlmModels);
+
 // VLM Agent routes (legacy)
 registerVlmRoutes(app, hub);
+
+// VLM Stats route
+const { StatsCalculator } = await import('./stats/stats-calculator.js');
+const vlmStatsCalc = new StatsCalculator(app);
+app.get('/api/v1/vlm/stats', async (req, reply) => {
+  const query = req.query as Record<string, string>;
+  const from = query.from ? Number(query.from) : Date.now() - 30 * 24 * 3600 * 1000;
+  const to = query.to ? Number(query.to) : Date.now();
+  try {
+    const stats = await vlmStatsCalc.calcVlmUsage(from, to);
+    return reply.send(stats);
+  } catch (err: any) {
+    return reply.status(500).send({ error: `Failed to compute VLM stats: ${err.message}` });
+  }
+});
 
 // Decision Engine routes (new architecture)
 if (decisionEngine) {
@@ -205,6 +237,14 @@ if (decisionEngine) {
     registerMemoryRoutes(app, memoryStore, experienceCompiler);
   }
 }
+
+const aiMemoryScheduler = new MemoryScheduler();
+await app.register(async function (scope: FastifyInstance) {
+  registerAiMemoryRoutes(scope, aiMemoryScheduler);
+});
+// [DISABLED] AI Memory Scheduler - DeepSeek API JSON parse issue
+// aiMemoryScheduler.start();
+console.log("[AIMemory] Scheduler API registered, auto-scheduling DISABLED");
 
 // Auth
 const authService = new AuthService(app, config.JWT_SECRET);

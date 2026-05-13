@@ -28,8 +28,8 @@ export default function DeviceGroupManagement() {
   async function loadGroups() {
     setLoading(true);
     try {
-      const res = await api.getGroups() as { groups: DeviceGroup[]; total: number };
-      setGroups(res.groups || []);
+      const groups = await api.getGroups();
+      setGroups(Array.isArray(groups) ? groups : []);
     } catch { toast('error', '加载分组失败'); }
     finally { setLoading(false); }
   }

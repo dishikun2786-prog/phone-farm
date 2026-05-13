@@ -4,6 +4,8 @@ dist/
 .env
 .env.production
 .dev-data.json
+.ai-memory-store.json
+.dev-groups.json
 # Keep deploy/.env.example — only ignore in subdirs
 control-server/.env.example
 .DS_Store
@@ -27,3 +29,7 @@ android-client/app/schemas/
 # Kotlin/C++ build caches
 android-client/.kotlin/
 android-client/app/.cxx/
+# Redis binaries (too large for git)
+deploy/scripts/redis-7.4.3-extracted/
+deploy/scripts/redis-7.4.3.zip
+deploy/scripts/redis-backup/
