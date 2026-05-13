@@ -8,6 +8,7 @@ dist/
 .dev-groups.json
 # Keep deploy/.env.example — only ignore in subdirs
 control-server/.env.example
+deploy/keys/
 .DS_Store
 Thumbs.db
 *.tsbuildinfo
