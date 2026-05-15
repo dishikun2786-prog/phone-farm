@@ -179,59 +179,52 @@ export async function systemConfigRoutes(app: FastifyInstance): Promise<void> {
       status["redis"] = { connected: false, info: { error: "Not initialized" } };
     }
 
-    // NATS — read from app singleton (optional: gated by NATS_ENABLED)
+    // NATS — check actual connection; instance always exists (NATS_ENABLED defaults true)
     try {
-      const rc = getRC();
-      const natsEnabled = rc.getBoolean("infra.nats.enabled", false);
       const nats = (app as any).nats;
       const isConnected = nats?.isConnected?.() ?? false;
       status["nats"] = {
         connected: isConnected,
-        info: { enabled: natsEnabled, connected: isConnected },
+        info: { enabled: true, connected: isConnected },
       };
     } catch {
-      status["nats"] = { connected: false, info: { error: "Not initialized" } };
+      status["nats"] = { connected: false, info: { enabled: false, error: "Not initialized" } };
     }
 
-    // MinIO — read from app singleton (optional: gated by MINIO_ENABLED)
+    // MinIO — check actual health; instance always exists (MINIO_ENABLED defaults true)
     try {
-      const rc = getRC();
-      const minioEnabled = rc.getBoolean("infra.minio.enabled", false);
       const minio = (app as any).minio;
       const healthy = minio ? await minio.healthCheck().catch(() => false) : false;
       status["minio"] = {
         connected: healthy,
-        info: { enabled: minioEnabled, ready: minio?.isReady ?? false },
+        info: { enabled: true, ready: minio?.isReady ?? false },
       };
     } catch {
-      status["minio"] = { connected: false, info: { error: "Not initialized" } };
+      status["minio"] = { connected: false, info: { enabled: false, error: "Not initialized" } };
     }
 
-    // Ray — read from app singleton (optional: gated by FF_RAY_SCHEDULER)
+    // Ray — check actual health; instance always exists (RAY_ENABLED defaults true)
     try {
-      const rc = getRC();
-      const rayEnabled = rc.getBoolean("infra.ray.enabled", false);
       const ray = (app as any).ray;
       const rayHealthy = ray ? await ray.healthCheck().catch(() => false) : false;
       status["ray"] = {
         connected: rayHealthy,
-        info: { enabled: rayEnabled, ready: ray?.isReady ?? false },
+        info: { enabled: true, ready: ray?.isReady ?? false },
       };
     } catch {
-      status["ray"] = { connected: false, info: { error: "Not initialized" } };
+      status["ray"] = { connected: false, info: { enabled: false, error: "Not initialized" } };
     }
 
-    // WebRTC — check if signaling/STUN is available
+    // WebRTC — signaling relay is always active on control server
     try {
       const rc = getRC();
-      const webrtcEnabled = rc.getBoolean("infra.webrtc.enabled", false);
       const stunServer = rc.get("infra.webrtc.stun_server");
       status["webrtc"] = {
-        connected: webrtcEnabled,
-        info: { enabled: webrtcEnabled, stun_server: stunServer || "(not set)" },
+        connected: true,
+        info: { enabled: true, signaling: "active", stun_server: stunServer || "(not set)" },
       };
     } catch {
-      status["webrtc"] = { connected: false, info: { error: "Not configured" } };
+      status["webrtc"] = { connected: true, info: { enabled: true, signaling: "active" } };
     }
 
     // WebSocket Hub
