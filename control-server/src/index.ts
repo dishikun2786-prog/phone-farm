@@ -391,6 +391,7 @@ await app.register(async function (openapiScope) {
 
 // Whitelabel routes (theme CSS is public; admin CRUD requires auth)
 await app.register(async function (wlScope) {
+  wlScope.addHook('preHandler', optionalAuth(authService));
   wlScope.addHook('preHandler', optionalTenant());
   await whitelabelRoutes(wlScope);
 });
@@ -409,6 +410,7 @@ await app.register(async function (creditScope) {
 });
 // Tenant management routes (super_admin only, with optional tenant resolution)
 await app.register(async function (tenantScope) {
+  tenantScope.addHook('preHandler', requireAuth(authService));
   tenantScope.addHook('preHandler', optionalTenant());
   await tenantRoutes(tenantScope);
   await tenantUserRoutes(tenantScope);
