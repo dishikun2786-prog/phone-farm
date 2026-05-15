@@ -61,8 +61,8 @@ app.register(async function (scope) {
   });
 
   // Frontend Dashboard connections
-  scope.get('/ws/frontend', { websocket: true }, (socket, _req) => {
-    bridge.handleFrontend(socket);
+  scope.get('/ws/frontend', { websocket: true }, (socket, req) => {
+    bridge.handleFrontend(socket, req);
   });
 
   // AI Worker connections (DeepSeek agent on VPS)

@@ -304,29 +304,62 @@ export class BridgeServer {
 
   // ── Frontend (Dashboard) connection ──
 
-  handleFrontend(ws: WebSocket): void {
+  handleFrontend(ws: WebSocket, req?: any): void {
     const frontendId = randomUUID();
     let authed = false;
     let authTimeout: ReturnType<typeof setTimeout> | undefined;
 
+    const tryAuth = (token: string): boolean => {
+      try {
+        jwt.verify(token, this.#jwtSecret);
+        authed = true;
+        clearTimeout(authTimeout);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
     const failAuth = (reason: string) => {
-      try { ws.send(JSON.stringify({ type: 'error', message: reason })); } catch { /* */ }
+      try { ws.send(JSON.stringify({ type: 'auth_error', message: reason })); } catch { /* */ }
       ws.close();
     };
 
+    // Try token from URL query param first (sent by dashboard frontend)
+    const urlToken = (() => {
+      try {
+        const url = new URL(req?.url || '/', 'http://localhost');
+        return url.searchParams.get('token') || '';
+      } catch { return ''; }
+    })();
+
+    if (urlToken && tryAuth(urlToken)) {
+      const conn: FrontendConn = {
+        ws, frontendId, authenticated: true,
+        connectedAt: new Date(), lastActivity: new Date(),
+      };
+      this.#frontends.set(frontendId, conn);
+      ws.send(JSON.stringify({ type: 'auth_ok' }));
+      this.#notifyControl({ type: 'frontend_connected', frontendId });
+    }
+
     ws.on('message', (raw) => {
       try {
-        // First message must be JWT auth
+        // Handle ping heartbeat (don't forward to control)
+        const m = JSON.parse(raw.toString());
+        if (m.type === 'ping') {
+          // Already authenticated or not — still keep connection alive
+          const conn = this.#frontends.get(frontendId);
+          if (conn) conn.lastActivity = new Date();
+          return;
+        }
+
+        // First message must be JWT auth (if not already authed via URL)
         if (!authed) {
-          const m = JSON.parse(raw.toString());
           if (m.type !== 'auth' || !m.token) {
-            return failAuth('JWT authentication required');
+            return failAuth('JWT authentication required — send { type: "auth", token: "..." }');
           }
-          try {
-            jwt.verify(m.token, this.#jwtSecret);
-            authed = true;
-            clearTimeout(authTimeout);
-          } catch {
+          if (!tryAuth(m.token)) {
             return failAuth('Invalid JWT token');
           }
 
@@ -335,7 +368,7 @@ export class BridgeServer {
             connectedAt: new Date(), lastActivity: new Date(),
           };
           this.#frontends.set(frontendId, conn);
-
+          ws.send(JSON.stringify({ type: 'auth_ok' }));
           this.#notifyControl({ type: 'frontend_connected', frontendId });
           return;
         }
@@ -362,9 +395,12 @@ export class BridgeServer {
 
     ws.on('error', () => { /* handled by close */ });
 
-    authTimeout = setTimeout(() => {
-      if (!authed) failAuth('Frontend authentication timeout');
-    }, AUTH_TIMEOUT_MS);
+    // Set auth timeout only if not already authenticated via URL token
+    if (!authed) {
+      authTimeout = setTimeout(() => {
+        if (!authed) failAuth('Frontend authentication timeout (30s)');
+      }, 30_000); // Increased from 10s to 30s
+    }
   }
 
   // ── AI Worker / AI Control connections ──
