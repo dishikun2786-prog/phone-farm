@@ -30,6 +30,7 @@ const PortalAccountSettingsPage = lazy(() => import('./pages/portal/AccountSetti
 const PortalNewTicketPage = lazy(() => import('./pages/portal/NewTicketPage'));
 const PortalApiDocsPage = lazy(() => import('./pages/portal/ApiDocsPage'));
 const PortalApiAppsPage = lazy(() => import('./pages/portal/ApiAppsPage'));
+const PortalAgentCommissionPage = lazy(() => import('./pages/portal/AgentCommissionPage'));
 
 // ── Route-level code splitting ──
 const DeviceList = lazy(() => import('./pages/DeviceList'));
@@ -60,6 +61,8 @@ const CommissionSettlementPage = lazy(() => import('./pages/admin/CommissionSett
 const CardBatchManagementPage = lazy(() => import('./pages/admin/CardBatchManagementPage'));
 const WhitelabelConfigPage = lazy(() => import('./pages/admin/WhitelabelConfigPage'));
 const UserManagement = lazy(() => import('./pages/admin/UserManagement'));
+const PermissionConfigPage = lazy(() => import('./pages/admin/PermissionConfigPage'));
+const TenantManagementPage = lazy(() => import('./pages/admin/TenantManagementPage'));
 const CreditManagementPage = lazy(() => import('./pages/admin/CreditManagementPage'));
 const TokenPricingPage = lazy(() => import('./pages/admin/TokenPricingPage'));
 const AssistantUsageDashboard = lazy(() => import('./pages/admin/AssistantUsageDashboard'));
@@ -101,6 +104,8 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/feature-flags': '功能开关管理',
   '/admin/infrastructure': '基础设施监控',
   '/admin/users': '用户管理',
+  '/admin/permissions': '权限配置',
+  '/admin/tenants': '租户管理',
   '/admin/credits': '积分管理',
   '/admin/token-pricing': 'Token 定价',
   '/admin/assistant-usage': 'AI 助手用量',
@@ -260,7 +265,7 @@ function PortalLayout() {
             <Route path="/support/new" element={<PortalNewTicketPage />} />
             <Route path="/support/:id" element={<PortalSupportTicketDetail />} />
             <Route path="/account" element={<PortalAccountSettingsPage />} />
-            <Route path="/api-docs" element={<PortalApiDocsPage />} />
+            <Route path="/commissions" element={<PortalAgentCommissionPage />} />
             <Route path="*" element={<Navigate to="/portal" replace />} />
           </Routes>
         </Suspense>
@@ -362,6 +367,8 @@ function AppInner() {
           <Route path="/admin/card-batches" element={<CardBatchManagementPage />} />
           <Route path="/admin/whitelabel" element={<WhitelabelConfigPage />} />
           <Route path="/admin/users" element={<UserManagement />} />
+          <Route path="/admin/permissions" element={<PermissionConfigPage />} />
+          <Route path="/admin/tenants" element={<TenantManagementPage />} />
           <Route path="/admin/credits" element={<CreditManagementPage />} />
           <Route path="/admin/token-pricing" element={<TokenPricingPage />} />
           <Route path="/admin/assistant-usage" element={<AssistantUsageDashboard />} />

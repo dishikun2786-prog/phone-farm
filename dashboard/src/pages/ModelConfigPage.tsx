@@ -13,7 +13,7 @@ import {
   CheckCircle2, XCircle, ChevronDown, ChevronUp, FlaskConical
 } from 'lucide-react';
 
-type ModelType = 'autoglm' | 'qwenvl' | 'uitars' | 'maiui' | 'guiowl' | 'deepseek';
+type ModelType = 'autoglm' | 'qwenvl' | 'uitars' | 'maiui' | 'guiowl' | 'deepseek' | 'guiplus';
 
 const MODEL_TYPE_NAMES: Record<ModelType, string> = {
   autoglm: 'AutoGLM',
@@ -22,6 +22,7 @@ const MODEL_TYPE_NAMES: Record<ModelType, string> = {
   maiui: 'MAI-UI',
   guiowl: 'GUI-Owl',
   deepseek: 'DeepSeek',
+  guiplus: 'GUI-Plus',
 };
 
 const MODEL_TYPE_COLORS: Record<ModelType, string> = {
@@ -31,6 +32,7 @@ const MODEL_TYPE_COLORS: Record<ModelType, string> = {
   maiui: 'bg-amber-100 text-amber-700',
   guiowl: 'bg-pink-100 text-pink-700',
   deepseek: 'bg-indigo-100 text-indigo-700',
+  guiplus: 'bg-orange-100 text-orange-700',
 };
 
 interface FormData {
@@ -128,7 +130,7 @@ export default function ModelConfigPage() {
     return list;
   }, [models, search, typeFilter]);
 
-  const typeFilterOptions = (['autoglm', 'qwenvl', 'uitars', 'maiui', 'guiowl', 'deepseek'] as ModelType[]).map(t => ({
+  const typeFilterOptions = (['autoglm', 'qwenvl', 'uitars', 'maiui', 'guiowl', 'deepseek', 'guiplus'] as ModelType[]).map(t => ({
     key: t,
     label: MODEL_TYPE_NAMES[t],
   }));

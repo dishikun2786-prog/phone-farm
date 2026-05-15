@@ -62,6 +62,26 @@ export class CreditService {
     };
   }
 
+  /** Get balances for multiple users in a single query. */
+  async getBalances(userIds: string[]): Promise<Map<string, CreditBalance>> {
+    if (userIds.length === 0) return new Map();
+    const placeholders = userIds.map((_, i) => `$${i + 1}`).join(', ');
+    const result = await pool.query(
+      `SELECT user_id, balance, total_earned, total_spent FROM ${USER_CREDITS} WHERE user_id IN (${placeholders})`,
+      userIds,
+    );
+    const map = new Map<string, CreditBalance>();
+    for (const row of result.rows) {
+      map.set(row.user_id, {
+        userId: row.user_id,
+        balance: row.balance ?? 0,
+        totalEarned: row.total_earned ?? 0,
+        totalSpent: row.total_spent ?? 0,
+      });
+    }
+    return map;
+  }
+
   /** Check if user has enough credits for a minimum required amount. */
   async hasEnoughCredits(userId: string, minRequired: number): Promise<boolean> {
     const balance = await this.getBalance(userId);

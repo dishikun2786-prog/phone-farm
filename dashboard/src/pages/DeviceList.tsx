@@ -472,6 +472,10 @@ export default function DeviceList() {
         <div
           className="fixed z-200 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-xl py-1 w-44 animate-scale-in"
           style={{ left: contextMenu.x, top: contextMenu.y }}
+          role="menu"
+          onKeyDown={e => {
+            if (e.key === 'Escape') setContextMenu(null);
+          }}
         >
           <div className="px-3 py-1.5 text-xs text-gray-400 dark:text-slate-500 truncate border-b border-gray-100 dark:border-slate-700">
             {contextMenu.deviceName}
@@ -479,6 +483,7 @@ export default function DeviceList() {
           {contextActions(contextMenu.deviceId).map((action, i) => (
             <button
               key={i}
+              role="menuitem"
               onClick={() => { action.action(); setContextMenu(null); }}
               className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors text-left"
             >

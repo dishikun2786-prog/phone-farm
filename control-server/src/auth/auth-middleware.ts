@@ -1,7 +1,7 @@
 /**
  * PhoneFarm Auth Middleware — JWT 验证 + RBAC 权限校验
  */
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Role, Resource, Action } from "./rbac";
 import { hasPermission } from "./rbac";
 import { createHmac } from "crypto";
@@ -80,15 +80,15 @@ export class AuthService {
 
 /** Fastify preHandler：验证 JWT 并注入 req.user */
 export function requireAuth(authService: AuthService) {
-  return async (req: FastifyRequest) => {
+  return async (req: FastifyRequest, reply: FastifyReply) => {
     const auth = req.headers.authorization;
     if (!auth?.startsWith("Bearer ")) {
-      throw { statusCode: 401, message: "Missing authorization header" };
+      return reply.status(401).send({ error: "Missing authorization header" });
     }
     const token = auth.slice(7);
     const user = authService.verifyToken(token);
     if (!user) {
-      throw { statusCode: 401, message: "Invalid or expired token" };
+      return reply.status(401).send({ error: "Invalid or expired token" });
     }
     req.user = user;
   };
@@ -96,16 +96,15 @@ export function requireAuth(authService: AuthService) {
 
 /** Fastify preHandler：验证 RBAC 权限 (在 requireAuth 之后) */
 export function requirePermission(resource: Resource, action: Action) {
-  return async (req: FastifyRequest) => {
-    const user = req.user;
+  return async (req: FastifyRequest, reply: FastifyReply) => {
+    const user = req.user as AuthUser | undefined;
     if (!user || !user.role) {
-      throw { statusCode: 401, message: "Authentication required" };
+      return reply.status(401).send({ error: "Authentication required" });
     }
     if (!hasPermission(user.role, resource, action)) {
-      throw {
-        statusCode: 403,
-        message: `Permission denied: ${action} on ${resource} (role: ${user.role})`,
-      };
+      return reply.status(403).send({
+        error: `Permission denied: ${action} on ${resource} (role: ${user.role})`,
+      });
     }
   };
 }

@@ -171,11 +171,14 @@ export class WsHub {
             runtime: conn.runtime,
           });
           this.#publishNatsDeviceOnline(conn.deviceId, {
-            publicIp: conn.publicIp,
-            model: msg.model,
-            androidVersion: msg.android_version,
-            deekeVersion: msg.deeke_version || msg.clientVersion,
-            runtime: conn.runtime,
+            device_id: conn.deviceId,
+            device_name: msg.model || '',
+            model: msg.model || '',
+            android_version: msg.android_version ?? 0,
+            script_version: msg.deeke_version || msg.clientVersion || '',
+            ip_address: conn.publicIp,
+            public_ip: conn.publicIp,
+            timestamp: Date.now(),
           });
         } else {
           conn.ws.send(JSON.stringify({ type: 'auth_error', message: 'Invalid token' }));
@@ -278,7 +281,7 @@ export class WsHub {
 
     // Verify JWT token for frontend connections
     try {
-      const decoded = jwt.verify(token, this.#jwtSecret, { algorithms: ['HS256'] }) as any;
+      const decoded = jwt.verify(token, this.#jwtSecret, { algorithms: ['HS256'] }) as { userId?: string; username?: string; role?: string } | null;
       if (decoded?.userId) {
         conn.authenticated = true;
       }
@@ -305,7 +308,7 @@ export class WsHub {
         // Auth message for frontend connections
         if (msg.type === 'auth') {
           try {
-            const decoded = jwt.verify(msg.token, this.#jwtSecret, { algorithms: ['HS256'] }) as any;
+            const decoded = jwt.verify(msg.token, this.#jwtSecret, { algorithms: ['HS256'] }) as { userId?: string } | null;
             if (decoded?.userId) {
               conn.authenticated = true;
               ws.send(JSON.stringify({ type: 'auth_ok' }));
@@ -442,9 +445,9 @@ export class WsHub {
 
     // Try JWT verification first (APK login flow)
     try {
-      const decoded = jwt.verify(token, this.#jwtSecret, { algorithms: ['HS256'] }) as any;
+      const decoded = jwt.verify(token, this.#jwtSecret, { algorithms: ['HS256'] }) as { userId?: string; username?: string; role?: string } | null;
       conn.authenticated = true;
-      conn.username = decoded.username;
+      conn.username = decoded?.username;
       conn.deviceId = msg.device_id || msg.deviceId || `device-${Date.now()}`;
       conn.publicIp = msg.public_ip || msg.ipAddress || conn.publicIp;
       conn.runtime = msg.runtime || 'phonefarm-native';
@@ -468,13 +471,13 @@ export class WsHub {
   // ── NATS integration hooks (no-op when NATS is disabled) ──
 
   #publishNatsDeviceOnline(deviceId: string, info: Record<string, unknown>): void {
-    if (natsSync?.isConnected) {
-      try { natsSync.publishDeviceOnline(deviceId, info as any); } catch { /* NATS optional — no-op */ }
+    if (natsSync?.isConnected()) {
+      try { natsSync.publishDeviceOnline(deviceId, info as Record<string, unknown>); } catch { /* NATS optional — no-op */ }
     }
   }
 
   #publishNatsDeviceOffline(deviceId: string): void {
-    if (natsSync?.isConnected) {
+    if (natsSync?.isConnected()) {
       try { natsSync.publishDeviceOffline(deviceId); } catch { /* NATS optional — no-op */ }
     }
   }

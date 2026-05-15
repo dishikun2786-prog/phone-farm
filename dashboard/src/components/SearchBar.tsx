@@ -16,6 +16,7 @@ export default function SearchBar({ value, onChange, placeholder = '搜索...', 
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
+        aria-label="搜索"
         className="border border-gray-300 rounded-lg pl-8 pr-8 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-48"
       />
       {value && (

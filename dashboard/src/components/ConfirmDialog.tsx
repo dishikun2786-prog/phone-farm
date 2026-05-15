@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 
@@ -42,6 +43,15 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel();
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [open, onCancel]);
+
   if (!open) return null;
 
   const style = VARIANT_STYLES[variant];

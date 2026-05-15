@@ -300,7 +300,11 @@ const SEED_TEMPLATES = [
 // ============== Server ==============
 async function main() {
   const app = Fastify({ logger: false });
-  await app.register(fastifyCors, { origin: true });
+  await app.register(fastifyCors, {
+    origin: true,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  });
   await app.register(fastifyJwt, { secret: JWT_SECRET });
   await app.register(fastifyWebsocket);
 
@@ -347,9 +351,9 @@ async function main() {
 
   // Auth
   app.post('/api/v1/auth/login', async (req, reply) => {
-    const { username, password } = req.body as any;
-    if (username === 'admin' && password === 'admin123') {
-      return { token: app.jwt.sign({ username, role: 'admin' }) };
+    const { account, password } = req.body as any;
+    if (account === 'admin' && password === 'admin123') {
+      return { token: app.jwt.sign({ username: account, role: 'admin' }) };
     }
     return reply.status(401).send({ error: 'Invalid credentials' });
   });
@@ -404,8 +408,10 @@ async function main() {
   // Tasks
   app.get('/api/v1/tasks', async () => store.tasks.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
 
-  app.get('/api/v1/tasks/:id', async (req) => {
-    return store.tasks.find(t => t.id === (req.params as Record<string, string>).id) || { error: 'Not found' };
+  app.get('/api/v1/tasks/:id', async (req, reply) => {
+    const task = store.tasks.find(t => t.id === (req.params as Record<string, string>).id);
+    if (!task) return reply.status(404).send({ error: 'Not found' });
+    return task;
   });
 
   app.post('/api/v1/tasks', async (req, reply) => {
@@ -416,9 +422,9 @@ async function main() {
     return reply.status(201).send(task);
   });
 
-  app.put('/api/v1/tasks/:id', async (req) => {
+  app.put('/api/v1/tasks/:id', async (req, reply) => {
     const idx = store.tasks.findIndex(t => t.id === (req.params as Record<string, string>).id);
-    if (idx === -1) return { error: 'Not found' };
+    if (idx === -1) return reply.status(404).send({ error: 'Not found' });
     store.tasks[idx] = { ...store.tasks[idx], ...(req.body as any), updatedAt: new Date().toISOString() };
     saveStore(store);
     return store.tasks[idx];
@@ -471,9 +477,9 @@ async function main() {
     return { execution: exec, sent };
   });
 
-  app.post('/api/v1/tasks/:id/stop', async (req) => {
+  app.post('/api/v1/tasks/:id/stop', async (req, reply) => {
     const task = store.tasks.find(t => t.id === (req.params as Record<string, string>).id);
-    if (!task) return { error: 'Not found' };
+    if (!task) return reply.status(404).send({ error: 'Not found' });
     return { success: hub.sendToDevice(task.deviceId, { type: 'stop_task', task_id: task.id }) };
   });
 

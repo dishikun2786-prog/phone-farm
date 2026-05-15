@@ -14,8 +14,8 @@ const PLATFORM_COLORS: Record<string, string> = {
 };
 
 export default function StatsDashboard() {
-  const stats = useStore(s => s.stats);
-  const statsLoading = useStore(s => s.statsLoading);
+  const stats = useStore(s => s.vlmStats);
+  const statsLoading = useStore(s => s.vlmLoading);
   const loadStats = useStore(s => s.loadStats);
 
   useEffect(() => {

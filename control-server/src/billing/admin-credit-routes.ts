@@ -37,6 +37,22 @@ export async function adminCreditRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ transactions, total: transactions.length });
   });
 
+  app.post("/api/v1/admin/credits/balances", async (req, reply) => {
+    const { userIds } = req.body as { userIds: string[] };
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return reply.status(400).send({ error: "userIds array is required" });
+    }
+    if (userIds.length > 200) {
+      return reply.status(400).send({ error: "max 200 userIds per request" });
+    }
+    const balances = await creditService.getBalances(userIds);
+    const result: Record<string, { balance: number; totalEarned: number; totalSpent: number }> = {};
+    for (const [uid, info] of balances) {
+      result[uid] = { balance: info.balance, totalEarned: info.totalEarned, totalSpent: info.totalSpent };
+    }
+    return reply.send({ balances: result });
+  });
+
   app.get("/api/v1/admin/credits/overview", async (_req, reply) => {
     const overview = await creditService.getOverview();
     return reply.send(overview);

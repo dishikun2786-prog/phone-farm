@@ -2,25 +2,29 @@ import { useEffect, useState, useRef } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useStore } from '../store';
 import ConnectivityBadge from './ConnectivityBadge';
+import AdminAIChatButton from './AdminAIChatButton';
+import AdminAIChatPanel from './AdminAIChatPanel';
 import type { ConnectionState } from '../hooks/useWebSocket';
 import {
   Smartphone, ListTodo, Shield, Bot, LogOut,
   Play, History, FileCode2, ChevronDown, Menu, X, Settings2,
   Layers, Keyboard, ShieldCheck, Wrench,
   Key, Server, AlertTriangle, BarChart3, Search, TabletSmartphone, ListChecks,
-  Globe, Package, Clock, Sun, Moon, Sliders, Activity, ToggleLeft,
+  Globe, Package, Clock, Sun, Moon, Sliders, Activity, ToggleLeft, Building,
 } from 'lucide-react';
 
 export default function Layout({ children, connectionState }: { children: React.ReactNode; connectionState: ConnectionState }) {
   const logout = useStore(s => s.logout);
   const user = useStore(s => s.user);
-  const devices = useStore(s => s.devices);
+  const loadDevices = useStore(s => s.loadDevices);
+  const onlineCount = useStore(s => s.devices.filter(d => d.status === 'online').length);
   const theme = useStore(s => s.theme);
   const toggleTheme = useStore(s => s.toggleTheme);
   const navigate = useNavigate();
   const location = useLocation();
 
-  const onlineCount = devices.filter(d => d.status === 'online').length;
+  // Load devices on mount so online count is accurate
+  useEffect(() => { loadDevices(); }, [loadDevices]);
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
   const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
   const [toolsMenuOpen, setToolsMenuOpen] = useState(false);
@@ -122,6 +126,9 @@ export default function Layout({ children, connectionState }: { children: React.
     { to: '/admin/system-config', label: '系统配置', icon: Sliders },
     { to: '/admin/feature-flags', label: '功能开关', icon: ToggleLeft },
     { to: '/admin/infrastructure', label: '基础监控', icon: Activity },
+    { to: '/admin/users', label: '用户管理', icon: Shield },
+    { to: '/admin/permissions', label: '权限配置', icon: ShieldCheck },
+    { to: '/admin/tenants', label: '租户管理', icon: Building },
   ];
 
   const navLinkCls = (isActive: boolean) =>
@@ -140,6 +147,7 @@ export default function Layout({ children, connectionState }: { children: React.
       <div className="relative" ref={deviceMenuRef}>
         <button
           onClick={() => { setDeviceMenuOpen(!deviceMenuOpen); setAiMenuOpen(false); setToolsMenuOpen(false); }}
+          aria-expanded={deviceMenuOpen}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
             isDeviceActive ? 'bg-gray-100 text-gray-900' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
           }`}
@@ -179,6 +187,7 @@ export default function Layout({ children, connectionState }: { children: React.
       <div className="relative" ref={aiMenuRef}>
         <button
           onClick={() => { setAiMenuOpen(!aiMenuOpen); setDeviceMenuOpen(false); setToolsMenuOpen(false); }}
+          aria-expanded={aiMenuOpen}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
             isAiActive ? 'bg-gray-100 text-gray-900' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
           }`}
@@ -210,6 +219,7 @@ export default function Layout({ children, connectionState }: { children: React.
       <div className="relative" ref={toolsMenuRef}>
         <button
           onClick={() => { setToolsMenuOpen(!toolsMenuOpen); setAiMenuOpen(false); setDeviceMenuOpen(false); }}
+          aria-expanded={toolsMenuOpen}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
             isToolsActive ? 'bg-gray-100 text-gray-900' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
           }`}
@@ -247,6 +257,7 @@ export default function Layout({ children, connectionState }: { children: React.
         <div className="relative" ref={adminMenuRef}>
           <button
             onClick={() => { setAdminMenuOpen(!adminMenuOpen); setAiMenuOpen(false); setDeviceMenuOpen(false); setToolsMenuOpen(false); }}
+            aria-expanded={adminMenuOpen}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
               isAdminActive ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
             }`}
@@ -400,6 +411,8 @@ export default function Layout({ children, connectionState }: { children: React.
           {/* Mobile hamburger */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label={mobileMenuOpen ? "关闭菜单" : "打开菜单"}
+            aria-expanded={mobileMenuOpen}
             className="md:hidden p-1.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg text-gray-600 dark:text-slate-300 transition-colors"
           >
             {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
@@ -424,6 +437,8 @@ export default function Layout({ children, connectionState }: { children: React.
         <div className="max-w-7xl mx-auto px-4 py-6">
           {children}
         </div>
+        {isAdminUser && <AdminAIChatButton />}
+        {isAdminUser && <AdminAIChatPanel />}
       </main>
     </div>
   );

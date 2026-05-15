@@ -79,11 +79,11 @@ export class DeepSeekClient {
   private async fetchWithRetry(body: Record<string, unknown>): Promise<any> {
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       try {
-        const res = await fetch(this.apiUrl, {
+        const res = await fetch(`${this.apiUrl}/messages`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${this.apiKey}`,
+            "x-api-key": this.apiKey,
           },
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(this.requestTimeoutMs),

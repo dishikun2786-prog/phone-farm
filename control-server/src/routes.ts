@@ -23,7 +23,8 @@ const sendCommandSchema = z.object({
 export async function deviceRoutes(app: FastifyInstance) {
   // List all devices
   app.get('/api/v1/devices', async () => {
-    return db.select().from(devices).orderBy(desc(devices.lastSeen));
+    const rows = await db.select().from(devices).orderBy(desc(devices.lastSeen));
+    return rows.map(d => ({ ...d, tailscaleIp: d.publicIp }));
   });
 
   // Get device detail
@@ -33,14 +34,25 @@ export async function deviceRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: 'Device not found' });
     }
     const online = wsHub.isDeviceOnline(device.id);
-    return { ...device, online };
+    return { ...device, online, tailscaleIp: device.publicIp };
   });
 
   // Android: POST /api/v1/device/heartbeat — REST-based device heartbeat
+  const heartbeatSchema = z.object({
+    deviceId: z.string(),
+    timestamp: z.number().optional(),
+    batteryLevel: z.number().optional(),
+    batteryCharging: z.boolean().optional(),
+    screenOn: z.boolean().optional(),
+    currentPackage: z.string().optional(),
+    activeTaskCount: z.number().optional(),
+    memoryMb: z.number().optional(),
+    cpuUsage: z.number().optional(),
+  });
   app.post('/api/v1/device/heartbeat', async (req, reply) => {
-    const { deviceId, timestamp, batteryLevel, batteryCharging, screenOn, currentPackage, activeTaskCount, memoryMb, cpuUsage } =
-      req.body as Record<string, any>;
-    if (!deviceId) return reply.status(400).send({ error: 'deviceId required' });
+    const parsed = heartbeatSchema.safeParse(req.body);
+    if (!parsed.success) return reply.status(400).send({ success: false, error: 'Invalid heartbeat body', details: parsed.error.issues });
+    const { deviceId, timestamp: _ts, batteryLevel, batteryCharging, screenOn, currentPackage, activeTaskCount, memoryMb, cpuUsage } = parsed.data;
     try {
       await db.update(devices).set({
         battery: batteryLevel ?? null,
@@ -67,23 +79,27 @@ export async function taskRoutes(app: FastifyInstance) {
   });
 
   // Get task detail
-  app.get<{ Params: { id: string } }>('/api/v1/tasks/:id', async (req) => {
+  app.get<{ Params: { id: string } }>('/api/v1/tasks/:id', async (req, reply) => {
     const [task] = await db.select().from(tasks).where(eq(tasks.id, req.params.id));
-    return task || { error: 'Not found' };
+    if (!task) return reply.status(404).send({ success: false, error: 'Task not found' });
+    return reply.send({ success: true, data: task });
   });
 
   // Create task
   app.post('/api/v1/tasks', async (req, reply) => {
-    const body = createTaskSchema.parse(req.body);
-    const [task] = await db.insert(tasks).values(body).returning();
+    const parsed = createTaskSchema.safeParse(req.body);
+    if (!parsed.success) return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+    const [task] = await db.insert(tasks).values(parsed.data).returning();
     return reply.status(201).send(task);
   });
 
   // Update task
-  app.put<{ Params: { id: string } }>('/api/v1/tasks/:id', async (req) => {
-    const body = createTaskSchema.partial().parse(req.body);
-    const [task] = await db.update(tasks).set(body).where(eq(tasks.id, req.params.id)).returning();
-    return task;
+  app.put<{ Params: { id: string } }>('/api/v1/tasks/:id', async (req, reply) => {
+    const parsed = createTaskSchema.partial().safeParse(req.body);
+    if (!parsed.success) return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+    const [task] = await db.update(tasks).set(parsed.data).where(eq(tasks.id, req.params.id)).returning();
+    if (!task) return reply.status(404).send({ success: false, error: 'Task not found' });
+    return reply.send({ success: true, data: task });
   });
 
   // Delete task
@@ -154,12 +170,17 @@ export async function taskRoutes(app: FastifyInstance) {
   });
 
   // Android: POST /api/v1/tasks/:taskId/result — report task execution result
-  app.post('/api/v1/tasks/:taskId/result', async (req, reply) => {
-    const { taskId } = req.params as { taskId: string };
-    const { success, stats, errorMessage, durationMs } = req.body as {
-      taskId?: string; success?: boolean; stats?: Record<string, string>;
-      errorMessage?: string; durationMs?: number;
-    };
+  const taskResultSchema = z.object({
+    success: z.boolean().optional(),
+    stats: z.record(z.string(), z.string()).optional(),
+    errorMessage: z.string().optional(),
+    durationMs: z.number().optional(),
+  });
+  app.post<{ Params: { taskId: string } }>('/api/v1/tasks/:taskId/result', async (req, reply) => {
+    const { taskId } = req.params;
+    const parsed = taskResultSchema.safeParse(req.body);
+    if (!parsed.success) return reply.status(400).send({ success: false, error: 'Invalid result body' });
+    const { success, stats, errorMessage, durationMs } = parsed.data;
     try {
       const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId));
       if (!task) return reply.status(404).send({ error: 'Task not found' });
@@ -171,8 +192,9 @@ export async function taskRoutes(app: FastifyInstance) {
         finishedAt: new Date(),
         stats: stats ?? {},
       });
-    } catch (err: any) {
-      return reply.status(500).send({ error: `Failed to record result: ${err.message}` });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return reply.status(500).send({ error: `Failed to record result: ${message}` });
     }
     return reply.send({ recorded: true, taskId, status: success ? 'completed' : 'failed' });
   });
@@ -191,8 +213,9 @@ export async function accountRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/v1/accounts', async (req, reply) => {
-    const body = createAccountSchema.parse(req.body);
-    const [acct] = await db.insert(accounts).values(body).returning();
+    const parsed = createAccountSchema.safeParse(req.body);
+    if (!parsed.success) return reply.status(400).send({ success: false, error: 'Validation failed', details: parsed.error.issues });
+    const [acct] = await db.insert(accounts).values(parsed.data).returning();
     return reply.status(201).send(acct);
   });
 

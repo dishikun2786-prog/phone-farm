@@ -15,6 +15,7 @@ import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import http from 'node:http';
 import { BridgeServer } from './relay/bridge-server';
 
 const PORT = parseInt(process.env.RELAY_PORT || '8499');
@@ -49,8 +50,12 @@ app.register(async function (scope) {
     bridge.handleControl(socket);
   });
 
-  // Phone device connections
+  // Phone device connections (both paths for compatibility with APK and relay clients)
   scope.get('/ws/phone', { websocket: true }, (socket, req) => {
+    const addr = req?.socket?.remoteAddress || req?.ip || 'unknown';
+    bridge.handlePhone(socket, addr);
+  });
+  scope.get('/ws/device', { websocket: true }, (socket, req) => {
     const addr = req?.socket?.remoteAddress || req?.ip || 'unknown';
     bridge.handlePhone(socket, addr);
   });
@@ -78,10 +83,6 @@ app.get('/api/v1/relay/health', async () => {
   return { status: 'ok', uptime: process.uptime() };
 });
 
-app.get('/health', async () => {
-  return { status: 'ok', uptime: process.uptime() };
-});
-
 app.get('/api/v1/relay/stats', async () => {
   return bridge.getStats();
 });
@@ -100,9 +101,64 @@ await app.register(fastifyStatic, {
   root: dashboardRoot,
   prefix: '/',
 });
+const CONTROL_API_URL = process.env.CONTROL_API_URL || 'http://127.0.0.1:8443';
+
+// Proxy /api/* to the control server
+// Promise-based — collects body then sends, avoids Fastify stream+async handler issues
+app.route({
+  method: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
+  url: '/api/*',
+  handler: async (request, reply) => {
+    const url = new URL(request.url, CONTROL_API_URL);
+    try {
+      const result = await new Promise<{ statusCode: number; headers: Record<string, string | string[] | undefined>; body: Buffer }>((resolve, reject) => {
+        const proxyReq = http.request(url, {
+          method: request.method,
+          headers: { ...request.headers, host: url.host },
+        }, (proxyRes) => {
+          const chunks: Buffer[] = [];
+          proxyRes.on('data', (chunk: Buffer) => chunks.push(chunk));
+          proxyRes.on('end', () => resolve({ statusCode: proxyRes.statusCode || 502, headers: proxyRes.headers, body: Buffer.concat(chunks) }));
+          proxyRes.on('error', reject);
+        });
+        proxyReq.on('error', reject);
+        if (request.body) proxyReq.write(JSON.stringify(request.body));
+        proxyReq.end();
+      });
+      reply.status(result.statusCode);
+      if (result.headers['content-type']) reply.header('content-type', result.headers['content-type']);
+      const ct = result.headers['content-type']?.toString() || '';
+      if (ct.includes('json')) {
+        try { return JSON.parse(result.body.toString()); } catch { /* fall through */ }
+      }
+      reply.send(result.body);
+    } catch {
+      reply.status(502).send({ error: 'Control server unreachable' });
+    }
+  },
+});
+
+app.get('/health', async (_request, reply) => {
+  try {
+    const result = await new Promise<{ statusCode: number; body: string }>((resolve, reject) => {
+      const proxyReq = http.get(`${CONTROL_API_URL}/api/v1/health`, (proxyRes) => {
+        let data = '';
+        proxyRes.on('data', (chunk: Buffer) => { data += chunk.toString(); });
+        proxyRes.on('end', () => resolve({ statusCode: proxyRes.statusCode || 502, body: data }));
+        proxyRes.on('error', reject);
+      });
+      proxyReq.on('error', reject);
+      proxyReq.end();
+    });
+    reply.status(result.statusCode).send(JSON.parse(result.body));
+  } catch {
+    reply.status(502).send({ error: 'Control server unreachable' });
+  }
+});
+
 app.setNotFoundHandler(async (request, reply) => {
-  if (request.url.startsWith('/api/') || request.url.startsWith('/ws/') || request.url === '/health') {
-    return reply.status(404).send({ error: 'Not found' });
+  if (request.url.startsWith('/ws/')) {
+    return reply.status(404).send({ error: 'WebSocket endpoint not found' });
   }
   return reply.sendFile('index.html');
 });

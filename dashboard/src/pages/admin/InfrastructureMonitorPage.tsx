@@ -42,8 +42,8 @@ const INFRA_DESCRIPTIONS: Record<string, string> = {
 
 export default function InfrastructureMonitorPage() {
   const infraStatus = useStore(s => s.infraStatus);
-  const infraLoading = useStore(s => s.infraStatusLoading);
-  const infraError = useStore(s => s.infraStatusError);
+  const infraLoading = useStore(s => s.infraLoading);
+  const infraError = useStore(s => s.infraError);
   const loadInfraStatus = useStore(s => s.loadInfraStatus);
 
   const [autoRefresh, setAutoRefresh] = useState(true);

@@ -1,4 +1,4 @@
-import { useLocation, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 
 const MENU_ITEMS = [
   { label: '门户首页', path: '/portal', icon: 'home' },
@@ -16,32 +16,28 @@ const MENU_ITEMS = [
 ];
 
 export default function PortalSidebar() {
-  const location = useLocation();
-  const navigate = useNavigate();
-
   return (
-    <aside className="w-56 bg-white border-r min-h-screen p-4">
+    <aside className="w-full lg:w-56 bg-white dark:bg-slate-800 border-r dark:border-slate-700 min-h-screen p-4">
       <div className="mb-6 px-2">
-        <h2 className="text-lg font-bold">客户门户</h2>
-        <p className="text-xs text-gray-400">PhoneFarm Portal</p>
+        <h2 className="text-lg font-bold dark:text-slate-100">客户门户</h2>
+        <p className="text-xs text-gray-400 dark:text-slate-500">PhoneFarm Portal</p>
       </div>
       <nav className="space-y-1">
-        {MENU_ITEMS.map((item) => {
-          const isActive = location.pathname === item.path;
-          return (
-            <button
-              key={item.path}
-              onClick={() => navigate(item.path)}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+        {MENU_ITEMS.map((item) => (
+          <NavLink
+            key={item.path}
+            to={item.path}
+            className={({ isActive }) =>
+              `block w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                 isActive
-                  ? 'bg-blue-50 text-blue-700 font-medium'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              }`}
-            >
-              {item.label}
-            </button>
-          );
-        })}
+                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium'
+                  : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-slate-200'
+              }`
+            }
+          >
+            {item.label}
+          </NavLink>
+        ))}
       </nav>
     </aside>
   );

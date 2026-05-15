@@ -37,6 +37,7 @@ import type { AiMessage } from '../ai-orchestrator/types';
 interface PhoneConn {
   ws: WebSocket;
   deviceId: string;
+  remoteAddress: string;
   authenticated: boolean;
   connectedAt: Date;
   lastActivity: Date;
@@ -114,9 +115,15 @@ export class BridgeServer {
     socket.on('message', (msg: Buffer, rinfo: RemoteInfo) => {
       const ctrl = this.#controlWs;
       if (!ctrl || ctrl.readyState !== WebSocket.OPEN) return;
-      // Forward UDP frame to local control server via control tunnel
+      // Look up device by source IP to tag the frame
+      const deviceId = this.#findDeviceByIp(rinfo.address);
+      // Prepend 4-byte deviceId length + UTF-8 deviceId + raw frame data
+      const idBuf = deviceId ? Buffer.from(deviceId, 'utf-8') : Buffer.from('unknown', 'utf-8');
+      const header = Buffer.alloc(4);
+      header.writeUInt32BE(idBuf.length, 0);
+      const framed = Buffer.concat([header, idBuf, msg]);
       try {
-        ctrl.send(msg);
+        ctrl.send(framed);
       } catch { /* ignore */ }
     });
 
@@ -224,18 +231,32 @@ export class BridgeServer {
 
     ws.on('message', (raw) => {
       try {
-        // First message must be auth
+        // First message must be auth — try JWT first, then device auth token
         if (!authed) {
           const m = JSON.parse(raw.toString());
-          if (m.type !== 'auth' || m.token !== this.#deviceAuthToken) {
+          if (m.type !== 'auth' || !m.token) {
             return failAuth('Device authentication required');
           }
+          // Try JWT verification first (APK login flow), fallback to device auth token
+          let tokenValid = false;
+          try {
+            jwt.verify(m.token, this.#jwtSecret, { algorithms: ['HS256'] });
+            tokenValid = true;
+          } catch {
+            // Not a valid JWT, try device auth token
+            if (m.token === this.#deviceAuthToken) {
+              tokenValid = true;
+            }
+          }
+          if (!tokenValid) {
+            return failAuth('Invalid token');
+          }
           authed = true;
-          deviceId = m.device_id || '';
+          deviceId = m.device_id || m.deviceId || '';
           clearTimeout(authTimeout);
 
           const conn: PhoneConn = {
-            ws, deviceId, authenticated: true,
+            ws, deviceId, remoteAddress, authenticated: true,
             connectedAt: new Date(), lastActivity: new Date(),
           };
 
@@ -452,6 +473,13 @@ export class BridgeServer {
         try { conn.ws.send(payload); } catch { /* */ }
       }
     }
+  }
+
+  #findDeviceByIp(ip: string): string | null {
+    for (const [deviceId, conn] of this.#phones) {
+      if (conn.remoteAddress === ip) return deviceId;
+    }
+    return null;
   }
 
   #sweepIdle(): void {

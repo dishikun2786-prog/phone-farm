@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+
 export function SkeletonCard() {
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden animate-pulse">
@@ -51,13 +53,18 @@ export function SkeletonTable() {
 }
 
 export function SkeletonText({ lines = 1, widths }: { lines?: number; widths?: string[] }) {
+  const deterministicWidths = useMemo(() =>
+    Array.from({ length: lines }).map((_, i) => widths?.[i] || `${60 + ((i * 17) % 40)}%`),
+    [lines, widths]
+  );
+
   return (
     <div className="space-y-2 animate-pulse">
-      {Array.from({ length: lines }).map((_, i) => (
+      {deterministicWidths.map((w, i) => (
         <div
           key={i}
           className="h-3 bg-gray-200 rounded"
-          style={{ width: widths?.[i] || `${60 + Math.random() * 40}%` }}
+          style={{ width: w }}
         />
       ))}
     </div>

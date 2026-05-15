@@ -1,6 +1,5 @@
 ﻿import fastifyCors from '@fastify/cors';
 import fastifyJwt from '@fastify/jwt';
-import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
 import bcrypt from 'bcryptjs';
@@ -140,15 +139,6 @@ await app.register(fastifyCors, {
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
-});
-await app.register(fastifyRateLimit, {
-  global: true,
-  max: 200,
-  timeWindow: '1 minute',
-  allowList: [],
-  keyGenerator: (req: import('fastify').FastifyRequest) => {
-    return req.ip || (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || 'unknown';
-  },
 });
 await app.register(fastifyJwt, { secret: config.JWT_SECRET });
 await app.register(fastifyWebsocket);
@@ -549,7 +539,6 @@ const loginBodySchema = z.object({
 });
 
 app.post('/api/v1/auth/login', {
-  config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
 }, async (req, reply) => {
   const parsed = loginBodySchema.safeParse(req.body);
   if (!parsed.success) {

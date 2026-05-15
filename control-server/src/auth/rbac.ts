@@ -7,7 +7,9 @@
  * Admin Dashboard menu visibility is derived from role permissions.
  */
 
-export type Role = "super_admin" | "admin" | "operator" | "viewer" | "customer" | "agent";
+export type Role = "super_admin" | "admin" | "tenant_admin" | "operator" | "viewer" | "customer" | "agent";
+
+export const ROLES: string[] = ["super_admin", "admin", "tenant_admin", "operator", "viewer", "customer", "agent"];
 
 export type Resource =
   | "devices"
@@ -35,8 +37,17 @@ export type Resource =
 
 export type Action = "read" | "write" | "delete" | "manage";
 
+export const RESOURCES: string[] = [
+  "devices", "device_groups", "tasks", "task_templates", "accounts", "users",
+  "activation", "vlm", "vlm_episodes", "vlm_scripts", "plugins", "models",
+  "audit_logs", "alerts", "webhooks", "api_keys", "stats", "platform_accounts",
+  "system", "config", "tenants", "billing",
+];
+
+export const ACTIONS: string[] = ["read", "write", "delete", "manage"];
+
 /** Permission matrix: role → resource → allowed actions */
-const PERMISSIONS: Record<Role, Partial<Record<Resource, Action[]>>> = {
+export const PERMISSIONS: Record<Role, Partial<Record<Resource, Action[]>>> = {
   super_admin: {
     devices: ["read", "write", "delete", "manage"],
     device_groups: ["read", "write", "delete", "manage"],
@@ -84,6 +95,30 @@ const PERMISSIONS: Record<Role, Partial<Record<Resource, Action[]>>> = {
     config: ["read", "write"],
     tenants: [],
     billing: ["read", "write"],
+  },
+  tenant_admin: {
+    devices: ["read", "write", "manage"],
+    device_groups: ["read", "write", "manage"],
+    tasks: ["read", "write", "manage"],
+    task_templates: ["read", "write"],
+    accounts: ["read", "write", "manage"],
+    users: ["read", "write", "manage"],
+    activation: ["read", "write"],
+    vlm: ["read", "write"],
+    vlm_episodes: ["read"],
+    vlm_scripts: ["read", "write"],
+    plugins: ["read", "write"],
+    models: ["read"],
+    audit_logs: ["read"],
+    alerts: ["read", "write"],
+    webhooks: [],
+    api_keys: ["read", "write"],
+    stats: ["read"],
+    platform_accounts: ["read", "write"],
+    system: [],
+    config: ["read"],
+    tenants: [],
+    billing: ["read"],
   },
   operator: {
     devices: ["read", "write"],
@@ -177,11 +212,45 @@ const PERMISSIONS: Record<Role, Partial<Record<Resource, Action[]>>> = {
   },
 };
 
+// ── DB override cache ──
+let dbOverrides: Record<string, Record<string, string[]>> | null = null;
+
+/** Reload permission overrides from the database */
+export async function reloadPermissions(): Promise<void> {
+  try {
+    // Dynamic import to avoid circular dependency
+    const { db } = await import('../db.js');
+    const { rolePermissions } = await import('../schema.js');
+    const { isNull } = await import('drizzle-orm');
+
+    const rows = await db
+      .select()
+      .from(rolePermissions)
+      .where(isNull(rolePermissions.tenantId));
+
+    const map: Record<string, Record<string, string[]>> = {};
+    for (const row of rows) {
+      if (!map[row.role]) map[row.role] = {};
+      map[row.role][row.resource] = row.actions;
+    }
+    dbOverrides = map;
+  } catch {
+    // DB might not be ready during startup — that's ok, use defaults
+    dbOverrides = null;
+  }
+}
+
 /** Check if a role has permission to perform an action on a resource */
 export function hasPermission(role: Role, resource: Resource, action: Action): boolean {
+  // Check DB overrides first
+  const overrideActions = dbOverrides?.[role]?.[resource];
+  if (overrideActions !== undefined) {
+    return overrideActions.includes(action) || overrideActions.includes('manage');
+  }
+  // Fall back to hardcoded defaults
   const resourcePermissions = PERMISSIONS[role]?.[resource];
   if (!resourcePermissions) return false;
-  return resourcePermissions.includes(action) || resourcePermissions.includes("manage");
+  return resourcePermissions.includes(action) || resourcePermissions.includes('manage');
 }
 
 /** Get all resources a role can access (for menu rendering) */

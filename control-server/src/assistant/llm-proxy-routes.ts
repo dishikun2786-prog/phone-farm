@@ -31,7 +31,7 @@ async function proxyDeepSeek(
   if (systemPrompt) body.system = systemPrompt;
   if (tools && tools.length > 0) body.tools = tools;
 
-  const resp = await fetch(`${config.DEEPSEEK_API_URL}/messages`, {
+  const resp = await fetch(`${config.DEEPSEEK_API_URL}/messages`, { // apiUrl is base (e.g. https://api.deepseek.com/anthropic)
     method: "POST",
     headers: {
       "Content-Type": "application/json",

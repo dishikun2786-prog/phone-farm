@@ -420,95 +420,19 @@ export const tokenPricing = pgTable('token_pricing', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
-// ── Billing (0005_billing) ──
+// ── Billing tables (billingPlans, subscriptions, orders, usageRecords, invoices) ──
+// are defined in billing/billing-schema.ts to avoid Drizzle migration conflicts.
+// Import from "../billing/billing-schema.js" for any code that needs them.
 
-export const billingPlans = pgTable('billing_plans', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  tenantId: uuid('tenant_id'),
-  name: varchar('name', { length: 128 }).notNull(),
-  tier: varchar('tier', { length: 16 }).default('free').notNull(),
-  monthlyPriceCents: integer('monthly_price_cents').default(0),
-  maxDevices: integer('max_devices').default(1),
-  maxVlmCallsPerDay: integer('max_vlm_calls_per_day').default(100),
-  maxScriptExecutionsPerDay: integer('max_script_executions_per_day').default(500),
-  includesScreenStream: boolean('includes_screen_stream').default(false),
-  includesVlmAgent: boolean('includes_vlm_agent').default(false),
-  includesPrioritySupport: boolean('includes_priority_support').default(false),
-  monthlyAssistantCredits: integer('monthly_assistant_credits').default(0),
-  maxAssistantSessionsPerDay: integer('max_assistant_sessions_per_day').default(10),
-  features: jsonb('features').default([]),
-  isActive: boolean('is_active').default(true),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+// ── RBAC Permission Overrides ──
 
-export const subscriptions = pgTable('subscriptions', {
+export const rolePermissions = pgTable('role_permissions', {
   id: uuid('id').primaryKey().defaultRandom(),
-  tenantId: uuid('tenant_id'),
-  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
-  planId: uuid('plan_id').references(() => billingPlans.id, { onDelete: 'restrict' }).notNull(),
-  status: varchar('status', { length: 16 }).default('active').notNull(),
-  currentPeriodStart: timestamp('current_period_start', { withTimezone: true }).notNull(),
-  currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }).notNull(),
-  cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
-  deviceCount: integer('device_count').default(0),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  tenantId: uuid('tenant_id'),       // null = global default override
+  role: varchar('role', { length: 32 }).notNull(),
+  resource: varchar('resource', { length: 64 }).notNull(),
+  actions: jsonb('actions').$type<string[]>().notNull().default([]),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
-  index('idx_subscriptions_user').on(table.userId),
-  index('idx_subscriptions_plan').on(table.planId),
-  index('idx_subscriptions_period_end').on(table.currentPeriodEnd),
-  index('idx_subscriptions_status').on(table.status),
-]);
-
-export const orders = pgTable('orders', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  tenantId: uuid('tenant_id'),
-  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
-  subscriptionId: uuid('subscription_id').references(() => subscriptions.id, { onDelete: 'set null' }),
-  amountCents: integer('amount_cents').notNull(),
-  currency: varchar('currency', { length: 3 }).default('CNY').notNull(),
-  status: varchar('status', { length: 16 }).default('pending').notNull(),
-  paymentMethod: varchar('payment_method', { length: 32 }),
-  paidAt: timestamp('paid_at', { withTimezone: true }),
-  metadata: jsonb('metadata').default({}),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-}, (table) => [
-  index('idx_orders_user').on(table.userId),
-  index('idx_orders_subscription').on(table.subscriptionId),
-  index('idx_orders_status').on(table.status),
-]);
-
-export const usageRecords = pgTable('usage_records', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  tenantId: uuid('tenant_id'),
-  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
-  deviceId: uuid('device_id').references(() => devices.id, { onDelete: 'set null' }),
-  metric: varchar('metric', { length: 64 }).notNull(),
-  quantity: integer('quantity').default(1).notNull(),
-  recordedAt: timestamp('recorded_at', { withTimezone: true }).defaultNow().notNull(),
-}, (table) => [
-  index('idx_usage_user').on(table.userId),
-  index('idx_usage_metric').on(table.metric),
-  index('idx_usage_recorded').on(table.recordedAt),
-  index('idx_usage_user_metric').on(table.userId, table.metric),
-]);
-
-export const invoices = pgTable('invoices', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  tenantId: uuid('tenant_id'),
-  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
-  orderId: uuid('order_id').references(() => orders.id, { onDelete: 'set null' }),
-  invoiceNumber: varchar('invoice_number', { length: 32 }).notNull(),
-  amountCents: integer('amount_cents').notNull(),
-  currency: varchar('currency', { length: 3 }).default('CNY').notNull(),
-  status: varchar('status', { length: 16 }).default('draft').notNull(),
-  issuedAt: timestamp('issued_at', { withTimezone: true }),
-  dueDate: timestamp('due_date', { withTimezone: true }),
-  paidAt: timestamp('paid_at', { withTimezone: true }),
-  pdfUrl: varchar('pdf_url', { length: 1024 }),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-}, (table) => [
-  index('idx_invoices_user').on(table.userId),
-  index('idx_invoices_order').on(table.orderId),
-  index('idx_invoices_status').on(table.status),
+  index('idx_role_permissions_lookup').on(table.tenantId, table.role, table.resource),
 ]);

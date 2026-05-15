@@ -18,8 +18,8 @@
  *   AI_BRIDGE_URL=ws://127.0.0.1:8499/ws/ai/worker
  *   AI_AUTH_TOKEN=<与 BridgeServer 一致>
  *   DEEPSEEK_API_KEY=sk-xxx
- *   DEEPSEEK_API_URL=https://api.deepseek.com/v1/chat/completions
- *   DEEPSEEK_MODEL=deepseek-chat
+ *   DEEPSEEK_API_URL=https://api.deepseek.com/anthropic
+ *   DEEPSEEK_MODEL=deepseek-v4-flash
  *   WORKER_WORKING_DIR=D:\phonefarm-relay
  */
 
@@ -36,8 +36,8 @@ import type { AiMessage, AgentIdentity, AiTaskAssignPayload, AiStreamChunkPayloa
 const BRIDGE_URL = process.env.AI_BRIDGE_URL || "ws://127.0.0.1:8499/ws/ai/worker";
 const AUTH_TOKEN = process.env.AI_AUTH_TOKEN || "ai-worker-token-change-me";
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "";
-const DEEPSEEK_API_URL = process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/v1/chat/completions";
-const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-chat";
+const DEEPSEEK_API_URL = process.env.DEEPSEEK_API_URL || "https://api.deepseek.com/anthropic";
+const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-v4-flash";
 const WORKING_DIR = process.env.WORKER_WORKING_DIR || process.cwd();
 const WORKER_ID = process.env.WORKER_INSTANCE_ID || `deepseek-worker-${randomUUID().slice(0, 8)}`;
 const WORKER_LABEL = process.env.WORKER_LABEL || "DeepSeek VPS Agent";
@@ -463,18 +463,18 @@ async function callDeepSeek(
   summary?: string;
   suggestions?: string[];
 }> {
-  const res = await fetch(DEEPSEEK_API_URL, {
+  const res = await fetch(`${DEEPSEEK_API_URL}/messages`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
+      "x-api-key": DEEPSEEK_API_KEY,
     },
     body: JSON.stringify({
       model: DEEPSEEK_MODEL,
       messages: [
-        { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
       ],
+      system: systemPrompt,
       max_tokens: 4096,
       temperature: 0.3,
     }),
@@ -485,7 +485,9 @@ async function callDeepSeek(
   }
 
   const data = await res.json() as any;
-  const text = data.choices?.[0]?.message?.content || "";
+  // Anthropic Messages API response format
+  const textBlocks = data.content?.filter((c: any) => c.type === "text") || [];
+  const text = textBlocks.map((c: any) => c.text).join("\n") || "";
 
   // Try to extract JSON from response
   try {

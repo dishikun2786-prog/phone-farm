@@ -69,7 +69,7 @@ export default function ServerHealthDashboard() {
       intervalRef.current = setInterval(loadHealth, 5000);
     }
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [autoRefresh]);
+  }, [autoRefresh, loadHealth]);
 
   if (loading && !health) {
     return (

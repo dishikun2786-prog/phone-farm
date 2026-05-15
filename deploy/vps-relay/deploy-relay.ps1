@@ -40,6 +40,7 @@ $SourceDir = Split-Path -Parent $PSScriptRoot
 
 mkdir -p $DeployDir\src\relay
 mkdir -p $DeployDir\src\transport
+mkdir -p $DeployDir\src\ai-orchestrator
 
 # Copy only the files needed for relay
 $filesToCopy = @(
@@ -57,11 +58,14 @@ foreach ($f in $filesToCopy) {
     }
 }
 
-# Copy TypeScript source
+# Copy TypeScript source (bridge-server depends on ai-orchestrator)
 $tsFiles = @(
     "vps-relay.ts",
     "relay\bridge-server.ts",
-    "transport\udp-relay.ts"
+    "transport\udp-relay.ts",
+    "ai-orchestrator\ai-bridge-router.ts",
+    "ai-orchestrator\types.ts",
+    "ai-orchestrator\ai-deepseek-worker.ts"
 )
 foreach ($f in $tsFiles) {
     $src = Join-Path $SourceDir "..\..\control-server\src\$f"
@@ -179,6 +183,17 @@ http {
         }
 
         location /ws/phone {
+            proxy_pass http://127.0.0.1:8499;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_read_timeout 86400;
+        }
+
+        location /ws/device {
             proxy_pass http://127.0.0.1:8499;
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;

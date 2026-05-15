@@ -2,7 +2,7 @@
  * PhoneFarm Device Configuration Routes — 设备云端配置拉取 + 管理端配置推送
  */
 import type { FastifyInstance } from "fastify";
-import { config } from "../config.js";
+import { config } from "./config.js";
 
 export interface DeviceConfig {
   device: {

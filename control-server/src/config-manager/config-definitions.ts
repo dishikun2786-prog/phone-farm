@@ -525,6 +525,55 @@ export const DEFINITIONS: ConfigDefinitionSeed[] = [
     validationRule: { min: 0, max: 1, step: 0.05, required: true },
     isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group"], tags: ["server", "qwenvl"], sortOrder: 10,
   },
+  {
+    categoryKey: "ai_models", key: "ai.gui_plus.api_url", displayName: "GUI-Plus API URL",
+    description: "阿里云百炼 GUI-Plus 兼容模式 API 端点", valueType: "url", defaultValue: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    isSecret: false, isOverridable: false, allowedScopes: ["global"], tags: ["server", "guiplus"], sortOrder: 11,
+  },
+  {
+    categoryKey: "ai_models", key: "ai.gui_plus.api_key", displayName: "GUI-Plus API Key",
+    description: "阿里云百炼 DashScope API 认证密钥（需北京地域）", valueType: "secret", defaultValue: "",
+    validationRule: { required: false },
+    isSecret: true, isOverridable: false, allowedScopes: ["global"], tags: ["server", "guiplus"], sortOrder: 12,
+  },
+  {
+    categoryKey: "ai_models", key: "ai.gui_plus.model", displayName: "GUI-Plus 模型",
+    description: "GUI 自动化视觉模型选择（推荐 2026-02-26 版本）", valueType: "enum", defaultValue: "gui-plus-2026-02-26",
+    enumOptions: [
+      { label: "GUI-Plus 2026-02-26 (推荐·思考模式)", value: "gui-plus-2026-02-26" },
+      { label: "GUI-Plus (非思考模式)", value: "gui-plus" },
+    ],
+    isSecret: false, isOverridable: false, allowedScopes: ["global"], tags: ["server", "guiplus"], sortOrder: 13,
+  },
+  {
+    categoryKey: "ai_models", key: "ai.gui_plus.max_steps", displayName: "GUI-Plus 最大步数",
+    description: "单次 GUI 自动化任务的最大执行步数", valueType: "number", defaultValue: "30",
+    validationRule: { min: 1, max: 100, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group"], tags: ["server", "guiplus"], sortOrder: 14,
+  },
+  {
+    categoryKey: "ai_models", key: "ai.gui_plus.max_tokens", displayName: "GUI-Plus 最大 Token",
+    description: "GUI-Plus 单次响应最大 Token 数（含思维链）", valueType: "number", defaultValue: "32768",
+    validationRule: { min: 256, max: 32768, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group"], tags: ["server", "guiplus"], sortOrder: 15,
+  },
+  {
+    categoryKey: "ai_models", key: "ai.gui_plus.temperature", displayName: "GUI-Plus 温度",
+    description: "GUI-Plus 推理温度参数", valueType: "slider", defaultValue: "0.1",
+    validationRule: { min: 0, max: 1, step: 0.05, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group"], tags: ["server", "guiplus"], sortOrder: 16,
+  },
+  {
+    categoryKey: "ai_models", key: "ai.gui_plus.coordinate_scale", displayName: "GUI-Plus 坐标缩放",
+    description: "模型输出坐标归一化分辨率（默认 1000×1000）", valueType: "number", defaultValue: "1000",
+    validationRule: { min: 500, max: 2000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group"], tags: ["server", "guiplus"], sortOrder: 17,
+  },
+  {
+    categoryKey: "ai_models", key: "ai.gui_plus.vl_high_resolution", displayName: "GUI-Plus 高分辨率",
+    description: "启用 VL 高分辨率图像处理（推荐开启）", valueType: "boolean", defaultValue: "true",
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group"], tags: ["server", "guiplus"], sortOrder: 18,
+  },
 
   // ═══ EXPERIENCE COMPILER ═══
   {
@@ -727,6 +776,11 @@ export const DEFINITIONS: ConfigDefinitionSeed[] = [
     categoryKey: "feature_flags", key: "ff.model_hot_update", displayName: "模型热更新",
     description: "允许不重发 APK 即可动态更新 AI 模型文件", valueType: "boolean", defaultValue: "true",
     isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group"], tags: ["server", "android"], sortOrder: 12,
+  },
+  {
+    categoryKey: "feature_flags", key: "ff.gui_plus", displayName: "GUI-Plus 自动化",
+    description: "启用阿里云百炼 GUI-Plus 手机/电脑 GUI 自动化模型", valueType: "boolean", defaultValue: "false",
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group"], tags: ["server", "guiplus"], sortOrder: 16,
   },
 
   // ═══ LEGACY VLM ═══

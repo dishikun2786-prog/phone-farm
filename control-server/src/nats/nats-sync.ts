@@ -15,19 +15,19 @@
 // -- Type Definitions --
 
 export interface DeviceOnlineInfo {
-  deviceId: string;
-  deviceName: string;
+  device_id: string;
+  device_name: string;
   model: string;
-  androidVersion: number;
-  scriptVersion: string;
-  ipAddress: string;
-  publicIp?: string;
+  android_version: number;
+  script_version: string;
+  ip_address: string;
+  public_ip?: string;
   timestamp: number;
 }
 
 export interface TaskStatusInfo {
-  taskId: string;
-  deviceId: string;
+  task_id: string;
+  device_id: string;
   status: "running" | "completed" | "failed" | "timeout" | "stopped";
   progress: number;
   message?: string;
@@ -36,31 +36,44 @@ export interface TaskStatusInfo {
 
 export interface DeviceEvent {
   type: string;
-  deviceId: string;
+  device_id: string;
   data: Record<string, unknown>;
   timestamp: number;
 }
 
 // -- NATS Subject Constants --
+// Subject naming convention: phonefarm.{resource}.{id}.{event}
+// Matches Go edge-node (handler.go): phonefarm.devices.%s.events, phonefarm.tasks.%s.status, etc.
+// All JSON fields use snake_case — consistent with Go struct tags and WS message convention.
 
 const SUBJECT_PREFIX = "phonefarm";
 
+/** Parameterized subject builders for type-safe NATS routing. */
 export const NATS_SUBJECTS = {
-  DEVICE_ONLINE: `${SUBJECT_PREFIX}.device.online`,
-  DEVICE_OFFLINE: `${SUBJECT_PREFIX}.device.offline`,
-  DEVICE_HEARTBEAT: `${SUBJECT_PREFIX}.device.heartbeat`,
-  TASK_STATUS: `${SUBJECT_PREFIX}.task.status`,
-  TASK_RESULT: `${SUBJECT_PREFIX}.task.result`,
-  CONFIG_UPDATE: `${SUBJECT_PREFIX}.config.update`,
-  ALERT: `${SUBJECT_PREFIX}.alert`,
-  DEVICE_EVENTS: `${SUBJECT_PREFIX}.device.>`,
-  TASK_EVENTS: `${SUBJECT_PREFIX}.task.>`,
+  // Device lifecycle — specific event per subject
+  deviceOnline:    (deviceId: string) => `${SUBJECT_PREFIX}.devices.${deviceId}.online`,
+  deviceOffline:   (deviceId: string) => `${SUBJECT_PREFIX}.devices.${deviceId}.offline`,
+  deviceHeartbeat: (deviceId: string) => `${SUBJECT_PREFIX}.devices.${deviceId}.heartbeat`,
+
+  // Task status & result
+  taskStatus: (taskId: string) => `${SUBJECT_PREFIX}.tasks.${taskId}.status`,
+  taskResult: (taskId: string) => `${SUBJECT_PREFIX}.tasks.${taskId}.result`,
+
+  // Config updates
+  configUpdate: (configKey: string) => `${SUBJECT_PREFIX}.config.${configKey}.update`,
+
+  // Alerts
+  alertGlobal: () => `${SUBJECT_PREFIX}.alerts.global.alert`,
+
+  // Wildcard subscriptions (for listening to all devices/tasks)
+  deviceEventsWildcard: `${SUBJECT_PREFIX}.devices.>`,
+  taskEventsWildcard:   `${SUBJECT_PREFIX}.tasks.>`,
 } as const;
 
 // -- JetStream Configuration --
 
 const JETSTREAM_STREAM_NAME = "PHONEFARM_TASKS";
-const JETSTREAM_TASK_SUBJECTS = `${SUBJECT_PREFIX}.task.*`;
+const JETSTREAM_TASK_SUBJECTS = `${SUBJECT_PREFIX}.tasks.>`;
 
 const JETSTREAM_STREAM_CONFIG = {
   name: JETSTREAM_STREAM_NAME,
@@ -147,8 +160,8 @@ export class NatsSync {
         timestamp: info.timestamp || Date.now(),
       } as Record<string, unknown>);
 
-      this.nc.publish(NATS_SUBJECTS.DEVICE_ONLINE, payload);
-      console.log(`[nats-sync] Published device online: ${info.deviceId || deviceId}`);
+      this.nc.publish(NATS_SUBJECTS.deviceOnline(deviceId), payload);
+      console.log(`[nats-sync] Published device online: ${info.device_id || deviceId}`);
     } catch (err) {
       console.error(
         `[nats-sync] Error publishing device online for ${deviceId}:`,
@@ -165,11 +178,11 @@ export class NatsSync {
 
     try {
       const payload = this.jsonCodec.encode({
-        deviceId,
+        device_id: deviceId,
         timestamp: Date.now(),
       } as Record<string, unknown>);
 
-      this.nc.publish(NATS_SUBJECTS.DEVICE_OFFLINE, payload);
+      this.nc.publish(NATS_SUBJECTS.deviceOffline(deviceId), payload);
       console.log(`[nats-sync] Published device offline: ${deviceId}`);
     } catch (err) {
       console.error(
@@ -191,7 +204,7 @@ export class NatsSync {
         timestamp: status.timestamp || Date.now(),
       } as Record<string, unknown>);
 
-      this.nc.publish(NATS_SUBJECTS.TASK_STATUS, payload);
+      this.nc.publish(NATS_SUBJECTS.taskStatus(taskId), payload);
       console.log(
         `[nats-sync] Published task status: ${taskId} -> ${status.status}`,
       );
@@ -203,7 +216,7 @@ export class NatsSync {
           persisted: true,
         } as Record<string, unknown>);
 
-        await this.js.publish(`${SUBJECT_PREFIX}.task.status`, jsPayload);
+        await this.js.publish(NATS_SUBJECTS.taskStatus(taskId), jsPayload);
       }
     } catch (err) {
       console.error(
@@ -220,7 +233,7 @@ export class NatsSync {
       throw new Error("[nats-sync] Cannot subscribe - not connected");
     }
 
-    const sub = this.nc.subscribe(NATS_SUBJECTS.DEVICE_EVENTS, {
+    const sub = this.nc.subscribe(NATS_SUBJECTS.deviceEventsWildcard, {
       callback: (err, msg) => {
         if (err) {
           console.error("[nats-sync] Device event subscription error:", err);
@@ -230,7 +243,7 @@ export class NatsSync {
           const data = this.jsonCodec.decode(msg.data);
           const event: DeviceEvent = {
             type: msg.subject.split(".").slice(-1)[0] || "unknown",
-            deviceId: (data.deviceId as string) || "unknown",
+            device_id: ((data.device_id ?? data.deviceId) as string) || "unknown",
             data,
             timestamp: (data.timestamp as number) || Date.now(),
           };
@@ -252,7 +265,7 @@ export class NatsSync {
 
     this.subscriptions.push(sub);
     console.log(
-      `[nats-sync] Subscribed to device events: ${NATS_SUBJECTS.DEVICE_EVENTS}`,
+      `[nats-sync] Subscribed to device events: ${NATS_SUBJECTS.deviceEventsWildcard}`,
     );
 
     return sub;

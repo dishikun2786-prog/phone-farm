@@ -1,9 +1,11 @@
 import { useNavigate } from 'react-router-dom';
 import PageWrapper from '../../components/PageWrapper';
-import { Key, Layers, Play, ShieldCheck, BarChart3, Bell, Server, Users, Shield, Coins, DollarSign, MessageSquare, Sliders, ToggleLeft, Activity } from 'lucide-react';
+import { Key, Layers, Play, ShieldCheck, BarChart3, Bell, Server, Users, Shield, Coins, DollarSign, MessageSquare, Sliders, ToggleLeft, Activity, Building } from 'lucide-react';
 
 const ADMIN_MODULES = [
   { key: 'users', label: '用户管理', desc: '用户列表/角色管理/禁用启用', icon: Users, path: '/admin/users', color: 'text-pink-600 bg-pink-50 dark:bg-pink-900/30' },
+  { key: 'permissions', label: '权限配置', desc: '角色×资源权限矩阵可视化配置', icon: ShieldCheck, path: '/admin/permissions', color: 'text-fuchsia-600 bg-fuchsia-50 dark:bg-fuchsia-900/30' },
+  { key: 'tenants', label: '租户管理', desc: '多租户创建/编辑/域名/设备配额', icon: Building, path: '/admin/tenants', color: 'text-teal-600 bg-teal-50 dark:bg-teal-900/30' },
   { key: 'cardKeys', label: '卡密管理', desc: '批量生成/查询/导出/禁用卡密', icon: Key, path: '/admin/card-keys', color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/30' },
   { key: 'groups', label: '设备分组', desc: '创建分组/拖拽添加设备/批量操作', icon: Layers, path: '/admin/groups', color: 'text-green-600 bg-green-50 dark:bg-green-900/30' },
   { key: 'batch', label: '批量操作', desc: '批量脚本部署/配置下发/重启/截图', icon: Play, path: '/admin/batch', color: 'text-purple-600 bg-purple-50 dark:bg-purple-900/30' },

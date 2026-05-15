@@ -39,7 +39,11 @@ export interface VLMScript {
 
 export interface VLMStats {
   totalEpisodes?: number; totalSteps?: number; avgStepsPerEpisode?: number;
-  successRate?: number; avgApiLatencyMs?: number; modelUsage?: Record<string, number>;
+  avgStepsPerTask?: number; successRate?: number; avgApiLatencyMs?: number;
+  totalVLMCost?: number; modelUsage?: Record<string, number>;
+  episodesByPlatform?: { platform: string; count: number }[];
+  successRateOverTime?: { date: string; rate: number }[];
+  topScripts?: { id: string; name: string; usageCount: number }[];
 }
 
 export interface VlmModelConfig {
@@ -76,6 +80,7 @@ interface DeviceSlice {
   devices: Device[];
   devicesLoading: boolean;
   devicesError: string;
+  devicesUpdatedAt: number;
   liveInfo: Record<string, LiveInfo>;
   selectedDevices: string[];
   loadDevices: () => Promise<void>;
@@ -90,6 +95,9 @@ interface TaskSlice {
   templates: TaskTemplate[];
   tasksLoading: boolean;
   tasksError: string;
+  tasksUpdatedAt: number;
+  templatesLoading: boolean;
+  templatesError: string;
   loadTasks: () => Promise<void>;
   loadTemplates: () => Promise<void>;
   createTask: (task: Partial<Task>) => Promise<void>;
@@ -107,6 +115,10 @@ interface VlmSlice {
   models: VlmModelConfig[];
   vlmLoading: boolean;
   vlmError: string;
+  episodesLoading: boolean;
+  scriptsLoading: boolean;
+  modelsLoading: boolean;
+  modelsError: string;
   loadEpisodes: () => Promise<void>;
   loadScripts: () => Promise<void>;
   loadStats: () => Promise<void>;
@@ -150,6 +162,12 @@ interface SystemSlice {
   featureFlags: Record<string, boolean>;
   infraStatus: Record<string, string>;
   systemLoading: boolean;
+  systemConfigLoading: boolean;
+  systemConfigError: string;
+  featureFlagsLoading: boolean;
+  featureFlagsError: string;
+  infraLoading: boolean;
+  infraError: string;
   loadSystemConfig: () => Promise<void>;
   updateSystemConfig: (key: string, value: string) => Promise<void>;
   loadFeatureFlags: () => Promise<void>;
@@ -157,7 +175,10 @@ interface SystemSlice {
   loadInfraStatus: () => Promise<void>;
 }
 
-export type AppState = AuthSlice & DeviceSlice & TaskSlice & VlmSlice & SystemSlice & TenantSlice;
+import type { AdminAISlice } from './admin-ai-slice';
+import { createAdminAISlice } from './admin-ai-slice';
+
+export type AppState = AuthSlice & DeviceSlice & TaskSlice & VlmSlice & SystemSlice & TenantSlice & AdminAISlice;
 
 // ── Lazy API ref (avoids circular dependency) ──
 
@@ -285,6 +306,7 @@ const createDeviceSlice: StateCreator<AppState, [], [], DeviceSlice> = (set) => 
   devices: [],
   devicesLoading: false,
   devicesError: '',
+  devicesUpdatedAt: 0,
   liveInfo: {},
   selectedDevices: [],
 
@@ -293,9 +315,9 @@ const createDeviceSlice: StateCreator<AppState, [], [], DeviceSlice> = (set) => 
     try {
       const api = getApi();
       const data = await api.getDevices();
-      set({ devices: data.devices || data || [], devicesLoading: false });
+      set({ devices: data.devices || data || [], devicesLoading: false, devicesUpdatedAt: Date.now() });
     } catch (err: any) {
-      set({ devicesError: err.message || '加载失败', devicesLoading: false });
+      set({ devicesError: err.message || '加载失败', devicesLoading: false, devicesUpdatedAt: Date.now() });
     }
   },
 
@@ -330,79 +352,134 @@ const createDeviceSlice: StateCreator<AppState, [], [], DeviceSlice> = (set) => 
 
 // ── Task Slice ──
 
-const createTaskSlice: StateCreator<AppState, [], [], TaskSlice> = (set) => ({
+const createTaskSlice: StateCreator<AppState, [], [], TaskSlice> = (set, get) => ({
   tasks: [],
   templates: [],
   tasksLoading: false,
   tasksError: '',
+  tasksUpdatedAt: 0,
+  templatesLoading: false,
+  templatesError: '',
 
   loadTasks: async () => {
     set({ tasksLoading: true, tasksError: '' });
     try {
       const api = getApi();
       const data = await api.getTasks();
-      set({ tasks: data.tasks || data || [], tasksLoading: false });
+      set({ tasks: data.tasks || data || [], tasksLoading: false, tasksUpdatedAt: Date.now() });
     } catch (err: any) {
-      set({ tasksError: err.message || '加载失败', tasksLoading: false });
+      set({ tasksError: err.message || '加载失败', tasksLoading: false, tasksUpdatedAt: Date.now() });
     }
   },
 
   loadTemplates: async () => {
+    set({ templatesLoading: true, templatesError: '' });
     try {
       const api = getApi();
       const data = await api.getTemplates();
-      set({ templates: data.templates || data || [] });
-    } catch { console.warn('Store: non-critical load failed'); }
+      set({ templates: data.templates || data || [], templatesLoading: false });
+    } catch (err: any) {
+      set({ templatesError: err.message || '加载失败', templatesLoading: false });
+    }
   },
 
-  createTask: async (task) => { const api = getApi(); await api.createTask(task); },
-  updateTask: async (id, updates) => { const api = getApi(); await api.updateTask(id, updates); },
-  deleteTask: async (id) => { const api = getApi(); await api.deleteTask(id); },
+  createTask: async (task) => {
+    const api = getApi();
+    await api.createTask(task);
+    get().loadTasks();
+  },
+  updateTask: async (id, updates) => {
+    const api = getApi();
+    await api.updateTask(id, updates);
+    get().loadTasks();
+  },
+  deleteTask: async (id) => {
+    const api = getApi();
+    await api.deleteTask(id);
+    get().loadTasks();
+  },
   runTask: async (id) => { const api = getApi(); await api.runTask(id); },
   stopTask: async (id) => { const api = getApi(); await api.stopTask(id); },
-  seedTemplates: async () => { const api = getApi(); await api.seedTemplates(); },
+  seedTemplates: async () => {
+    const api = getApi();
+    await api.seedTemplates();
+    get().loadTemplates();
+  },
 });
 
 // ── VLM Slice ──
 
-const createVlmSlice: StateCreator<AppState, [], [], VlmSlice> = (set) => ({
+const createVlmSlice: StateCreator<AppState, [], [], VlmSlice> = (set, get) => ({
   episodes: [],
   scripts: [],
   vlmStats: null,
   models: [],
   vlmLoading: false,
   vlmError: '',
+  episodesLoading: false,
+  scriptsLoading: false,
+  modelsLoading: false,
+  modelsError: '',
 
   loadEpisodes: async () => {
-    set({ vlmLoading: true, vlmError: '' });
+    set({ vlmLoading: true, episodesLoading: true, vlmError: '' });
     try {
       const api = getApi();
       const data = await api.vlmGetEpisodes();
-      set({ episodes: data.episodes || data || [], vlmLoading: false });
+      set({ episodes: data.episodes || data || [], vlmLoading: false, episodesLoading: false });
+    } catch (err: any) {
+      set({ vlmError: err.message || '加载失败', vlmLoading: false, episodesLoading: false });
+    }
+  },
+
+  loadScripts: async () => {
+    set({ scriptsLoading: true });
+    try {
+      const api = getApi();
+      const data = await api.getScripts();
+      set({ scripts: data.scripts || data || [], scriptsLoading: false });
+    } catch (err: any) {
+      set({ vlmError: err.message || '加载失败', scriptsLoading: false });
+    }
+  },
+
+  loadStats: async () => {
+    set({ vlmLoading: true });
+    try {
+      const api = getApi();
+      const data = await api.vlmGetStats();
+      set({ vlmStats: data, vlmLoading: false });
     } catch (err: any) {
       set({ vlmError: err.message || '加载失败', vlmLoading: false });
     }
   },
 
-  loadScripts: async () => {
+  loadModels: async () => {
+    set({ modelsLoading: true, modelsError: '' });
     try {
       const api = getApi();
-      const data = await api.getScripts();
-      set({ scripts: data.scripts || data || [] });
-    } catch { console.warn('Store: non-critical load failed'); }
+      const data = await api.vlmGetModels();
+      set({ models: data.models || data || [], modelsLoading: false });
+    } catch (err: any) {
+      set({ modelsError: err.message || '加载失败', modelsLoading: false });
+    }
   },
 
-  loadStats: async () => {
-    try { const api = getApi(); const data = await api.vlmGetStats(); set({ vlmStats: data }); } catch { console.warn('Store: load failed'); }
+  createModel: async (model) => {
+    const api = getApi();
+    await api.vlmCreateModel(model);
+    get().loadModels();
   },
-
-  loadModels: async () => {
-    try { const api = getApi(); const data = await api.vlmGetModels(); set({ models: data.models || data || [] }); } catch { console.warn('Store: load failed'); }
+  updateModel: async (id, updates) => {
+    const api = getApi();
+    await api.vlmUpdateModel(id, updates);
+    get().loadModels();
   },
-
-  createModel: async (model) => { const api = getApi(); await api.vlmCreateModel(model); },
-  updateModel: async (id, updates) => { const api = getApi(); await api.vlmUpdateModel(id, updates); },
-  deleteModel: async (id) => { const api = getApi(); await api.vlmDeleteModel(id); },
+  deleteModel: async (id) => {
+    const api = getApi();
+    await api.vlmDeleteModel(id);
+    get().loadModels();
+  },
 });
 
 // ── System Slice ──
@@ -412,14 +489,22 @@ const createSystemSlice: StateCreator<AppState, [], [], SystemSlice> = (set) => 
   featureFlags: {},
   infraStatus: {},
   systemLoading: false,
+  systemConfigLoading: false,
+  systemConfigError: '',
+  featureFlagsLoading: false,
+  featureFlagsError: '',
+  infraLoading: false,
+  infraError: '',
 
   loadSystemConfig: async () => {
-    set({ systemLoading: true });
+    set({ systemLoading: true, systemConfigLoading: true, systemConfigError: '' });
     try {
       const api = getApi();
       const data = await api.getSystemConfig();
-      set({ systemConfig: data.config || data || {}, systemLoading: false });
-    } catch { console.warn('Store: load failed'); set({ systemLoading: false }); }
+      set({ systemConfig: data.config || data || {}, systemLoading: false, systemConfigLoading: false });
+    } catch (err: any) {
+      set({ systemConfigError: err.message || '加载失败', systemLoading: false, systemConfigLoading: false });
+    }
   },
 
   updateSystemConfig: async (key, value) => {
@@ -429,7 +514,14 @@ const createSystemSlice: StateCreator<AppState, [], [], SystemSlice> = (set) => 
   },
 
   loadFeatureFlags: async () => {
-    try { const api = getApi(); const data = await api.getFeatureFlags(); set({ featureFlags: data.flags || data || {} }); } catch { console.warn('Store: load failed'); }
+    set({ featureFlagsLoading: true, featureFlagsError: '' });
+    try {
+      const api = getApi();
+      const data = await api.getFeatureFlags();
+      set({ featureFlags: data.flags || data || {}, featureFlagsLoading: false });
+    } catch (err: any) {
+      set({ featureFlagsError: err.message || '加载失败', featureFlagsLoading: false });
+    }
   },
 
   toggleFeatureFlag: async (key) => {
@@ -439,13 +531,20 @@ const createSystemSlice: StateCreator<AppState, [], [], SystemSlice> = (set) => 
   },
 
   loadInfraStatus: async () => {
-    try { const api = getApi(); const data = await api.getInfraStatus(); set({ infraStatus: data.status || data || {} }); } catch { console.warn('Store: load failed'); }
+    set({ infraLoading: true, infraError: '' });
+    try {
+      const api = getApi();
+      const data = await api.getInfraStatus();
+      set({ infraStatus: data.status || data || {}, infraLoading: false });
+    } catch (err: any) {
+      set({ infraError: err.message || '加载失败', infraLoading: false });
+    }
   },
 });
 
 // ── Tenant Slice ──
 
-const createTenantSlice: StateCreator<AppState, [], [], TenantSlice> = (set) => ({
+const createTenantSlice: StateCreator<AppState, [], [], TenantSlice> = (set, get) => ({
   tenants: [],
   currentTenant: null,
   tenantsLoading: false,
@@ -474,16 +573,19 @@ const createTenantSlice: StateCreator<AppState, [], [], TenantSlice> = (set) => 
   createTenant: async (data) => {
     const api = getApi();
     await api.createTenant(data);
+    get().loadTenants();
   },
 
   updateTenant: async (id, data) => {
     const api = getApi();
     await api.updateTenant(id, data);
+    get().loadTenants();
   },
 
   deleteTenant: async (id) => {
     const api = getApi();
     await api.deleteTenant(id);
+    get().loadTenants();
   },
 });
 
@@ -496,4 +598,5 @@ export const useStore = create<AppState>()((...a) => ({
   ...createVlmSlice(...a),
   ...createSystemSlice(...a),
   ...createTenantSlice(...a),
+  ...createAdminAISlice(...a),
 }));

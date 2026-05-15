@@ -27,6 +27,7 @@ const registerSchema = z.object({
   code: z.string().length(6),
   username: z.string().min(2).max(32).optional(),
   password: z.string().min(8).max(128).optional(),
+  tenantId: z.string().uuid().optional(),
 });
 
 const loginPhoneSchema = z.object({
@@ -128,7 +129,7 @@ export async function userRoutes(app: FastifyInstance) {
         .status(400)
         .send({ error: parsed.error.issues[0]?.message });
     }
-    const { phone, code, username, password } = parsed.data;
+    const { phone, code, username, password, tenantId } = parsed.data;
 
     // Verify SMS code
     const verifyResult = await smsService.verifyCode(phone, code, "register");
@@ -171,6 +172,7 @@ export async function userRoutes(app: FastifyInstance) {
         role: "operator",
         status: "active",
         lastLoginAt: new Date(),
+        ...(tenantId ? { tenantId } : {}),
       })
       .returning();
 

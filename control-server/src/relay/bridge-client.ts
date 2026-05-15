@@ -178,9 +178,24 @@ export class BridgeClient {
         ? Buffer.byteLength(raw)
         : (raw as Buffer).length;
 
-      // UDP frames are sent as binary (raw Buffer) from VPS relay
+      // UDP frames are sent as binary with 4-byte header: [idLen:4][deviceId:UTF-8][rawFrame]
       if (Buffer.isBuffer(raw) || raw instanceof ArrayBuffer) {
-        this.onUdpFrame?.(Buffer.isBuffer(raw) ? raw : Buffer.from(raw));
+        const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+        if (buf.length >= 4) {
+          const idLen = buf.readUInt32BE(0);
+          if (idLen > 0 && idLen <= 256 && buf.length >= 4 + idLen) {
+            const deviceId = buf.subarray(4, 4 + idLen).toString('utf-8');
+            const frame = buf.subarray(4 + idLen);
+            if (deviceId !== 'unknown') {
+              this.injectUdpFrame(deviceId, frame);
+            } else {
+              this.onUdpFrame?.(frame);
+            }
+            return;
+          }
+        }
+        // Fallback: treat whole buffer as raw frame
+        this.onUdpFrame?.(buf);
         return;
       }
 

@@ -31,18 +31,27 @@ ht.openedskill.com {
 phone.openedskill.com {
 	tls internal
 
+	# WebSocket endpoints — all go to relay at 8499 (场景A: VPS relay bridges to local control)
+	# Long timeouts for persistent WebSocket connections
 	handle /ws/* {
+		reverse_proxy 127.0.0.1:8499 {
+			header_up X-Forwarded-Proto https
+		}
+	}
+
+	# API requests — proxy to relay which forwards to local control server
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8499 {
+			header_up X-Forwarded-Proto https
+		}
+	}
+
+	# Health check — also via relay
+	handle /health {
 		reverse_proxy 127.0.0.1:8499
 	}
 
-	handle /api/* {
-		reverse_proxy 127.0.0.1:8443
-	}
-
-	handle /health {
-		reverse_proxy 127.0.0.1:8443
-	}
-
+	# Static dashboard files + SPA fallback — relay serves dashboard/dist/
 	reverse_proxy 127.0.0.1:8499
 	encode gzip
 	header {

@@ -37,8 +37,11 @@ export async function alertRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/api/v1/alerts/rules/:id", async (req, reply) => {
     const { id } = req.params as { id: string };
     const updates = req.body as Record<string, unknown>;
+    const rules = engine.getRules();
+    const existing = rules.find((r) => r.id === id);
+    if (!existing) return reply.status(404).send({ error: "Rule not found" });
     engine.removeRule(id);
-    engine.addRule({ ...updates, id } as any);
+    engine.addRule({ ...existing, ...updates, id } as any);
     return reply.send({ ok: true });
   });
 

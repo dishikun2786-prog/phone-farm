@@ -2,13 +2,15 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../lib/api';
 import { useStore } from '../store';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { toast } from '../hooks/useToast';
 import InfraStatusCard from '../components/InfraStatusCard';
 import FeatureFlagToggle from '../components/FeatureFlagToggle';
 import {
   Server, Database, Radio, Wifi, Shield, HardDrive,
   Play, Pause, Trash2, Zap, Activity, Clock, Cpu,
   Smartphone, ListTodo, Box, Antenna, Monitor, Search,
-  Download,
+  Download, Bot, Eye, EyeOff, Save, Loader2, AlertCircle,
+  CheckCircle2, Settings, RotateCw,
 } from 'lucide-react';
 
 interface HealthData {
@@ -45,6 +47,106 @@ export default function SystemControlPanel() {
   const toggleFeatureFlag = useStore(s => s.toggleFeatureFlag);
 
   const activeTaskCount = devices.filter(d => d.status === 'busy').length;
+
+  // ── GUI-Plus Configuration State ──
+  const [guiPlusExpanded, setGuiPlusExpanded] = useState(false);
+  const [guiPlusEnabled, setGuiPlusEnabled] = useState(false);
+  const [guiPlusApiKey, setGuiPlusApiKey] = useState('');
+  const [guiPlusModel, setGuiPlusModel] = useState('gui-plus-2026-02-26');
+  const [guiPlusApiUrl, setGuiPlusApiUrl] = useState('https://dashscope.aliyuncs.com/compatible-mode/v1');
+  const [guiPlusMaxSteps, setGuiPlusMaxSteps] = useState(30);
+  const [guiPlusMaxTokens, setGuiPlusMaxTokens] = useState(32768);
+  const [guiPlusTemperature, setGuiPlusTemperature] = useState(0.1);
+  const [guiPlusCoordScale, setGuiPlusCoordScale] = useState(1000);
+  const [guiPlusVlHighRes, setGuiPlusVlHighRes] = useState(true);
+  const [showGuiPlusApiKey, setShowGuiPlusApiKey] = useState(false);
+  const [guiPlusSaving, setGuiPlusSaving] = useState(false);
+  const [guiPlusTesting, setGuiPlusTesting] = useState(false);
+  const [guiPlusTestResult, setGuiPlusTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [guiPlusLoaded, setGuiPlusLoaded] = useState(false);
+
+  const loadGuiPlusConfig = useCallback(async () => {
+    try {
+      const cfg: Record<string, any> = await api.getSystemConfig();
+      setGuiPlusEnabled(cfg['ff.gui_plus'] === 'true' || cfg['ff.gui_plus'] === true);
+      setGuiPlusApiKey(cfg['ai.gui_plus.api_key'] || '');
+      setGuiPlusModel(cfg['ai.gui_plus.model'] || 'gui-plus-2026-02-26');
+      setGuiPlusApiUrl(cfg['ai.gui_plus.api_url'] || 'https://dashscope.aliyuncs.com/compatible-mode/v1');
+      setGuiPlusMaxSteps(Number(cfg['ai.gui_plus.max_steps'] || 30));
+      setGuiPlusMaxTokens(Number(cfg['ai.gui_plus.max_tokens'] || 32768));
+      setGuiPlusTemperature(Number(cfg['ai.gui_plus.temperature'] || 0.1));
+      setGuiPlusCoordScale(Number(cfg['ai.gui_plus.coordinate_scale'] || 1000));
+      setGuiPlusVlHighRes(cfg['ai.gui_plus.vl_high_resolution'] !== 'false' && cfg['ai.gui_plus.vl_high_resolution'] !== false);
+      setGuiPlusLoaded(true);
+    } catch {
+      setGuiPlusLoaded(true); // show defaults even if load fails
+    }
+  }, []);
+
+  const saveGuiPlusConfig = async () => {
+    setGuiPlusSaving(true);
+    try {
+      const updates: [string, string][] = [
+        ['ai.gui_plus.api_url', guiPlusApiUrl],
+        ['ai.gui_plus.model', guiPlusModel],
+        ['ai.gui_plus.max_steps', String(guiPlusMaxSteps)],
+        ['ai.gui_plus.max_tokens', String(guiPlusMaxTokens)],
+        ['ai.gui_plus.temperature', String(guiPlusTemperature)],
+        ['ai.gui_plus.coordinate_scale', String(guiPlusCoordScale)],
+        ['ai.gui_plus.vl_high_resolution', String(guiPlusVlHighRes)],
+      ];
+      if (guiPlusApiKey) {
+        updates.push(['ai.gui_plus.api_key', guiPlusApiKey]);
+      }
+      // Save feature flag
+      await api.toggleFeatureFlag('ff.gui_plus');
+      // Save all config values
+      await Promise.all(updates.map(([k, v]) => api.updateSystemConfig(k, v)));
+      addLog('info', 'GUI-Plus 配置已保存');
+      toast('success', 'GUI-Plus 配置已保存');
+    } catch (err: any) {
+      addLog('error', `GUI-Plus 配置保存失败: ${err.message}`);
+      toast('error', `保存失败: ${err.message}`);
+    } finally {
+      setGuiPlusSaving(false);
+    }
+  };
+
+  const testGuiPlusConnection = async () => {
+    setGuiPlusTesting(true);
+    setGuiPlusTestResult(null);
+    try {
+      // Test DashScope API connectivity for GUI-Plus
+      const response = await fetch(guiPlusApiUrl + '/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${guiPlusApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: guiPlusModel,
+          messages: [{ role: 'user', content: 'reply "ok"' }],
+          max_tokens: 10,
+        }),
+      });
+      if (response.ok) {
+        const latency = Date.now();
+        setGuiPlusTestResult({ success: true, message: `连接成功 (HTTP ${response.status})` });
+        addLog('info', `GUI-Plus 连接测试通过 (${guiPlusModel})`);
+      } else {
+        const errBody = await response.text().catch(() => '');
+        setGuiPlusTestResult({ success: false, message: `HTTP ${response.status}: ${errBody.slice(0, 100)}` });
+        addLog('warn', `GUI-Plus 连接测试失败: HTTP ${response.status}`);
+      }
+    } catch (err: any) {
+      setGuiPlusTestResult({ success: false, message: `连接失败: ${err.message}` });
+      addLog('error', `GUI-Plus 连接测试异常: ${err.message}`);
+    } finally {
+      setGuiPlusTesting(false);
+    }
+  }
+
+
 
   const addLog = useCallback((level: LogEntry['level'], message: string) => {
     const entry: LogEntry = {
@@ -106,6 +208,7 @@ export default function SystemControlPanel() {
 
     loadInfraStatus();
     loadFeatureFlags();
+    loadGuiPlusConfig();
   }, []);
 
   useEffect(() => {
@@ -259,6 +362,248 @@ export default function SystemControlPanel() {
           </div>
         </div>
       )}
+
+      {/* GUI-Plus Configuration */}
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
+        <button
+          onClick={() => { if (!guiPlusExpanded && !guiPlusLoaded) loadGuiPlusConfig(); setGuiPlusExpanded(!guiPlusExpanded); }}
+          className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Bot size={18} className="text-orange-600" />
+            <span className="font-medium text-gray-900 dark:text-slate-100 text-sm">
+              阿里云百炼 GUI-Plus 配置
+            </span>
+            <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+              guiPlusEnabled
+                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                : 'bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400'
+            }`}>
+              {guiPlusEnabled ? '已启用' : '未启用'}
+            </span>
+          </div>
+          <Settings size={16} className={`text-gray-400 transition-transform ${guiPlusExpanded ? 'rotate-90' : ''}`} />
+        </button>
+
+        {guiPlusExpanded && (
+          <div className="p-4 pt-0 border-t border-gray-100 dark:border-slate-700">
+            <p className="text-xs text-gray-500 dark:text-slate-400 mb-4 mt-4">
+              GUI-Plus 是阿里云百炼推出的 GUI 自动化视觉模型，支持手机端 (mobile_use) 和电脑端 (computer_use) 操作。
+              使用前需在阿里云百炼控制台开通服务并获取北京地域 API Key。
+            </p>
+
+            {/* Enable Toggle */}
+            <div className="flex items-center justify-between mb-4 p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
+              <div>
+                <p className="text-sm font-medium text-gray-700 dark:text-slate-300">启用 GUI-Plus</p>
+                <p className="text-xs text-gray-500 dark:text-slate-400">开启后将在 AI 自动化任务中可用</p>
+              </div>
+              <button
+                onClick={async () => {
+                  try {
+                    await api.toggleFeatureFlag('ff.gui_plus');
+                    setGuiPlusEnabled(!guiPlusEnabled);
+                    addLog('info', `GUI-Plus ${!guiPlusEnabled ? '已启用' : '已禁用'}`);
+                  } catch (err: any) {
+                    toast('error', `切换失败: ${err.message}`);
+                  }
+                }}
+                className={`relative w-11 h-6 rounded-full transition-colors ${
+                  guiPlusEnabled ? 'bg-orange-500' : 'bg-gray-300 dark:bg-slate-600'
+                }`}
+              >
+                <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                  guiPlusEnabled ? 'translate-x-5.5 left-0.5' : 'left-0.5'
+                }`} />
+              </button>
+            </div>
+
+            {/* API Key */}
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
+                API Key <span className="text-gray-400 dark:text-slate-500">(DashScope 北京地域)</span>
+              </label>
+              <div className="relative">
+                <input
+                  type={showGuiPlusApiKey ? 'text' : 'password'}
+                  value={guiPlusApiKey}
+                  onChange={e => setGuiPlusApiKey(e.target.value)}
+                  placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                  className="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 pr-9 focus:ring-2 focus:ring-orange-500 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowGuiPlusApiKey(!showGuiPlusApiKey)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-slate-300"
+                >
+                  {showGuiPlusApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Model + API URL */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">模型选择</label>
+                <select
+                  value={guiPlusModel}
+                  onChange={e => setGuiPlusModel(e.target.value)}
+                  className="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-orange-500"
+                >
+                  <option value="gui-plus-2026-02-26">GUI-Plus 2026-02-26 (推荐·思考模式)</option>
+                  <option value="gui-plus">GUI-Plus (非思考模式)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">API 端点</label>
+                <input
+                  type="text"
+                  value={guiPlusApiUrl}
+                  onChange={e => setGuiPlusApiUrl(e.target.value)}
+                  className="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 font-mono focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+            </div>
+
+            {/* Max Steps + Max Tokens */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  最大步数: <span className="text-orange-600 font-semibold">{guiPlusMaxSteps}</span>
+                </label>
+                <input
+                  type="range"
+                  value={guiPlusMaxSteps}
+                  onChange={e => setGuiPlusMaxSteps(Number(e.target.value))}
+                  min={1} max={100} step={1}
+                  className="w-full accent-orange-500"
+                />
+                <div className="flex justify-between text-xs text-gray-400 dark:text-slate-500">
+                  <span>1</span><span>100</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  Max Tokens: <span className="text-orange-600 font-semibold">{guiPlusMaxTokens.toLocaleString()}</span>
+                </label>
+                <input
+                  type="range"
+                  value={guiPlusMaxTokens}
+                  onChange={e => setGuiPlusMaxTokens(Number(e.target.value))}
+                  min={256} max={32768} step={256}
+                  className="w-full accent-orange-500"
+                />
+                <div className="flex justify-between text-xs text-gray-400 dark:text-slate-500">
+                  <span>256</span><span>32,768</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Temperature + Coordinate Scale */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">
+                  Temperature: <span className="text-orange-600 font-semibold">{guiPlusTemperature.toFixed(2)}</span>
+                </label>
+                <input
+                  type="range"
+                  value={guiPlusTemperature}
+                  onChange={e => setGuiPlusTemperature(Number(e.target.value))}
+                  min={0} max={1} step={0.05}
+                  className="w-full accent-orange-500"
+                />
+                <div className="flex justify-between text-xs text-gray-400 dark:text-slate-500">
+                  <span>0</span><span>1.0</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">坐标归一化分辨率</label>
+                <input
+                  type="number"
+                  value={guiPlusCoordScale}
+                  onChange={e => setGuiPlusCoordScale(Number(e.target.value))}
+                  min={500} max={2000} step={100}
+                  className="w-full border border-gray-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-orange-500"
+                />
+                <p className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">
+                  默认 1000×1000，需根据截图分辨率调整映射
+                </p>
+              </div>
+            </div>
+
+            {/* VL High Resolution Toggle */}
+            <div className="flex items-center justify-between mb-4 p-3 bg-gray-50 dark:bg-slate-700/50 rounded-lg">
+              <div>
+                <p className="text-sm font-medium text-gray-700 dark:text-slate-300">高分辨率图像</p>
+                <p className="text-xs text-gray-500 dark:text-slate-400">VL 高分辨率模式，需设置 vl_high_resolution_images=true（推荐开启）</p>
+              </div>
+              <button
+                onClick={() => setGuiPlusVlHighRes(!guiPlusVlHighRes)}
+                className={`relative w-11 h-6 rounded-full transition-colors ${
+                  guiPlusVlHighRes ? 'bg-orange-500' : 'bg-gray-300 dark:bg-slate-600'
+                }`}
+              >
+                <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                  guiPlusVlHighRes ? 'translate-x-5.5 left-0.5' : 'left-0.5'
+                }`} />
+              </button>
+            </div>
+
+            {/* Test Result */}
+            {guiPlusTestResult && (
+              <div className={`text-sm rounded-lg px-3 py-2 mb-4 ${
+                guiPlusTestResult.success
+                  ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800'
+                  : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800'
+              }`}>
+                <span className="inline-flex items-center gap-1">
+                  {guiPlusTestResult.success ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                  {guiPlusTestResult.message}
+                </span>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2 pt-2 border-t border-gray-100 dark:border-slate-700">
+              <button
+                onClick={saveGuiPlusConfig}
+                disabled={guiPlusSaving}
+                className="flex items-center gap-1.5 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {guiPlusSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                保存配置
+              </button>
+              <button
+                onClick={testGuiPlusConnection}
+                disabled={guiPlusTesting || !guiPlusApiKey}
+                className="flex items-center gap-1.5 px-4 py-2 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-gray-700 dark:text-slate-300 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {guiPlusTesting ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+                测试连接
+              </button>
+              <button
+                onClick={() => { loadGuiPlusConfig(); toast('info', '已重新加载配置'); }}
+                className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-gray-500 dark:text-slate-400 rounded-lg text-sm transition-colors"
+              >
+                <RotateCw size={14} />
+              </button>
+            </div>
+
+            {/* Info box */}
+            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg text-xs text-blue-700 dark:text-blue-400">
+              <p className="font-medium mb-1">使用说明</p>
+              <ul className="space-y-0.5 text-blue-600 dark:text-blue-400">
+                <li>· 需在阿里云百炼控制台开通 GUI-Plus 服务（北京地域）</li>
+                <li>· 手机端通过 ADB 连接，输出 mobile_use 操作指令</li>
+                <li>· 电脑端支持 Windows 桌面自动化，输出 computer_use 操作指令</li>
+                <li>· 模型输出坐标基于归一化分辨率，执行前需映射到屏幕实际尺寸</li>
+                <li>· 推荐使用 GUI-Plus 2026-02-26 思考模式，效果更优</li>
+                <li>· 定价: 输入 1.5元/百万Token，输出 4.5元/百万Token</li>
+              </ul>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Log Stream */}
       <div>
