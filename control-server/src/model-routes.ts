@@ -175,7 +175,7 @@ export async function modelRoutes(app: FastifyInstance): Promise<void> {
 
   // 获取可用模型清单
   app.get("/api/v1/models/manifest", async (_req, reply) => {
-    return reply.send({ models: store.listAll() });
+    return reply.send(store.listAll());
   });
 
   // 获取模型详细信息

@@ -10,7 +10,7 @@
  */
 import {
   pgTable, uuid, varchar, text, integer, boolean,
-  timestamp, jsonb,
+  timestamp, jsonb, index,
 } from "drizzle-orm/pg-core";
 import { users, devices } from "../schema.js";
 import { billingPlans } from "../billing/billing-schema.js";
@@ -25,7 +25,9 @@ export const configCategories = pgTable("config_categories", {
   icon: varchar("icon", { length: 32 }).default("Settings"),
   sortOrder: integer("sort_order").default(0).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_config_categories_key").on(table.key),
+]);
 
 // ── Definitions ──
 
@@ -48,7 +50,10 @@ export const configDefinitions = pgTable("config_definitions", {
   sortOrder: integer("sort_order").default(0).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_config_defs_category").on(table.categoryId),
+  index("idx_config_defs_key").on(table.key),
+]);
 
 // ── Scoped Values ──
 
@@ -64,7 +69,12 @@ export const configValues = pgTable("config_values", {
   updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_config_values_def").on(table.definitionId),
+  index("idx_config_values_scope").on(table.scope),
+  index("idx_config_values_def_scope").on(table.definitionId, table.scope),
+  index("idx_config_values_lookup").on(table.definitionId, table.scope, table.scopeId),
+]);
 
 // ── Templates ──
 
@@ -78,7 +88,9 @@ export const configTemplates = pgTable("config_templates", {
   createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_config_templates_active").on(table.isActive),
+]);
 
 // ── Audit Log ──
 
@@ -94,4 +106,8 @@ export const configChangeLog = pgTable("config_change_log", {
   changedAt: timestamp("changed_at", { withTimezone: true }).defaultNow().notNull(),
   ipAddress: varchar("ip_address", { length: 45 }),
   changeReason: text("change_reason"),
-});
+}, (table) => [
+  index("idx_config_changelog_key").on(table.configKey),
+  index("idx_config_changelog_changed").on(table.changedAt),
+  index("idx_config_changelog_by").on(table.changedBy),
+]);

@@ -95,6 +95,41 @@
             android:exported="false"
             android:foregroundServiceType="specialUse" />
 
+        <!-- PhoneFarm IME (custom input method for stable text entry) -->
+        <service
+            android:name=".service.PhoneFarmInputMethodService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_INPUT_METHOD">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/input_method" />
+        </service>
+
+        <!-- AI Assistant Activity (full-screen chat) -->
+        <activity
+            android:name=".assistant.AssistantActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.PhoneFarm"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- Device Admin Receiver (lock screen, wipe, device owner) -->
+        <receiver
+            android:name=".service.PhoneFarmDeviceAdminReceiver"
+            android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin" />
+        </receiver>
+
         <!-- Boot Receiver -->
         <receiver
             android:name=".service.BootReceiver"

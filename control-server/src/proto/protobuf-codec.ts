@@ -65,7 +65,24 @@ export interface KeymapAction {
   cmd: Record<string, unknown>;
 }
 
+export interface AudioFrame {
+  deviceId: string;
+  frameSeq: number;
+  ptsUs: number;
+  codec: string;
+  audioData: Uint8Array;
+  sampleRate: number;
+  channels: number;
+  sampleFormat: number;
+}
+
 export type ControlAction = TouchAction | KeyAction | ScrollAction | ClipboardAction | KeymapAction;
+
+export interface FrameAck {
+  deviceId: string;
+  ackedSeq: number;
+  recvTimestampMs: number;
+}
 
 export interface ControlMessage {
   action?: ControlAction;
@@ -99,6 +116,7 @@ export class ProtobufCodec {
       await root.load(videoProto, { keepCase: true });
       this.videoFrameType = root.lookupType('phonefarm.video.VideoFrame');
       this.deviceMetaType = root.lookupType('phonefarm.video.DeviceMeta');
+      this.audioFrameType = root.lookupType('phonefarm.video.AudioFrame');
     }
 
     // Load control proto
@@ -123,6 +141,7 @@ export class ProtobufCodec {
       root.loadSync(videoProto, { keepCase: true });
       this.videoFrameType = root.lookupType('phonefarm.video.VideoFrame');
       this.deviceMetaType = root.lookupType('phonefarm.video.DeviceMeta');
+      this.audioFrameType = root.lookupType('phonefarm.video.AudioFrame');
     }
 
     if (fs.existsSync(controlProto)) {
@@ -283,6 +302,34 @@ export class ProtobufCodec {
     };
   }
 
+  // ── Audio ──
+
+  private audioFrameType: protobuf.Type | null = null;
+
+  encodeAudioFrame(frame: AudioFrame): Uint8Array {
+    if (!this.audioFrameType) throw new Error('ProtobufCodec not initialized');
+    const err = this.audioFrameType.verify(frame);
+    if (err) throw new Error(`AudioFrame validation: ${err}`);
+    return this.audioFrameType.encode(
+      this.audioFrameType.create(frame),
+    ).finish();
+  }
+
+  decodeAudioFrame(buf: Uint8Array): AudioFrame {
+    if (!this.audioFrameType) throw new Error('ProtobufCodec not initialized');
+    const decoded: Record<string, any> = this.audioFrameType.decode(buf) as any;
+    return {
+      deviceId: decoded.deviceId || '',
+      frameSeq: decoded.frameSeq || 0,
+      ptsUs: typeof decoded.ptsUs === 'object' ? (decoded.ptsUs as any).toNumber() : Number(decoded.ptsUs) || 0,
+      codec: decoded.codec || 'aac',
+      audioData: decoded.audioData || new Uint8Array(0),
+      sampleRate: decoded.sampleRate || 44100,
+      channels: decoded.channels || 1,
+      sampleFormat: decoded.sampleFormat || 0,
+    };
+  }
+
   // ── JSON <-> Binary bridge ──
 
   /** Check if a WebSocket message is binary (potential protobuf) */
@@ -298,9 +345,13 @@ export class ProtobufCodec {
         return { binary: true, payload: this.decodeVideoFrame(buf) as unknown as Record<string, unknown> };
       } catch {
         try {
-          return { binary: true, payload: this.decodeControlMessage(buf) as unknown as Record<string, unknown> };
+          return { binary: true, payload: this.decodeAudioFrame(buf) as unknown as Record<string, unknown> };
         } catch {
-          return { binary: true, payload: null };
+          try {
+            return { binary: true, payload: this.decodeControlMessage(buf) as unknown as Record<string, unknown> };
+          } catch {
+            return { binary: true, payload: null };
+          }
         }
       }
     }

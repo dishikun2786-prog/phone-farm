@@ -660,7 +660,7 @@ export const DEFINITIONS: ConfigDefinitionSeed[] = [
   // ═══ INFRASTRUCTURE — WebRTC ═══
   {
     categoryKey: "infrastructure", key: "infra.webrtc.turn_server", displayName: "TURN 服务器地址",
-    description: "WebRTC TURN 服务器 URL", valueType: "url", defaultValue: "turn:localhost:3478",
+    description: "WebRTC TURN 服务器 URL", valueType: "url", defaultValue: "turn:47.243.254.248:3478?transport=udp",
     isSecret: false, isOverridable: false, allowedScopes: ["global"], tags: ["server", "webrtc"], sortOrder: 19,
   },
   {
@@ -670,17 +670,17 @@ export const DEFINITIONS: ConfigDefinitionSeed[] = [
   },
   {
     categoryKey: "infrastructure", key: "infra.webrtc.turn_credential", displayName: "TURN 密码",
-    description: "TURN 服务器认证密码", valueType: "secret", defaultValue: "",
+    description: "TURN 服务器认证密码 (通过 TURN_PASSWORD 环境变量设置)", valueType: "secret", defaultValue: "",
     isSecret: true, isOverridable: false, allowedScopes: ["global"], tags: ["server", "webrtc"], sortOrder: 21,
   },
   {
     categoryKey: "infrastructure", key: "infra.webrtc.stun_server", displayName: "STUN 服务器地址",
-    description: "WebRTC STUN 服务器 URL", valueType: "url", defaultValue: "stun:stun.l.google.com:19302",
+    description: "WebRTC STUN 服务器 URL", valueType: "url", defaultValue: "stun:47.243.254.248:3478",
     isSecret: false, isOverridable: false, allowedScopes: ["global"], tags: ["server", "webrtc"], sortOrder: 22,
   },
   {
     categoryKey: "infrastructure", key: "infra.webrtc.enabled", displayName: "WebRTC 启用",
-    description: "是否启用 WebRTC P2P 通信", valueType: "boolean", defaultValue: "false",
+    description: "是否启用 WebRTC P2P 通信", valueType: "boolean", defaultValue: "true",
     isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "webrtc"], sortOrder: 23,
   },
 
@@ -966,6 +966,85 @@ export const DEFINITIONS: ConfigDefinitionSeed[] = [
     description: "远程 ADB 命令默认超时（毫秒）", valueType: "number", defaultValue: "15000",
     validationRule: { min: 1000, max: 120000, required: true },
     isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group", "device"], tags: ["server", "remote"], sortOrder: 11,
+  },
+
+  // ═══ AI ASSISTANT ═══
+  {
+    categoryKey: "ai_models", key: "assistant.brain.model", displayName: "Brain 模型",
+    description: "AI Assistant Brain Agent 使用的推理模型", valueType: "enum", defaultValue: "deepseek-v4-flash",
+    enumOptions: [
+      { label: "DeepSeek-V4-Flash (推荐)", value: "deepseek-v4-flash" },
+      { label: "DeepSeek-Chat (V4)", value: "deepseek-chat" },
+      { label: "DeepSeek-Reasoner", value: "deepseek-reasoner" },
+    ],
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group"], tags: ["server", "assistant"], sortOrder: 17,
+  },
+  {
+    categoryKey: "ai_models", key: "assistant.vision.model", displayName: "Vision 模型",
+    description: "AI Assistant Phone Agent 屏幕理解模型", valueType: "enum", defaultValue: "qwen3-vl-plus",
+    enumOptions: [
+      { label: "Qwen3-VL-Plus (推荐)", value: "qwen3-vl-plus" },
+      { label: "Qwen3-VL-Flash", value: "qwen3-vl-flash" },
+      { label: "Qwen3-VL-Max", value: "qwen3-vl-max" },
+    ],
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group"], tags: ["server", "assistant"], sortOrder: 18,
+  },
+  {
+    categoryKey: "billing", key: "assistant.credits.min_chat", displayName: "Chat 最低积分",
+    description: "使用 Brain Agent 文本推理的最低积分要求", valueType: "number", defaultValue: "1",
+    validationRule: { min: 0, max: 100, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template"], tags: ["server", "assistant"], sortOrder: 3,
+  },
+  {
+    categoryKey: "billing", key: "assistant.credits.min_vision", displayName: "Vision 最低积分",
+    description: "使用 Phone Agent 视觉推理的最低积分要求", valueType: "number", defaultValue: "2",
+    validationRule: { min: 0, max: 100, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template"], tags: ["server", "assistant"], sortOrder: 4,
+  },
+  {
+    categoryKey: "billing", key: "assistant.credits.default_input_rate", displayName: "默认输入积分率",
+    description: "未知模型的默认输入 Token/积分 汇率", valueType: "number", defaultValue: "5000",
+    validationRule: { min: 100, max: 100000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "assistant"], sortOrder: 5,
+  },
+  {
+    categoryKey: "billing", key: "assistant.credits.default_output_rate", displayName: "默认输出积分率",
+    description: "未知模型的默认输出 Token/积分 汇率", valueType: "number", defaultValue: "2000",
+    validationRule: { min: 100, max: 100000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "assistant"], sortOrder: 6,
+  },
+  {
+    categoryKey: "task", key: "assistant.max_steps_per_session", displayName: "最大会话步数",
+    description: "AI Assistant 单次会话的最大推理步数", valueType: "number", defaultValue: "50",
+    validationRule: { min: 1, max: 500, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group"], tags: ["server", "assistant"], sortOrder: 12,
+  },
+  {
+    categoryKey: "task", key: "assistant.step_timeout_ms", displayName: "单步超时",
+    description: "AI Assistant 单步推理最大等待时间（毫秒）", valueType: "number", defaultValue: "30000",
+    validationRule: { min: 5000, max: 120000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group"], tags: ["server", "assistant"], sortOrder: 13,
+  },
+  {
+    categoryKey: "feature_flags", key: "ff.ai_assistant", displayName: "AI 助手",
+    description: "启用移动端 AI Assistant 功能 (Brain + Phone Agent)", valueType: "boolean", defaultValue: "true",
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group"], tags: ["server"], sortOrder: 13,
+  },
+  {
+    categoryKey: "feature_flags", key: "ff.ai_assistant_vision", displayName: "AI 助手视觉",
+    description: "启用 Phone Agent 屏幕视觉理解 (需要 QwenVL API)", valueType: "boolean", defaultValue: "true",
+    isSecret: false, isOverridable: true, allowedScopes: ["global", "plan", "template", "group"], tags: ["server"], sortOrder: 14,
+  },
+  {
+    categoryKey: "feature_flags", key: "ff.ai_assistant_credits", displayName: "AI 助手积分制",
+    description: "启用积分消耗系统 (关闭则免费使用)", valueType: "boolean", defaultValue: "true",
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server"], sortOrder: 15,
+  },
+  {
+    categoryKey: "billing", key: "assistant.free_daily_sessions", displayName: "免费每日会话",
+    description: "免费套餐每日允许的 AI Assistant 会话次数", valueType: "number", defaultValue: "10",
+    validationRule: { min: 0, max: 1000, required: true },
+    isSecret: false, isOverridable: true, allowedScopes: ["global"], tags: ["server", "assistant"], sortOrder: 7,
   },
 
   // ═══ HARD-CODED CONSTANTS — Server Health ═══

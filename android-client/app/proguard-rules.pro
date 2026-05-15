@@ -282,5 +282,5 @@
 # Merge similar classes to reduce DEX count
 # ============================================================================
 -mergeinterfacesaggressively
--repackageclasses com.phonefarm.client.internal
+# -repackageclasses removed — breaks AndroidManifest component class references
 -allowaccessmodification

@@ -36,20 +36,23 @@ export async function deviceRoutes(app: FastifyInstance) {
     return { ...device, online };
   });
 
-  // Send command to device (moved to remote/remote-command-routes.ts)
-  // app.post<{ Params: { id: string } }>('/api/v1/devices/:id/command', async (req, reply) => {
-  //   const body = sendCommandSchema.parse(req.body);
-  //   const [device] = await db.select().from(devices).where(eq(devices.id, req.params.id));
-  //   if (!device) {
-  //     return reply.status(404).send({ error: 'Device not found' });
-  //   }
-  //   const sent = wsHub.sendToDevice(device.id, {
-  //     type: 'command',
-  //     action: body.action,
-  //     params: body.params || {},
-  //   });
-  //   return { success: sent };
-  // });
+  // Android: POST /api/v1/device/heartbeat — REST-based device heartbeat
+  app.post('/api/v1/device/heartbeat', async (req, reply) => {
+    const { deviceId, timestamp, batteryLevel, batteryCharging, screenOn, currentPackage, activeTaskCount, memoryMb, cpuUsage } =
+      req.body as Record<string, any>;
+    if (!deviceId) return reply.status(400).send({ error: 'deviceId required' });
+    try {
+      await db.update(devices).set({
+        battery: batteryLevel ?? null,
+        screenOn: screenOn ?? null,
+        currentApp: currentPackage ?? null,
+        lastSeen: new Date(),
+        updatedAt: new Date(),
+        metadata: { batteryCharging, activeTaskCount, memoryMb, cpuUsage },
+      }).where(eq(devices.id, deviceId));
+    } catch { /* device may not exist yet — heartbeat will create it on WS connect */ }
+    return reply.send({ ok: true, serverTime: Date.now() });
+  });
 }
 
 export async function taskRoutes(app: FastifyInstance) {
@@ -148,6 +151,30 @@ export async function taskRoutes(app: FastifyInstance) {
       .where(eq(executions.taskId, req.params.id))
       .orderBy(desc(executions.createdAt))
       .limit(50);
+  });
+
+  // Android: POST /api/v1/tasks/:taskId/result — report task execution result
+  app.post('/api/v1/tasks/:taskId/result', async (req, reply) => {
+    const { taskId } = req.params as { taskId: string };
+    const { success, stats, errorMessage, durationMs } = req.body as {
+      taskId?: string; success?: boolean; stats?: Record<string, string>;
+      errorMessage?: string; durationMs?: number;
+    };
+    try {
+      const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId));
+      if (!task) return reply.status(404).send({ error: 'Task not found' });
+      await db.insert(executions).values({
+        taskId,
+        deviceId: task.deviceId ?? '00000000-0000-0000-0000-000000000000',
+        status: success ? 'completed' : 'failed',
+        errorMessage: errorMessage ?? null,
+        finishedAt: new Date(),
+        stats: stats ?? {},
+      });
+    } catch (err: any) {
+      return reply.status(500).send({ error: `Failed to record result: ${err.message}` });
+    }
+    return reply.send({ recorded: true, taskId, status: success ? 'completed' : 'failed' });
   });
 }
 

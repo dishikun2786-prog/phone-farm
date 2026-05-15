@@ -1,6 +1,6 @@
+import { useEffect, useState, useRef } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useStore } from '../store';
-import { useState, useEffect, useRef } from 'react';
 import ConnectivityBadge from './ConnectivityBadge';
 import type { ConnectionState } from '../hooks/useWebSocket';
 import {
@@ -59,6 +59,27 @@ export default function Layout({ children, connectionState }: { children: React.
     setAdminMenuOpen(false);
     setMobileMenuOpen(false);
   }, [location.pathname]);
+
+  // Whitelabel theme CSS injection
+  useEffect(() => {
+    let styleEl = document.getElementById('whitelabel-theme') as HTMLStyleElement | null;
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'whitelabel-theme';
+      document.head.appendChild(styleEl);
+    }
+
+    const controller = new AbortController();
+    fetch('/api/v2/whitelabel/theme.css', { signal: controller.signal })
+      .then(res => res.text())
+      .then(css => { styleEl!.textContent = css; })
+      .catch(() => {}); // Silently ignore — non-critical cosmetic feature
+
+    return () => {
+      controller.abort();
+      if (styleEl) styleEl.textContent = '';
+    };
+  }, [user?.userId]);
 
   const handleLogout = () => {
     logout();

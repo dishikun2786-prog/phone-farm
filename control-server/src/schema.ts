@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, integer, boolean, timestamp, jsonb, text, pgEnum } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, integer, boolean, timestamp, jsonb, text, pgEnum, index } from 'drizzle-orm/pg-core';
 
 export const platformEnum = pgEnum('platform', ['dy', 'ks', 'wx', 'xhs']);
 export const deviceStatusEnum = pgEnum('device_status', ['online', 'offline', 'busy', 'error']);
@@ -7,6 +7,7 @@ export const scriptValidationEnum = pgEnum('script_validation', ['untested', 'pa
 
 export const devices = pgTable('devices', {
   id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
   name: varchar('name', { length: 128 }).notNull(),
   publicIp: varchar('public_ip', { length: 45 }).notNull(),
   deekeVersion: varchar('deeke_version', { length: 32 }),
@@ -20,10 +21,14 @@ export const devices = pgTable('devices', {
   metadata: jsonb('metadata').default({}),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_devices_last_seen').on(table.lastSeen),
+  index('idx_devices_status').on(table.status),
+]);
 
 export const accounts = pgTable('accounts', {
   id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
   platform: platformEnum('platform').notNull(),
   username: varchar('username', { length: 256 }).notNull(),
   passwordEncrypted: text('password_encrypted').notNull(),
@@ -36,6 +41,7 @@ export const accounts = pgTable('accounts', {
 
 export const taskTemplates = pgTable('task_templates', {
   id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
   name: varchar('name', { length: 256 }).notNull(),
   platform: platformEnum('platform').notNull(),
   scriptName: varchar('script_name', { length: 256 }).notNull(),
@@ -46,6 +52,7 @@ export const taskTemplates = pgTable('task_templates', {
 
 export const tasks = pgTable('tasks', {
   id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
   name: varchar('name', { length: 256 }).notNull(),
   templateId: uuid('template_id').references(() => taskTemplates.id),
   deviceId: uuid('device_id').references(() => devices.id, { onDelete: 'cascade' }),
@@ -55,10 +62,14 @@ export const tasks = pgTable('tasks', {
   enabled: boolean('enabled').default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_tasks_device').on(table.deviceId),
+  index('idx_tasks_template').on(table.templateId),
+]);
 
 export const executions = pgTable('executions', {
   id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
   taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'cascade' }).notNull(),
   deviceId: uuid('device_id').references(() => devices.id, { onDelete: 'cascade' }).notNull(),
   status: executionStatusEnum('status').default('pending').notNull(),
@@ -68,20 +79,50 @@ export const executions = pgTable('executions', {
   logs: jsonb('logs').default([]),
   errorMessage: text('error_message'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_executions_task').on(table.taskId),
+  index('idx_executions_device').on(table.deviceId),
+  index('idx_executions_created').on(table.createdAt),
+  index('idx_executions_started').on(table.startedAt),
+  index('idx_executions_status').on(table.status),
+]);
+
+export const userStatusEnum = pgEnum('user_status', ['active', 'disabled', 'deleted']);
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
   username: varchar('username', { length: 128 }).unique().notNull(),
   passwordHash: varchar('password_hash', { length: 256 }).notNull(),
   role: varchar('role', { length: 32 }).default('operator').notNull(),
+  phone: varchar('phone', { length: 20 }).unique(),
+  phoneVerified: boolean('phone_verified').default(false),
+  status: userStatusEnum('status').default('active').notNull(),
+  lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+// ── SMS Verification Codes ──
+
+export const smsCodes = pgTable('sms_codes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
+  phone: varchar('phone', { length: 20 }).notNull(),
+  code: varchar('code', { length: 6 }).notNull(),
+  scene: varchar('scene', { length: 32 }).notNull(), // register, login, reset_password, bind
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  used: boolean('used').default(false).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_sms_codes_phone_scene').on(table.phone, table.scene),
+]);
 
 // ── VLM Agent tables ──
 
 export const vlmEpisodes = pgTable('vlm_episodes', {
   id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
   taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'set null' }),
   deviceId: uuid('device_id').references(() => devices.id, { onDelete: 'cascade' }).notNull(),
   modelName: varchar('model_name', { length: 128 }).notNull(),
@@ -93,10 +134,16 @@ export const vlmEpisodes = pgTable('vlm_episodes', {
   startedAt: timestamp('started_at', { withTimezone: true }),
   finishedAt: timestamp('finished_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_vlm_episodes_task').on(table.taskId),
+  index('idx_vlm_episodes_device').on(table.deviceId),
+  index('idx_vlm_episodes_created').on(table.createdAt),
+  index('idx_vlm_episodes_status').on(table.status),
+]);
 
 export const vlmSteps = pgTable('vlm_steps', {
   id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
   episodeId: uuid('episode_id').references(() => vlmEpisodes.id, { onDelete: 'cascade' }).notNull(),
   stepIndex: integer('step_index').notNull(),
   screenshotPath: varchar('screenshot_path', { length: 512 }),
@@ -107,10 +154,13 @@ export const vlmSteps = pgTable('vlm_steps', {
   success: boolean('success').default(true),
   durationMs: integer('duration_ms'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_vlm_steps_episode').on(table.episodeId),
+]);
 
 export const vlmScripts = pgTable('vlm_scripts', {
   id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
   episodeId: uuid('episode_id').references(() => vlmEpisodes.id, { onDelete: 'set null' }),
   name: varchar('name', { length: 256 }).notNull(),
   platform: platformEnum('platform').notNull(),
@@ -126,6 +176,8 @@ export const vlmScripts = pgTable('vlm_scripts', {
 
 export const cardKeys = pgTable('card_keys', {
   id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
+  batchId: uuid('batch_id'),
   code: varchar('code', { length: 64 }).unique().notNull(),
   days: integer('days').notNull(),
   maxDevices: integer('max_devices').default(1).notNull(),
@@ -139,6 +191,7 @@ export const cardKeys = pgTable('card_keys', {
 
 export const deviceBindings = pgTable('device_bindings', {
   id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
   cardKeyId: uuid('card_key_id').references(() => cardKeys.id, { onDelete: 'cascade' }).notNull(),
   deviceId: varchar('device_id', { length: 256 }).notNull(),
   deviceName: varchar('device_name', { length: 256 }).notNull(),
@@ -150,6 +203,7 @@ export const deviceBindings = pgTable('device_bindings', {
 
 export const deviceGroups = pgTable('device_groups', {
   id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
   name: varchar('name', { length: 256 }).notNull(),
   description: text('description'),
   deviceIds: jsonb('device_ids').default([]).notNull(),
@@ -162,6 +216,7 @@ export const deviceGroups = pgTable('device_groups', {
 
 export const platformAccounts = pgTable('platform_accounts', {
   id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
   platform: platformEnum('platform').notNull(),
   username: varchar('username', { length: 256 }).notNull(),
   passwordEncrypted: text('password_encrypted').notNull(),
@@ -176,6 +231,7 @@ export const platformAccounts = pgTable('platform_accounts', {
 
 export const apiKeys = pgTable('api_keys', {
   id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
   userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
   name: varchar('name', { length: 256 }).notNull(),
   keyPrefix: varchar('key_prefix', { length: 32 }).notNull(),
@@ -188,12 +244,16 @@ export const apiKeys = pgTable('api_keys', {
   expiresAt: timestamp('expires_at', { withTimezone: true }),
   enabled: boolean('enabled').default(true).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_api_keys_hash').on(table.keyHash),
+  index('idx_api_keys_user').on(table.userId),
+]);
 
 // ── Cron Jobs ──
 
 export const cronJobs = pgTable('cron_jobs', {
   id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
   taskId: uuid('task_id').references(() => tasks.id, { onDelete: 'cascade' }),
   cronExpr: varchar('cron_expr', { length: 128 }).notNull(),
   deviceIds: jsonb('device_ids').default([]).notNull(),
@@ -207,6 +267,7 @@ export const cronJobs = pgTable('cron_jobs', {
 
 export const crashReports = pgTable('crash_reports', {
   id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
   deviceId: varchar('device_id', { length: 256 }).notNull(),
   deviceName: varchar('device_name', { length: 256 }),
   appVersion: varchar('app_version', { length: 32 }),
@@ -224,6 +285,7 @@ export const crashReports = pgTable('crash_reports', {
 
 export const accountDeletions = pgTable('account_deletions', {
   id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
   userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
   username: varchar('username', { length: 128 }),
   requestedAt: timestamp('requested_at', { withTimezone: true }).defaultNow().notNull(),
@@ -235,6 +297,7 @@ export const accountDeletions = pgTable('account_deletions', {
 
 export const webhookConfigs = pgTable('webhook_configs', {
   id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
   url: varchar('url', { length: 1024 }).notNull(),
   events: jsonb('events').default([]).notNull(),
   secret: varchar('secret', { length: 256 }),
@@ -248,6 +311,7 @@ export const webhookConfigs = pgTable('webhook_configs', {
 
 export const alertRules = pgTable('alert_rules', {
   id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
   name: varchar('name', { length: 256 }).notNull(),
   type: varchar('type', { length: 32 }).notNull(), // device_offline, task_failure, battery_low, etc.
   conditions: jsonb('conditions').default({}).notNull(),
@@ -256,3 +320,195 @@ export const alertRules = pgTable('alert_rules', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+// ── Edge Memory (0002_edge_memory) ──
+
+export const deviceMemories = pgTable('device_memories', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
+  deviceId: text('device_id').notNull(),
+  platform: text('platform').notNull(),
+  pageType: text('page_type'),
+  scenario: text('scenario').notNull(),
+  stateSignature: text('state_signature').notNull(),
+  observation: text('observation').notNull(),
+  actionTaken: jsonb('action_taken').default({}).notNull(),
+  outcome: text('outcome').notNull(),
+  errorReason: text('error_reason'),
+  successCount: integer('success_count').default(1),
+  failCount: integer('fail_count').default(0),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+});
+
+export const experienceRules = pgTable('experience_rules', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
+  platform: text('platform').notNull(),
+  scenario: text('scenario').notNull(),
+  conditions: jsonb('conditions').default({}).notNull(),
+  autoAction: jsonb('auto_action').default({}).notNull(),
+  confidence: integer('confidence').default(0.5),
+  verifiedByDevices: integer('verified_by_devices').default(0),
+  totalSuccesses: integer('total_successes').default(0),
+  totalTrials: integer('total_trials').default(0),
+  enabled: boolean('enabled').default(true),
+  firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).defaultNow(),
+  lastVerifiedAt: timestamp('last_verified_at', { withTimezone: true }).defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+});
+
+// ── AI Assistant / Credits (0004_ai_assistant) ──
+
+export const userCredits = pgTable('user_credits', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).unique().notNull(),
+  balance: integer('balance').default(0).notNull(),
+  totalEarned: integer('total_earned').default(0).notNull(),
+  totalSpent: integer('total_spent').default(0).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const creditTransactions = pgTable('credit_transactions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  type: varchar('type', { length: 32 }).notNull(), // earn, spend, refund, bonus, admin_grant
+  amount: integer('amount').notNull(),
+  balanceAfter: integer('balance_after').notNull(),
+  scene: varchar('scene', { length: 64 }), // assistant_chat, card_activation, admin_grant
+  referenceId: uuid('reference_id'),
+  metadata: jsonb('metadata').default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_credit_tx_user').on(table.userId),
+  index('idx_credit_tx_scene').on(table.scene),
+  index('idx_credit_tx_created').on(table.createdAt),
+]);
+
+export const assistantSessions = pgTable('assistant_sessions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  deviceId: uuid('device_id').references(() => devices.id, { onDelete: 'set null' }),
+  title: varchar('title', { length: 256 }),
+  status: varchar('status', { length: 16 }).default('active'), // active, completed, stopped, error
+  totalTokens: integer('total_tokens').default(0).notNull(),
+  totalSteps: integer('total_steps').default(0).notNull(),
+  creditsSpent: integer('credits_spent').default(0).notNull(),
+  startedAt: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
+  endedAt: timestamp('ended_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_asst_session_user').on(table.userId),
+  index('idx_asst_session_device').on(table.deviceId),
+]);
+
+export const tokenPricing = pgTable('token_pricing', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
+  modelName: varchar('model_name', { length: 64 }).notNull(),
+  modelType: varchar('model_type', { length: 32 }).notNull(), // brain, vision
+  inputTokensPerCredit: integer('input_tokens_per_credit').notNull(),
+  outputTokensPerCredit: integer('output_tokens_per_credit').notNull(),
+  isActive: boolean('is_active').default(true).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+// ── Billing (0005_billing) ──
+
+export const billingPlans = pgTable('billing_plans', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
+  name: varchar('name', { length: 128 }).notNull(),
+  tier: varchar('tier', { length: 16 }).default('free').notNull(),
+  monthlyPriceCents: integer('monthly_price_cents').default(0),
+  maxDevices: integer('max_devices').default(1),
+  maxVlmCallsPerDay: integer('max_vlm_calls_per_day').default(100),
+  maxScriptExecutionsPerDay: integer('max_script_executions_per_day').default(500),
+  includesScreenStream: boolean('includes_screen_stream').default(false),
+  includesVlmAgent: boolean('includes_vlm_agent').default(false),
+  includesPrioritySupport: boolean('includes_priority_support').default(false),
+  monthlyAssistantCredits: integer('monthly_assistant_credits').default(0),
+  maxAssistantSessionsPerDay: integer('max_assistant_sessions_per_day').default(10),
+  features: jsonb('features').default([]),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const subscriptions = pgTable('subscriptions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  planId: uuid('plan_id').references(() => billingPlans.id, { onDelete: 'restrict' }).notNull(),
+  status: varchar('status', { length: 16 }).default('active').notNull(),
+  currentPeriodStart: timestamp('current_period_start', { withTimezone: true }).notNull(),
+  currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }).notNull(),
+  cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+  deviceCount: integer('device_count').default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_subscriptions_user').on(table.userId),
+  index('idx_subscriptions_plan').on(table.planId),
+  index('idx_subscriptions_period_end').on(table.currentPeriodEnd),
+  index('idx_subscriptions_status').on(table.status),
+]);
+
+export const orders = pgTable('orders', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  subscriptionId: uuid('subscription_id').references(() => subscriptions.id, { onDelete: 'set null' }),
+  amountCents: integer('amount_cents').notNull(),
+  currency: varchar('currency', { length: 3 }).default('CNY').notNull(),
+  status: varchar('status', { length: 16 }).default('pending').notNull(),
+  paymentMethod: varchar('payment_method', { length: 32 }),
+  paidAt: timestamp('paid_at', { withTimezone: true }),
+  metadata: jsonb('metadata').default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_orders_user').on(table.userId),
+  index('idx_orders_subscription').on(table.subscriptionId),
+  index('idx_orders_status').on(table.status),
+]);
+
+export const usageRecords = pgTable('usage_records', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  deviceId: uuid('device_id').references(() => devices.id, { onDelete: 'set null' }),
+  metric: varchar('metric', { length: 64 }).notNull(),
+  quantity: integer('quantity').default(1).notNull(),
+  recordedAt: timestamp('recorded_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_usage_user').on(table.userId),
+  index('idx_usage_metric').on(table.metric),
+  index('idx_usage_recorded').on(table.recordedAt),
+  index('idx_usage_user_metric').on(table.userId, table.metric),
+]);
+
+export const invoices = pgTable('invoices', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id'),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  orderId: uuid('order_id').references(() => orders.id, { onDelete: 'set null' }),
+  invoiceNumber: varchar('invoice_number', { length: 32 }).notNull(),
+  amountCents: integer('amount_cents').notNull(),
+  currency: varchar('currency', { length: 3 }).default('CNY').notNull(),
+  status: varchar('status', { length: 16 }).default('draft').notNull(),
+  issuedAt: timestamp('issued_at', { withTimezone: true }),
+  dueDate: timestamp('due_date', { withTimezone: true }),
+  paidAt: timestamp('paid_at', { withTimezone: true }),
+  pdfUrl: varchar('pdf_url', { length: 1024 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('idx_invoices_user').on(table.userId),
+  index('idx_invoices_order').on(table.orderId),
+  index('idx_invoices_status').on(table.status),
+]);

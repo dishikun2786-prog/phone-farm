@@ -2,6 +2,7 @@
  * PhoneFarm Alert Engine — Evaluates alert rules against device/event metrics.
  * Supports: device offline > N min, task failure rate > X%, activation expiring, storage low, CPU/mem overload.
  */
+import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
 export type AlertMetric =
@@ -44,6 +45,7 @@ export interface AlertHistory {
 export class AlertEngine {
   private rules = new Map<string, AlertRule>();
   private history: AlertHistory[] = [];
+  private readonly MAX_HISTORY = 1000;
   private firingAlerts = new Map<string, AlertHistory>();
   private evaluationInterval: ReturnType<typeof setInterval> | null = null;
   private fastify: FastifyInstance;
@@ -52,9 +54,38 @@ export class AlertEngine {
     this.fastify = fastify;
   }
 
+  /** Load rules from DB on startup. */
+  async initialize(): Promise<void> {
+    try {
+      const { db } = await import("../db.js");
+      const { alertRules } = await import("../schema.js");
+      const rows = await db.select().from(alertRules).where(eq(alertRules.enabled, true));
+      this.rules.clear();
+      for (const row of rows) {
+        this.rules.set(row.id, {
+          id: row.id,
+          name: row.name,
+          metric: row.type as AlertMetric,
+          operator: (row.conditions as any)?.operator ?? "gt",
+          threshold: (row.conditions as any)?.threshold ?? 0,
+          durationMs: (row.conditions as any)?.durationMs ?? 60000,
+          channels: (row.channels as AlertChannel[]) ?? ["dashboard"],
+          enabled: row.enabled ?? false,
+          createdAt: row.createdAt ? new Date(row.createdAt).getTime() : Date.now(),
+          updatedAt: row.updatedAt ? new Date(row.updatedAt).getTime() : undefined,
+        });
+      }
+      this.fastify.log.info(`[AlertEngine] Loaded ${rows.length} alert rules from DB`);
+    } catch {
+      this.fastify.log.warn("[AlertEngine] Could not load rules from DB — table may not exist yet");
+    }
+  }
+
   start(evaluationIntervalMs = 30000): void {
-    this.evaluationInterval = setInterval(() => this.evaluate(), evaluationIntervalMs);
-    this.fastify.log.info("[AlertEngine] Started evaluation loop");
+    this.initialize().then(() => {
+      this.evaluationInterval = setInterval(() => this.evaluate(), evaluationIntervalMs);
+      this.fastify.log.info("[AlertEngine] Started evaluation loop");
+    });
   }
 
   stop(): void {
@@ -71,12 +102,32 @@ export class AlertEngine {
     }
   }
 
-  addRule(rule: AlertRule): void {
+  /** Add rule to memory and persist to DB. */
+  async addRule(rule: AlertRule): Promise<void> {
     this.rules.set(rule.id, rule);
+    try {
+      const { db } = await import("../db.js");
+      const { alertRules } = await import("../schema.js");
+      await db.insert(alertRules).values({
+        id: rule.id,
+        name: rule.name,
+        type: rule.metric,
+        conditions: { operator: rule.operator, threshold: rule.threshold, durationMs: rule.durationMs },
+        channels: rule.channels,
+        enabled: rule.enabled,
+      }).onConflictDoNothing();
+    } catch { /* best-effort DB persistence */ }
   }
 
-  removeRule(id: string): void {
+  /** Remove rule from memory and DB. */
+  async removeRule(id: string): Promise<void> {
     this.rules.delete(id);
+    try {
+      const { db } = await import("../db.js");
+      const { eq } = await import("drizzle-orm");
+      const { alertRules: table } = await import("../schema.js");
+      await db.delete(table).where(eq(table.id, id));
+    } catch { /* best-effort */ }
   }
 
   getRules(): AlertRule[] {
@@ -118,6 +169,9 @@ export class AlertEngine {
     };
 
     this.history.push(alert);
+    if (this.history.length > this.MAX_HISTORY) {
+      this.history = this.history.slice(-this.MAX_HISTORY);
+    }
     this.firingAlerts.set(rule.id, alert);
 
     this.fastify.log.warn(`[AlertEngine] FIRING: ${alert.message}`);

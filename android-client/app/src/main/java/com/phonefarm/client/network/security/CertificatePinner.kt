@@ -16,13 +16,15 @@ import okhttp3.CertificatePinner
  */
 object CertificatePinnerFactory {
 
-    // Cloudflare edge certificate (Google Trust Services WE1) — expires 2026-07-03
-    private const val CLOUDFLARE_EDGE_PIN =
-        "sha256/Ne5iCXIYr1PAn3QMIJOUlerhMjil/BpZiKcUFezYjzA="
-
-    // Backup: Google Trust Services root CA R4
+    // Google Trust Services root CA R4 — permanent, does not expire.
+    // cloudflare uses GTS as CA, so pinning the root validates any GTS-issued cert.
     private const val GTS_ROOT_R4_PIN =
         "sha256/hUqBGNNDFzl2BnemMsKbD7qAuQ1tGlpOXkMRcZqTqOs="
+
+    // Cloudflare edge certificate (GTS WE1 leaf) — expires 2026-07-03.
+    // Secondary pin; remove or replace with current edge cert hash after renewal.
+    private const val CLOUDFLARE_EDGE_PIN =
+        "sha256/Ne5iCXIYr1PAn3QMIJOUlerhMjil/BpZiKcUFezYjzA="
 
     /**
      * Create a CertificatePinner for the production server.
@@ -36,8 +38,8 @@ object CertificatePinnerFactory {
         }
 
         return CertificatePinner.Builder()
-            .add("phone.openedskill.com", CLOUDFLARE_EDGE_PIN, GTS_ROOT_R4_PIN)
-            .add("*.openedskill.com", CLOUDFLARE_EDGE_PIN, GTS_ROOT_R4_PIN)
+            .add("phone.openedskill.com", GTS_ROOT_R4_PIN, CLOUDFLARE_EDGE_PIN)
+            .add("*.openedskill.com", GTS_ROOT_R4_PIN, CLOUDFLARE_EDGE_PIN)
             .build()
     }
 }

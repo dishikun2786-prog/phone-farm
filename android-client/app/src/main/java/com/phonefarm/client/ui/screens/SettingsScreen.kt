@@ -14,13 +14,13 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.phonefarm.client.network.ApiService
 import com.phonefarm.client.ui.components.*
 import com.phonefarm.client.ui.theme.AccentColor
 import com.phonefarm.client.ui.theme.Error
 import com.phonefarm.client.ui.theme.Success
 import com.phonefarm.client.BuildConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,9 +29,9 @@ import javax.inject.Inject
 
 data class SettingsUiState(
     val serverUrl: String = BuildConfig.API_BASE_URL,
-    val serverStatus: String = "已连接",
-    val serverLatency: Long = 42,
-    val deviceName: String = "Pixel 7 Pro",
+    val serverStatus: String = "检查中...",
+    val serverLatency: Long = 0,
+    val deviceName: String = android.os.Build.MODEL,
     val heartbeatInterval: Int = 30,
     val screenshotQuality: Int = 80,
     val vlmMode: String = "cloud",
@@ -40,12 +40,12 @@ data class SettingsUiState(
     val darkMode: ThemeMode = ThemeMode.SYSTEM,
     val glassEnabled: Boolean = true,
     val fontScale: Float = 1.0f,
-    val installedModels: List<String> = listOf("Qwen3-VL-2B-q4", "AutoGLM-Phone-9B"),
-    val storageUsed: Long = 3_200_000_000,
-    val storageTotal: Long = 16_000_000_000,
-    val installedPlugins: List<String> = listOf("PluginEngine 1.0", "scrcpy 2.7"),
-    val lastSyncTime: String = "2026-05-12 14:30",
-    val appVersion: String = "1.0.0",
+    val installedModels: List<String> = emptyList(),
+    val storageUsed: Long = 0,
+    val storageTotal: Long = 0,
+    val installedPlugins: List<String> = emptyList(),
+    val lastSyncTime: String = "—",
+    val appVersion: String = BuildConfig.VERSION_NAME,
     val showDeleteDialog: Boolean = false,
     val showDeregisterDialog: Boolean = false,
 )
@@ -53,9 +53,13 @@ data class SettingsUiState(
 enum class ThemeMode(val label: String) { LIGHT("浅色"), DARK("深色"), SYSTEM("跟随系统") }
 
 @HiltViewModel
-class SettingsViewModel @Inject constructor() : ViewModel() {
+class SettingsViewModel @Inject constructor(
+    private val apiService: ApiService,
+) : ViewModel() {
     private val _ui = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _ui.asStateFlow()
+
+    init { testConnection() }
 
     fun updateServerUrl(url: String) { _ui.value = _ui.value.copy(serverUrl = url) }
     fun setThemeMode(mode: ThemeMode) { _ui.value = _ui.value.copy(darkMode = mode) }
@@ -67,22 +71,45 @@ class SettingsViewModel @Inject constructor() : ViewModel() {
     fun testConnection() {
         viewModelScope.launch {
             _ui.value = _ui.value.copy(serverStatus = "检查中...")
-            delay(1000)
-            _ui.value = _ui.value.copy(serverStatus = "已连接", serverLatency = (30..80).random().toLong())
+            try {
+                val startTime = System.currentTimeMillis()
+                val health = apiService.healthCheck()
+                val elapsed = System.currentTimeMillis() - startTime
+                _ui.value = _ui.value.copy(
+                    serverStatus = if (health.status == "ok") "已连接" else "异常",
+                    serverLatency = elapsed,
+                )
+            } catch (e: Exception) {
+                _ui.value = _ui.value.copy(
+                    serverStatus = "连接失败",
+                    serverLatency = 0,
+                )
+            }
         }
     }
 
     fun reconnect() {
         viewModelScope.launch {
             _ui.value = _ui.value.copy(serverStatus = "重连中...")
-            delay(1500)
-            _ui.value = _ui.value.copy(serverStatus = "已连接")
+            try {
+                val health = apiService.healthCheck()
+                _ui.value = _ui.value.copy(
+                    serverStatus = if (health.status == "ok") "已连接" else "异常",
+                )
+            } catch (e: Exception) {
+                _ui.value = _ui.value.copy(serverStatus = "重连失败")
+            }
         }
     }
 
     fun manualSync() {
         viewModelScope.launch {
-            _ui.value = _ui.value.copy(lastSyncTime = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date()))
+            try {
+                apiService.getScriptManifest()
+                _ui.value = _ui.value.copy(
+                    lastSyncTime = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date()),
+                )
+            } catch (_: Exception) { }
         }
     }
 

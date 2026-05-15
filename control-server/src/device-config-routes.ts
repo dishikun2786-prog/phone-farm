@@ -2,6 +2,7 @@
  * PhoneFarm Device Configuration Routes — 设备云端配置拉取 + 管理端配置推送
  */
 import type { FastifyInstance } from "fastify";
+import { config } from "../config.js";
 
 export interface DeviceConfig {
   device: {
@@ -17,6 +18,13 @@ export interface DeviceConfig {
     serverUrl: string;
     reconnectBaseMs: number;
     reconnectMaxMs: number;
+  };
+  webrtc: {
+    enabled: boolean;
+    turnServerUrl: string;
+    turnUsername: string;
+    turnCredential: string;
+    stunServerUrl: string;
   };
   vlm: {
     routing: {
@@ -76,6 +84,13 @@ const DEFAULT_CONFIG: DeviceConfig = {
     serverUrl: "",
     reconnectBaseMs: 2000,
     reconnectMaxMs: 60000,
+  },
+  webrtc: {
+    enabled: config.WEBRTC_ENABLED,
+    turnServerUrl: config.TURN_SERVER_URL,
+    turnUsername: config.TURN_USERNAME,
+    turnCredential: config.TURN_CREDENTIAL,
+    stunServerUrl: config.STUN_SERVER_URL,
   },
   vlm: {
     routing: {

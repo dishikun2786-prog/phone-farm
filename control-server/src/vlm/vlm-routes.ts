@@ -36,6 +36,17 @@ export interface WsHubLike {
 const activeTasks = new Map<string, VlmOrchestrator>();
 const completedTasks = new Map<string, VlmTaskResult>();
 
+/** Step buffer for REST-reported VLM steps (Android posts steps via REST, not WS) */
+interface BufferedStep {
+  stepNumber: number;
+  screenshotBase64: string;
+  modelThinking: string;
+  actionJson: string;
+  durationMs: number;
+  recordedAt: string;
+}
+const episodeStepBuffer = new Map<string, BufferedStep[]>();
+
 /** In-memory store for compiled scripts (prod: replace with vlm_scripts DB table) */
 interface StoredScript {
   id: string;
@@ -143,6 +154,32 @@ export function registerVlmRoutes(
 
     // Also enrich disk episodes with active/completed data from in-memory if relevant
     return [...inMemory, ...diskWithSource];
+  });
+
+  // Android: POST /api/v1/vlm/episodes/:episodeId/steps — report VLM step
+  app.post('/api/v1/vlm/episodes/:episodeId/steps', async (req, reply) => {
+    const { episodeId } = req.params as { episodeId: string };
+    const { stepNumber, screenshotBase64, modelThinking, actionJson, durationMs } = req.body as {
+      episodeId?: string; stepNumber?: number; screenshotBase64?: string;
+      modelThinking?: string; actionJson?: string; durationMs?: number;
+    };
+    // Buffer the step in memory; flush to disk when episode compiles/ends
+    const buffer = episodeStepBuffer.get(episodeId) ?? [];
+    buffer.push({
+      stepNumber: stepNumber ?? 0,
+      screenshotBase64: screenshotBase64 ?? '',
+      modelThinking: modelThinking ?? '',
+      actionJson: actionJson ?? '{}',
+      durationMs: durationMs ?? 0,
+      recordedAt: new Date().toISOString(),
+    });
+    episodeStepBuffer.set(episodeId, buffer);
+    // Auto-clean old buffers (>1000 steps total across all episodes)
+    if (episodeStepBuffer.size > 50) {
+      const oldest = [...episodeStepBuffer.keys()].slice(0, 10);
+      for (const k of oldest) episodeStepBuffer.delete(k);
+    }
+    return reply.send({ recorded: true, episodeId, step: stepNumber });
   });
 
   // ── GET /vlm/episodes/:id — Episode detail with steps ──

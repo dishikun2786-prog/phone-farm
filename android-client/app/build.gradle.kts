@@ -218,6 +218,9 @@ dependencies {
     // WebRTC (Phase 2 — P2P communication)
     implementation(libs.webrtc.core)
 
+    // Pinyin4j — Chinese pinyin for smart app search
+    implementation("com.belerweb:pinyin4j:2.5.1")
+
     // NATS Java Client (Phase 2 — state sync)
     implementation(libs.jnats)
 

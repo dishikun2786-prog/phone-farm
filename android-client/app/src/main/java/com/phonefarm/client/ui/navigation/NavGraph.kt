@@ -22,7 +22,12 @@ import com.phonefarm.client.ui.components.QuickActionFab
 import com.phonefarm.client.ui.screens.*
 
 object Routes {
+    const val SPLASH = "splash"
+    const val ACTIVATION = "activation"
+    const val PERMISSION_GUIDE = "permissionGuide"
     const val MAIN = "main"
+    const val LOGIN = "login"
+    const val REGISTER = "register"
     const val VLM_AGENT = "vlmAgent"
     const val SCRIPT_MANAGER = "scriptManager"
     const val SCRIPT_EDITOR = "scriptEditor/{scriptId}"
@@ -36,6 +41,12 @@ object Routes {
     const val DATA_USAGE = "dataUsage"
     const val PRIVACY = "privacy"
     const val HELP = "help"
+    const val ASSISTANT = "assistant"
+    const val ACCOUNT_CENTER = "accountCenter"
+    const val UPGRADE_PLAN = "upgradePlan"
+    const val USAGE_STATS = "usageStats"
+    const val SUPPORT_CENTER = "supportCenter"
+    const val AGENT_DASHBOARD = "agentDashboard"
 
     fun episodeReplay(id: String) = "episodeReplay/$id"
     fun scriptEditor(id: String) = "scriptEditor/$id"
@@ -45,7 +56,47 @@ private const val T_DUR = 300
 
 @Composable
 fun NavGraph(navController: NavHostController = rememberNavController()) {
-    NavHost(navController = navController, startDestination = Routes.MAIN) {
+    NavHost(navController = navController, startDestination = Routes.SPLASH) {
+
+        // ==============================
+        // Onboarding flow
+        // ==============================
+        composable(Routes.SPLASH) {
+            SplashScreen(
+                onNavigate = { destination ->
+                    val route = when (destination) {
+                        SplashDestination.ACTIVATION -> Routes.ACTIVATION
+                        SplashDestination.PERMISSION_GUIDE -> Routes.PERMISSION_GUIDE
+                        SplashDestination.LOGIN -> Routes.LOGIN
+                        SplashDestination.HOME -> Routes.MAIN
+                    }
+                    navController.navigate(route) {
+                        popUpTo(Routes.SPLASH) { inclusive = true }
+                    }
+                },
+            )
+        }
+
+        composable(Routes.ACTIVATION) {
+            ActivationScreen(
+                onBack = { navController.popBackStack() },
+                onActivationSuccess = {
+                    navController.navigate(Routes.PERMISSION_GUIDE) {
+                        popUpTo(Routes.ACTIVATION) { inclusive = true }
+                    }
+                },
+            )
+        }
+
+        composable(Routes.PERMISSION_GUIDE) {
+            PermissionGuideScreen(
+                onAllComplete = {
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(Routes.SPLASH) { inclusive = true }
+                    }
+                },
+            )
+        }
 
         // ==============================
         // Main scaffold with 3-tab bottom nav
@@ -83,6 +134,15 @@ fun NavGraph(navController: NavHostController = rememberNavController()) {
                         QuickActionFab(
                             modifier = Modifier.padding(bottom = 64.dp, end = 16.dp),
                             actions = listOf(
+                                FabAction(
+                                    label = "AI Assistant",
+                                    color = androidx.compose.ui.graphics.Color(0xFF1565C0),
+                                    onClick = {
+                                        val ctx = navController.context
+                                        ctx.startActivity(android.content.Intent(ctx, com.phonefarm.client.assistant.AssistantActivity::class.java))
+                                    },
+                                    icon = Icons.Default.Psychology,
+                                ),
                                 FabAction(
                                     label = "VLM Agent",
                                     color = androidx.compose.ui.graphics.Color(0xFF7C4DFF),
@@ -140,6 +200,33 @@ fun NavGraph(navController: NavHostController = rememberNavController()) {
         // ==============================
         // Pushed screens
         // ==============================
+        composable(Routes.LOGIN) {
+            LoginScreen(
+                onLoginSuccess = {
+                    navController.navigate(Routes.MAIN) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
+                onNavigateToRegister = { navController.navigate(Routes.REGISTER) },
+                onNavigateToPermissionGuide = {
+                    navController.navigate(Routes.PERMISSION_GUIDE) {
+                        popUpTo(Routes.LOGIN) { inclusive = true }
+                    }
+                },
+            )
+        }
+
+        composable(Routes.REGISTER) {
+            RegisterScreen(
+                onBack = { navController.popBackStack() },
+                onRegisterSuccess = {
+                    navController.navigate(Routes.MAIN) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
+            )
+        }
+
         composable(Routes.VLM_AGENT) {
             VlmAgentScreen(
                 onBack = { navController.popBackStack() },
@@ -196,7 +283,9 @@ fun NavGraph(navController: NavHostController = rememberNavController()) {
                 onBack = { navController.popBackStack() },
                 onFixAction = { actionId ->
                     when (actionId) {
-                        "accessibility", "permissions" -> { /* permission guide */ }
+                        "accessibility", "permissions" -> {
+                            navController.navigate(Routes.PERMISSION_GUIDE)
+                        }
                     }
                 },
             )
@@ -220,6 +309,37 @@ fun NavGraph(navController: NavHostController = rememberNavController()) {
 
         composable(Routes.HELP) {
             HelpFaqScreen(onBack = { navController.popBackStack() })
+        }
+
+        // ── Portal pages ──
+        composable(Routes.ACCOUNT_CENTER) {
+            AccountCenterScreen(
+                onBack = { navController.popBackStack() },
+                onNavigate = { id ->
+                    when (id) {
+                        "plans" -> navController.navigate(Routes.UPGRADE_PLAN)
+                        "usage" -> navController.navigate(Routes.USAGE_STATS)
+                        "support" -> navController.navigate(Routes.SUPPORT_CENTER)
+                        "dashboard" -> navController.navigate(Routes.AGENT_DASHBOARD)
+                    }
+                },
+            )
+        }
+
+        composable(Routes.UPGRADE_PLAN) {
+            UpgradePlanScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Routes.USAGE_STATS) {
+            UsageStatsScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Routes.SUPPORT_CENTER) {
+            SupportCenterScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Routes.AGENT_DASHBOARD) {
+            AgentDashboardScreen(onBack = { navController.popBackStack() })
         }
     }
 }

@@ -46,6 +46,13 @@ const envSchema = z.object({
   EXPERIENCE_COMPILE_INTERVAL_MIN: z.coerce.number().default(30),
   EXPERIENCE_MIN_DEVICES: z.coerce.number().default(3),
 
+  // ── Alibaba Cloud SMS ──
+  ALIBABA_CLOUD_ACCESS_KEY_ID: z.string().default(""),
+  ALIBABA_CLOUD_ACCESS_KEY_SECRET: z.string().default(""),
+  SMS_SIGN_NAME: z.string().default("广州修己科技文化传媒有限"),
+  SMS_TEMPLATE_CODE: z.string().default("SMS_330410954"),
+  SMS_RATE_LIMIT_SEC: z.coerce.number().default(60),
+
   // ── Feature Flags ──
   FF_DECISION_ENGINE: z.coerce.boolean().default(true),
   FF_QWEN_VL_FALLBACK: z.coerce.boolean().default(true),
@@ -77,15 +84,19 @@ const envSchema = z.object({
   RAY_ENABLED: z.coerce.boolean().default(false),
 
   // ── WebRTC / Signaling ──
-  TURN_SERVER_URL: z.string().default("turn:localhost:3478"),
+  TURN_SERVER_URL: z.string().default("turn:47.243.254.248:3478?transport=udp"),
   TURN_USERNAME: z.string().default("phonefarm"),
   TURN_CREDENTIAL: z.string().default(""),
-  STUN_SERVER_URL: z.string().default("stun:stun.l.google.com:19302"),
-  WEBRTC_ENABLED: z.coerce.boolean().default(false),
+  STUN_SERVER_URL: z.string().default("stun:47.243.254.248:3478"),
+  WEBRTC_ENABLED: z.coerce.boolean().default(true),
 
   // ── Edge Node ──
   EDGE_NODE_ENABLED: z.coerce.boolean().default(false),
   EDGE_NODE_PORT: z.coerce.number().default(9090),
+
+  // ── Multi-Tenancy ──
+  DEFAULT_TENANT_SLUG: z.string().default("default"),
+  TENANT_ISOLATION_ENABLED: z.coerce.boolean().default(true),
 
   // ── Feature Flags (Phase 2-5) ──
   FF_WEBRTC_P2P: z.coerce.boolean().default(false),

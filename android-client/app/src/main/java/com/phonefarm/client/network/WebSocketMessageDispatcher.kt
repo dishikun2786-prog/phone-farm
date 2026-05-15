@@ -14,6 +14,7 @@ import com.phonefarm.client.crash.CrashReporter
 import com.phonefarm.client.engine.ScriptManager
 import com.phonefarm.client.stream.StreamController
 import com.phonefarm.client.webrtc.P2pConnectionManager
+import com.phonefarm.client.webrtc.WebrtcManager
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -47,6 +48,7 @@ class WebSocketMessageDispatcher @Inject constructor(
     private val scriptManager: ScriptManager,
     private val crashReporter: CrashReporter,
     private val p2pConnectionManager: P2pConnectionManager,
+    private val webrtcManager: WebrtcManager,
 ) {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -132,6 +134,9 @@ class WebSocketMessageDispatcher @Inject constructor(
             is WebSocketMessage.WebrtcRequestConnection -> handleWebrtcRequestConnection(message)
             is WebSocketMessage.WebrtcAcceptConnection -> handleWebrtcAcceptConnection(message)
             is WebSocketMessage.WebrtcRejectConnection -> handleWebrtcRejectConnection(message)
+
+            // Session — auth_ok from server carries webrtc config
+            is WebSocketMessage.AuthOk -> handleAuthOk(message)
 
             // Session / Device layer — informational, no action needed
             is WebSocketMessage.Auth,
@@ -275,7 +280,34 @@ class WebSocketMessageDispatcher @Inject constructor(
     }
 
     private suspend fun handleShellCommand(msg: WebSocketMessage.ShellCommand) {
-        Log.d(TAG, "Shell command received: ${msg.command}")
+        Log.i(TAG, "Executing shell command: ${msg.command}")
+        try {
+            val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", msg.command))
+            val stdout = process.inputStream.bufferedReader().readText().take(5000)
+            val stderr = process.errorStream.bufferedReader().readText().take(1000)
+            val exited = process.waitFor(msg.timeoutMs ?: 5000L, java.util.concurrent.TimeUnit.MILLISECONDS)
+            if (!exited) process.destroyForcibly()
+            val exitCode = if (exited) process.exitValue() else -1
+
+            webSocketClient.send(
+                WebSocketMessage.RemoteCommandResult(
+                    commandId = msg.commandId ?: "shell_${System.currentTimeMillis()}",
+                    success = exitCode == 0,
+                    result = if (exitCode == 0) stdout else "exit=$exitCode: $stderr",
+                    durationMs = 0,
+                )
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Shell command failed: ${msg.command}", e)
+            webSocketClient.send(
+                WebSocketMessage.RemoteCommandResult(
+                    commandId = msg.commandId ?: "shell_${System.currentTimeMillis()}",
+                    success = false,
+                    result = e.message ?: "Shell error",
+                    durationMs = 0,
+                )
+            )
+        }
     }
 
     private suspend fun handleVlmConfigUpdate(msg: WebSocketMessage.VlmConfigUpdate) {
@@ -287,11 +319,70 @@ class WebSocketMessageDispatcher @Inject constructor(
     }
 
     private suspend fun handleFilePush(msg: WebSocketMessage.FilePush) {
-        Log.d(TAG, "File push: ${msg.remotePath} (${msg.fileId})")
+        Log.i(TAG, "File push: ${msg.remotePath} (${msg.fileId})")
+        scope.launch {
+            try {
+                val url = msg.downloadUrl ?: return@launch
+                val client = okhttp3.OkHttpClient.Builder()
+                    .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
+                    .build()
+                val request = okhttp3.Request.Builder().url(url).build()
+                val response = client.newCall(request).execute()
+                if (response.isSuccessful) {
+                    val file = java.io.File(msg.remotePath)
+                    file.parentFile?.mkdirs()
+                    file.writeBytes(response.body?.bytes() ?: ByteArray(0))
+                    Log.i(TAG, "File saved: ${msg.remotePath} (${file.length()} bytes)")
+                    webSocketClient.send(
+                        WebSocketMessage.RemoteCommandResult(
+                            commandId = msg.fileId,
+                            success = true,
+                            result = "Saved: ${file.length()} bytes",
+                            durationMs = 0,
+                        )
+                    )
+                } else {
+                    Log.w(TAG, "File push download failed: ${response.code}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "File push failed: ${e.message}", e)
+            }
+        }
     }
 
     private suspend fun handleFilePull(msg: WebSocketMessage.FilePull) {
-        Log.d(TAG, "File pull request: ${msg.localPath} (${msg.fileId})")
+        Log.i(TAG, "File pull request: ${msg.localPath} (${msg.fileId})")
+        scope.launch {
+            try {
+                val file = java.io.File(msg.localPath)
+                if (!file.exists()) {
+                    webSocketClient.send(
+                        WebSocketMessage.RemoteCommandResult(
+                            commandId = msg.fileId,
+                            success = false,
+                            result = "File not found: ${msg.localPath}",
+                            durationMs = 0,
+                        )
+                    )
+                    return@launch
+                }
+                val content = file.readBytes()
+                val base64 = android.util.Base64.encodeToString(content, android.util.Base64.NO_WRAP)
+                webSocketClient.send(
+                    WebSocketMessage.DeviceScreenshot(
+                        deviceId = "",
+                        imageBase64 = base64,
+                        format = "file",
+                        width = 0,
+                        height = 0,
+                        timestamp = System.currentTimeMillis(),
+                    )
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "File pull failed: ${e.message}", e)
+            }
+        }
     }
 
     private suspend fun handlePluginUpdate(msg: WebSocketMessage.PluginUpdate) {
@@ -386,6 +477,23 @@ class WebSocketMessageDispatcher @Inject constructor(
     private suspend fun handleWebrtcRejectConnection(msg: WebSocketMessage.WebrtcRejectConnection) {
         Log.w(TAG, "WebRTC connection rejected by ${msg.from}: ${msg.reason}")
         p2pConnectionManager.handleIncomingReject(msg.from, msg.reason)
+    }
+
+    private fun handleAuthOk(msg: WebSocketMessage.AuthOk) {
+        val webrtc = msg.webrtc ?: run {
+            Log.d(TAG, "auth_ok received without webrtc config")
+            return
+        }
+        if (!webrtc.enabled) {
+            Log.i(TAG, "WebRTC disabled by server config")
+            return
+        }
+        Log.i(TAG, "Configuring TURN: ${webrtc.turnServerUrl} user=${webrtc.turnUsername}")
+        webrtcManager.configureTurn(
+            url = webrtc.turnServerUrl,
+            username = webrtc.turnUsername,
+            credential = webrtc.turnCredential,
+        )
     }
 
     private suspend fun handleReactionRulesUpdate(msg: WebSocketMessage.ReactionRulesUpdate) {

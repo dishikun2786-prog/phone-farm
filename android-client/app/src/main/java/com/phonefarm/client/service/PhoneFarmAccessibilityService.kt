@@ -99,6 +99,7 @@ class PhoneFarmAccessibilityService : AccessibilityService() {
         val results = mutableListOf<AccessibilityNodeInfo>()
         val root = rootInActiveWindow ?: return results
         collectMatchingNodes(root, predicate, results)
+        root.recycle()
         return results
     }
 
@@ -299,6 +300,11 @@ class PhoneFarmAccessibilityService : AccessibilityService() {
 
     // ---- utility ----
 
+    /**
+     * Search for a node by text and click it, polling until found or timeout.
+     * Uses Thread.sleep for compatibility with synchronous callers (Rhino bridge).
+     * Callers on coroutine dispatchers should use [findAndClickAsync] instead.
+     */
     fun findAndClick(text: String, timeoutMs: Long = 5000L): Boolean {
         val start = System.currentTimeMillis()
         while (System.currentTimeMillis() - start < timeoutMs) {
@@ -309,6 +315,24 @@ class PhoneFarmAccessibilityService : AccessibilityService() {
                 return true
             }
             Thread.sleep(200)
+        }
+        return false
+    }
+
+    /**
+     * Coroutine-friendly variant of [findAndClick] that uses non-blocking [delay].
+     * Preferred for callers on coroutine dispatchers (VlmAgent, ScriptEngine flows).
+     */
+    suspend fun findAndClickAsync(text: String, timeoutMs: Long = 5000L, delayMs: Long = 200L): Boolean {
+        val start = System.currentTimeMillis()
+        while (System.currentTimeMillis() - start < timeoutMs) {
+            val node = findNodesByText(text).firstOrNull()
+            if (node != null) {
+                node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                node.recycle()
+                return true
+            }
+            kotlinx.coroutines.delay(delayMs)
         }
         return false
     }

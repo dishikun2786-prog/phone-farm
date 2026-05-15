@@ -44,6 +44,10 @@ class ScriptEngine @Inject constructor(
     val stepFlow: Flow<ScriptStep> = _stepFlow.asSharedFlow()
 
     private var executionJob: Job? = null
+    private var executing = false
+
+    @Volatile
+    private var stopRequested = false
 
     @Volatile
     private var rhinoContext: Context? = null
@@ -91,6 +95,17 @@ class ScriptEngine @Inject constructor(
      * @return A Flow of [ScriptStep] events (start, progress, complete, error).
      */
     fun execute(scriptName: String, config: Map<String, Any> = emptyMap()): Flow<ScriptStep> = flow {
+        // Guard against concurrent execute() calls
+        if (executing) {
+            emit(ScriptStep.Error(scriptName, "Another script is already running", null))
+            return@flow
+        }
+        executing = true
+        stopRequested = false
+
+        // Capture the coroutine Job so stop() can cancel execution.
+        executionJob = currentCoroutineContext()[Job]
+
         check(initialized) { "ScriptEngine not initialized. Call init() first." }
 
         val content = scriptManager.getScriptContent(scriptName)
@@ -109,20 +124,21 @@ class ScriptEngine @Inject constructor(
             withContext(Dispatchers.Default) {
                 val cx = Context.enter()
                 rhinoContext = cx
+                // Enable interruptible mode so stop() can terminate long-running scripts
+                cx.isInterruptible = true
                 var scope: org.mozilla.javascript.ScriptableObject? = null
                 try {
                     val newScope = cx.initStandardObjects()
                     scope = newScope
                     jsBridge.registerAll(newScope)
 
-                    // TODO: Inject config/arguments into scope.
+                    // Inject config/arguments into scope.
                     val configObj = cx.newObject(newScope)
                     config.forEach { (k, v) ->
                         ScriptableObject.putProperty(configObj, k, Context.javaToJS(v, newScope))
                     }
                     ScriptableObject.putProperty(newScope, "config", configObj)
 
-                    // TODO: Execute the script.
                     cx.evaluateString(newScope, content, scriptName, 1, null)
 
                     emit(ScriptStep.Completed(scriptName, System.currentTimeMillis()))
@@ -138,16 +154,24 @@ class ScriptEngine @Inject constructor(
             }
         } finally {
             _currentScript.value = null
+            executing = false
+            executionJob = null
         }
     }.flowOn(Dispatchers.Default)
 
     /**
-     * TODO: Stop the currently executing script.
-     * Interrupts the Rhino context and cancels the execution coroutine.
+     * Stop the currently executing script.
+     * Cancels the execution coroutine and interrupts the Rhino context.
      */
     fun stop() {
+        stopRequested = true
+        // Interrupt Rhino's current evaluation — causes evaluateString() to throw
+        rhinoContext?.let { cx ->
+            try { cx.interrupt() } catch (_: Exception) { android.util.Log.w("ScriptEngine", "Failed to interrupt Rhino context") }
+            rhinoContext = null
+        }
         executionJob?.cancel(CancellationException("Script stopped by user"))
-        rhinoContext?.let { /* TODO: Call Context.exit() or set interruption flag */ }
+        executionJob = null
     }
 
     /**

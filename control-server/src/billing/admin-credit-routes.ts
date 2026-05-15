@@ -1,0 +1,61 @@
+/**
+ * Admin Credit Routes — credit/pricing management for administrators.
+ *
+ * Endpoints:
+ *   POST /api/v1/admin/credits/grant        — grant credits to a user
+ *   GET  /api/v1/admin/credits/transactions — all transactions (with username)
+ *   GET  /api/v1/admin/credits/overview     — aggregate credit stats
+ *   GET  /api/v1/admin/credits/pricing      — get active token pricing
+ *   PUT  /api/v1/admin/credits/pricing      — update token pricing
+ */
+import type { FastifyInstance } from "fastify";
+import { creditService } from "./credit-service.js";
+
+export async function adminCreditRoutes(app: FastifyInstance): Promise<void> {
+
+  app.post("/api/v1/admin/credits/grant", async (req, reply) => {
+    const adminUserId = (req as any).user?.userId;
+    if (!adminUserId) return reply.status(401).send({ error: "Unauthorized" });
+
+    const { userId, amount, note } = req.body as {
+      userId: string; amount: number; note?: string;
+    };
+    if (!userId || amount == null || amount <= 0) {
+      return reply.status(400).send({ error: "userId and positive amount are required" });
+    }
+
+    const balance = await creditService.grantCredits(userId, amount, adminUserId, note);
+    return reply.send(balance);
+  });
+
+  app.get("/api/v1/admin/credits/transactions", async (req, reply) => {
+    const { limit, offset } = req.query as Record<string, string>;
+    const transactions = await creditService.getAllTransactions(
+      Number(limit) || 100,
+      Number(offset) || 0,
+    );
+    return reply.send({ transactions, total: transactions.length });
+  });
+
+  app.get("/api/v1/admin/credits/overview", async (_req, reply) => {
+    const overview = await creditService.getOverview();
+    return reply.send(overview);
+  });
+
+  app.get("/api/v1/admin/credits/pricing", async (_req, reply) => {
+    const pricing = await creditService.getActivePricing();
+    return reply.send({ pricing });
+  });
+
+  app.put("/api/v1/admin/credits/pricing", async (req, reply) => {
+    const { modelName, inputTokensPerCredit, outputTokensPerCredit } = req.body as {
+      modelName: string; inputTokensPerCredit: number; outputTokensPerCredit: number;
+    };
+    if (!modelName || inputTokensPerCredit == null || outputTokensPerCredit == null) {
+      return reply.status(400).send({ error: "modelName, inputTokensPerCredit, and outputTokensPerCredit are required" });
+    }
+
+    await creditService.updatePricing(modelName, inputTokensPerCredit, outputTokensPerCredit);
+    return reply.send({ ok: true, modelName, inputTokensPerCredit, outputTokensPerCredit });
+  });
+}

@@ -1,13 +1,14 @@
 const API_BASE = '/api/v1';
 const REQUEST_TIMEOUT_MS = 15000;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 export class ApiError extends Error {
-  code: 'TIMEOUT' | 'NETWORK' | 'UNAUTHORIZED' | 'SERVER' | 'UNKNOWN';
+  code: 'TIMEOUT' | 'NETWORK' | 'UNAUTHORIZED' | 'FORBIDDEN' | 'NOT_FOUND' | 'CONFLICT' | 'VALIDATION' | 'SERVER' | 'UNKNOWN';
   status?: number;
 
   constructor(
     message: string,
-    code: 'TIMEOUT' | 'NETWORK' | 'UNAUTHORIZED' | 'SERVER' | 'UNKNOWN',
+    code: ApiError['code'],
     status?: number,
   ) {
     super(message);
@@ -17,50 +18,172 @@ export class ApiError extends Error {
   }
 }
 
-async function request(path: string, options?: RequestInit) {
+function classifyError(status: number): ApiError['code'] {
+  switch (status) {
+    case 401: return 'UNAUTHORIZED';
+    case 403: return 'FORBIDDEN';
+    case 404: return 'NOT_FOUND';
+    case 409: return 'CONFLICT';
+    case 422: return 'VALIDATION';
+    default: return status >= 500 ? 'SERVER' : 'UNKNOWN';
+  }
+}
+
+// ── Request cache + deduplication ──
+
+interface CacheEntry<T = any> {
+  data: T;
+  expiresAt: number;
+}
+
+const cache = new Map<string, CacheEntry>();
+const inflight = new Map<string, Promise<any>>();
+
+function cacheKey(path: string, options?: RequestInit): string {
+  return `${options?.method ?? 'GET'}:${path}`;
+}
+
+/** Clear all cached responses (call after mutations). */
+export function clearApiCache(): void {
+  cache.clear();
+}
+
+/** Invalidate a specific cached path. */
+export function invalidateCache(path: string): void {
+  cache.delete(`GET:${path}`);
+}
+
+async function request<T = any>(path: string, options?: RequestInit): Promise<T> {
   const token = localStorage.getItem('token');
   const hasBody = options?.body != null;
+  const isGet = !options?.method || options.method === 'GET';
+  const key = cacheKey(path, options);
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  // Serve from cache for GET requests
+  if (isGet) {
+    const cached = cache.get(key);
+    if (cached && cached.expiresAt > Date.now()) return cached.data as T;
+  }
 
-  let res: Response;
-  try {
-    res = await fetch(`${API_BASE}${path}`, {
-      ...options,
-      signal: controller.signal,
-      headers: {
-        ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...options?.headers,
-      },
-    });
-  } catch (err: any) {
-    clearTimeout(timeoutId);
-    if (err.name === 'AbortError') {
-      throw new ApiError('请求超时，请检查网络连接', 'TIMEOUT');
+  // Deduplicate concurrent requests
+  const inflightReq = inflight.get(key);
+  if (inflightReq) return inflightReq as Promise<T>;
+
+  const promise = (async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    let res: Response;
+    try {
+      const url = path.startsWith('/api/') ? path : `${API_BASE}${path}`;
+      res = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...options?.headers,
+        },
+      });
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        throw new ApiError('请求超时，请检查网络连接', 'TIMEOUT');
+      }
+      const wrapped = new ApiError('无法连接到服务器: ' + (err.message || ''), 'NETWORK');
+      wrapped.cause = err;
+      throw wrapped;
     }
-    throw new ApiError('无法连接到服务器', 'NETWORK');
-  }
-  clearTimeout(timeoutId);
+    clearTimeout(timeoutId);
 
-  if (res.status === 401) {
-    localStorage.removeItem('token');
-    window.location.href = '/login';
-    throw new ApiError('登录已过期，请重新登录', 'UNAUTHORIZED', 401);
+    if (res.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+      window.dispatchEvent(new CustomEvent('phonefarm:auth-expired'));
+      throw new ApiError('登录已过期，请重新登录', 'UNAUTHORIZED', 401);
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new ApiError(err.error || res.statusText, classifyError(res.status), res.status);
+    }
+    const data = await res.json();
+
+    // Cache GET responses
+    if (isGet) {
+      cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
+      // Prune old entries if cache grows too large
+      if (cache.size > 200) {
+        const now = Date.now();
+        for (const [k, v] of cache) {
+          if (v.expiresAt <= now) cache.delete(k);
+        }
+      }
+    }
+
+    return data as T;
+  })();
+
+  inflight.set(key, promise);
+  try {
+    return await promise;
+  } finally {
+    inflight.delete(key);
   }
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    const code = res.status >= 500 ? 'SERVER' : 'UNKNOWN';
-    throw new ApiError(err.error || res.statusText, code, res.status);
-  }
-  return res.json();
 }
 
 export const api = {
   // Auth
-  login: (username: string, password: string) =>
-    request('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
+  login: (account: string, password: string) =>
+    request('/auth/login', { method: 'POST', body: JSON.stringify({ account, password }) }),
+
+  // SMS Auth
+  sendSms: (phone: string, scene: 'register' | 'login' | 'reset_password' | 'bind') =>
+    request('/auth/send-sms', { method: 'POST', body: JSON.stringify({ phone, scene }) }),
+  verifySms: (phone: string, code: string, scene: string) =>
+    request('/auth/verify-sms', { method: 'POST', body: JSON.stringify({ phone, code, scene }) }),
+  register: (data: { phone: string; code: string; username?: string; password?: string }) =>
+    request('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
+  loginByPhone: (phone: string, code: string) =>
+    request('/auth/login-phone', { method: 'POST', body: JSON.stringify({ phone, code }) }),
+  resetPassword: (phone: string, code: string, newPassword: string) =>
+    request('/auth/reset-password', { method: 'POST', body: JSON.stringify({ phone, code, newPassword }) }),
+
+  // User profile
+  getProfile: () => request('/users/me'),
+  updateProfile: (data: { username?: string }) =>
+    request('/users/me', { method: 'PUT', body: JSON.stringify(data) }),
+  changePassword: (oldPassword: string, newPassword: string) =>
+    request('/users/me/password', { method: 'PUT', body: JSON.stringify({ oldPassword, newPassword }) }),
+  bindPhone: (phone: string, code: string) =>
+    request('/users/me/bind-phone', { method: 'POST', body: JSON.stringify({ phone, code }) }),
+
+  // Admin: User Management
+  getUsers: (params?: { page?: number; pageSize?: number; keyword?: string; role?: string; status?: string }) => {
+    const search = new URLSearchParams();
+    if (params?.page) search.set('page', String(params.page));
+    if (params?.pageSize) search.set('pageSize', String(params.pageSize));
+    if (params?.keyword) search.set('keyword', params.keyword);
+    if (params?.role) search.set('role', params.role);
+    if (params?.status) search.set('status', params.status);
+    const qs = search.toString();
+    return request(`/admin/users${qs ? `?${qs}` : ''}`);
+  },
+  getUser: (id: string) => request(`/admin/users/${id}`),
+  updateUser: (id: string, data: { username?: string; role?: string; status?: string }) =>
+    request(`/admin/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  disableUser: (id: string) => request(`/admin/users/${id}/disable`, { method: 'POST' }),
+  enableUser: (id: string) => request(`/admin/users/${id}/enable`, { method: 'POST' }),
+  getUserStats: () => request('/admin/users/stats'),
+
+  // Tenant Management (v2 API)
+  getTenants: (params?: string) => request(`/api/v2/tenants${params || ''}`),
+  getCurrentTenant: () => request('/api/v2/tenant/current'),
+  createTenant: (data: Record<string, unknown>) =>
+    request('/api/v2/tenants', { method: 'POST', body: JSON.stringify(data) }),
+  updateTenant: (id: string, data: Record<string, unknown>) =>
+    request(`/api/v2/tenants/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteTenant: (id: string) =>
+    request(`/api/v2/tenants/${id}`, { method: 'DELETE' }),
 
   // Devices
   getDevices: () => request('/devices'),
@@ -388,20 +511,115 @@ export const api = {
 
   // ── System Config ──
   systemGetConfig: () => request("/system/config"),
+  getSystemConfig: () => request("/system/config"),
   systemGetConfigKey: (key: string) => request(`/system/config/${encodeURIComponent(key)}`),
   systemUpdateConfig: (key: string, value: string, changeReason?: string) =>
     request(`/system/config/${encodeURIComponent(key)}`, {
       method: "PUT",
       body: JSON.stringify({ value, changeReason }),
     }),
+  updateSystemConfig: (key: string, value: string) =>
+    request(`/system/config/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      body: JSON.stringify({ value }),
+    }),
   systemReloadConfig: () => request("/system/config/reload", { method: "POST" }),
   systemGetFeatureFlags: () => request("/system/feature-flags"),
+  getFeatureFlags: () => request("/system/feature-flags"),
   systemToggleFeatureFlag: (key: string, enabled: boolean) =>
     request(`/system/feature-flags/${encodeURIComponent(key)}`, {
       method: "PUT",
       body: JSON.stringify({ value: String(enabled) }),
     }),
+  toggleFeatureFlag: (key: string) =>
+    request(`/system/feature-flags/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      body: JSON.stringify({ value: "toggle" }),
+    }),
   systemGetInfrastructureStatus: () => request("/system/infrastructure/status"),
+  getInfraStatus: () => request("/system/infrastructure/status"),
+
+  // ── Portal BFF ──
+  portalGetDashboard: () => request('/api/v2/portal/dashboard'),
+  portalGetDevices: () => request('/api/v2/portal/devices'),
+  portalGetTasks: () => request('/api/v2/portal/tasks'),
+  portalGetUsage: (params?: { from?: number; to?: number }) => {
+    const search = new URLSearchParams();
+    if (params?.from) search.set('from', String(params.from));
+    if (params?.to) search.set('to', String(params.to));
+    const qs = search.toString();
+    return request(`/api/v2/portal/usage${qs ? `?${qs}` : ''}`);
+  },
+
+  // ── Billing (Portal) ──
+  getBillingPlans: () => request('/api/v2/billing/plans'),
+  getSubscription: () => request('/api/v2/billing/subscription'),
+  subscribePlan: (planId: string) =>
+    request('/api/v2/billing/subscribe', { method: 'POST', body: JSON.stringify({ planId }) }),
+  cancelSubscription: () =>
+    request('/api/v2/billing/subscription/cancel', { method: 'POST' }),
+  getBillingOrders: (params?: { limit?: number; offset?: number }) => {
+    const search = new URLSearchParams();
+    if (params?.limit) search.set('limit', String(params.limit));
+    if (params?.offset) search.set('offset', String(params.offset));
+    const qs = search.toString();
+    return request(`/api/v2/billing/orders${qs ? `?${qs}` : ''}`);
+  },
+  getBillingOrder: (id: string) => request(`/api/v2/billing/orders/${id}`),
+  createBillingOrder: (planId: string, paymentMethod: string) =>
+    request('/api/v2/billing/orders', { method: 'POST', body: JSON.stringify({ planId, paymentMethod }) }),
+
+  // ── Support Tickets ──
+  getSupportTickets: () => request('/api/v2/support/tickets'),
+  getSupportTicket: (id: string) => request(`/api/v2/support/tickets/${id}`),
+  createSupportTicket: (data: { subject: string; category: string; message: string; priority?: string }) =>
+    request('/api/v2/support/tickets', { method: 'POST', body: JSON.stringify(data) }),
+  replySupportTicket: (id: string, message: string) =>
+    request(`/api/v2/support/tickets/${id}/replies`, { method: 'POST', body: JSON.stringify({ message }) }),
+  closeSupportTicket: (id: string) =>
+    request(`/api/v2/support/tickets/${id}/close`, { method: 'POST' }),
+
+  // ── Credits ──
+  getCreditsOverview: () => request('/credits/overview'),
+  getCreditTransactions: (params?: { userId?: string; limit?: number; offset?: number }) => {
+    const search = new URLSearchParams();
+    if (params?.userId) search.set('userId', params.userId);
+    if (params?.limit) search.set('limit', String(params.limit));
+    if (params?.offset) search.set('offset', String(params.offset));
+    const qs = search.toString();
+    return request(`/credits/transactions${qs ? `?${qs}` : ''}`);
+  },
+  getAllCreditTransactions: (params?: { limit?: number; offset?: number }) => {
+    const search = new URLSearchParams();
+    if (params?.limit) search.set('limit', String(params.limit));
+    if (params?.offset) search.set('offset', String(params.offset));
+    const qs = search.toString();
+    return request(`/credits/admin/transactions${qs ? `?${qs}` : ''}`);
+  },
+  grantCredits: (userId: string, amount: number, note?: string) =>
+    request('/credits/admin/grant', { method: 'POST', body: JSON.stringify({ userId, amount, note }) }),
+
+  // ── Token Pricing ──
+  getTokenPricing: () => request('/credits/pricing'),
+  updateTokenPricing: (modelName: string, inputTokensPerCredit: number, outputTokensPerCredit: number) =>
+    request('/credits/pricing', { method: 'PUT', body: JSON.stringify({ modelName, inputTokensPerCredit, outputTokensPerCredit }) }),
+
+  // ── Assistant Usage ──
+  getAssistantUsage: (params?: { from?: number; to?: number }) => {
+    const search = new URLSearchParams();
+    if (params?.from) search.set('from', String(params.from));
+    if (params?.to) search.set('to', String(params.to));
+    const qs = search.toString();
+    return request(`/assistant/usage${qs ? `?${qs}` : ''}`);
+  },
+  getAssistantSessions: (params?: { limit?: number; offset?: number }) => {
+    const search = new URLSearchParams();
+    if (params?.limit) search.set('limit', String(params.limit));
+    if (params?.offset) search.set('offset', String(params.offset));
+    const qs = search.toString();
+    return request(`/assistant/sessions${qs ? `?${qs}` : ''}`);
+  },
+  getAssistantSession: (id: string) => request(`/assistant/sessions/${id}`),
 
   // Generic request (used by admin pages and custom endpoints)
   request: (path: string, options?: RequestInit) => request(path, options),

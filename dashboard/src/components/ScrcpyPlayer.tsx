@@ -11,7 +11,6 @@
  */
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { Play, Square, Maximize2, Loader2, Wifi, WifiOff, Upload } from 'lucide-react';
-// @ts-ignore mux.js has no types
 import muxjs from 'mux.js';
 import { useClipboardSync } from '../hooks/useClipboardSync';
 import RecordingControls from './RecordingControls';
@@ -47,6 +46,7 @@ export default function ScrcpyPlayer({
   const containerRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const mediaSourceRef = useRef<MediaSource | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
   const sourceBufferRef = useRef<SourceBuffer | null>(null);
   const transmuxerRef = useRef<any>(null);
   const sbQueueRef = useRef<Uint8Array[]>([]);
@@ -64,6 +64,7 @@ export default function ScrcpyPlayer({
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectCountRef = useRef(0);
   const intentionalStopRef = useRef(false);
+  const mseCleanupRef = useRef<(() => void) | null>(null);
 
   // Clipboard sync
   useClipboardSync({ deviceId, wsRef, enabled: state === 'streaming' });
@@ -80,18 +81,30 @@ export default function ScrcpyPlayer({
       wsRef.current.close();
       wsRef.current = null;
     }
+    // Remove MediaSource event listeners
+    if (mseCleanupRef.current) {
+      mseCleanupRef.current();
+      mseCleanupRef.current = null;
+    }
     // Clean up MSE
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
     try {
       if (sourceBufferRef.current && mediaSourceRef.current) {
         const ms = mediaSourceRef.current;
         if (ms.readyState === 'open') {
-          try { ms.endOfStream(); } catch { /* */ }
+          try { ms.endOfStream(); } catch (e) { console.warn('ScrcpyPlayer: endOfStream failed', e); }
         }
       }
-    } catch { /* */ }
+    } catch (e) { console.warn('ScrcpyPlayer: MSE cleanup failed', e); }
+    if (transmuxerRef.current) {
+      try { transmuxerRef.current.dispose(); } catch (e) { console.warn('ScrcpyPlayer: transmuxer dispose failed', e); }
+      transmuxerRef.current = null;
+    }
     sourceBufferRef.current = null;
     mediaSourceRef.current = null;
-    transmuxerRef.current = null;
     sbQueueRef.current = [];
     sbUpdatingRef.current = false;
     queuedNalsRef.current = [];
@@ -111,19 +124,19 @@ export default function ScrcpyPlayer({
     connectWs();
   }, [deviceId, tailscaleIp, cleanup]);
 
-  /** Connect WebSocket with JWT auth token */
+  /** Connect WebSocket with JWT auth token (sent as first message, not URL param). */
   function connectWs() {
     const token = localStorage.getItem('token');
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws/scrcpy/${deviceId}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+    const wsUrl = `${protocol}//${window.location.host}/ws/scrcpy/${deviceId}`;
     const ws = new WebSocket(wsUrl);
     ws.binaryType = 'arraybuffer';
     wsRef.current = ws;
 
     ws.onopen = () => {
-      // If token wasn't in query string, send as auth message
-      if (!localStorage.getItem('token')) {
-        // No auth — server will close after timeout
+      // Send auth as first message (not in URL)
+      if (token) {
+        ws.send(JSON.stringify({ type: 'auth', token }));
       }
 
       // Tell the server to start scrcpy for this device
@@ -180,7 +193,7 @@ export default function ScrcpyPlayer({
               setState('error');
               break;
           }
-        } catch { /* */ }
+        } catch (e) { console.warn('ScrcpyPlayer: failed to parse WS message', e); }
         return;
       }
 
@@ -245,10 +258,12 @@ export default function ScrcpyPlayer({
     mediaSourceRef.current = ms;
 
     if (videoRef.current) {
-      videoRef.current.src = URL.createObjectURL(ms);
+      const url = URL.createObjectURL(ms);
+      objectUrlRef.current = url;
+      videoRef.current.src = url;
     }
 
-    ms.addEventListener('sourceopen', () => {
+    const onSourceOpen = () => {
       // Extract codec string from SPS in the first NAL unit
       const codecStr = parseCodecFromSps(firstNal) || 'avc1.42E01E';
 
@@ -257,25 +272,35 @@ export default function ScrcpyPlayer({
         sb.mode = 'sequence';
         sourceBufferRef.current = sb;
 
-        sb.addEventListener('updateend', () => {
+        const onUpdateEnd = () => {
           sbUpdatingRef.current = false;
           processQueue();
-        });
-
-        sb.addEventListener('error', () => {
+        };
+        const onSbError = () => {
           setError('MediaSource buffer error');
           setState('error');
-        });
+        };
+
+        sb.addEventListener('updateend', onUpdateEnd);
+        sb.addEventListener('error', onSbError);
 
         // Create transmuxer
         const transmuxer = new muxjs.mp4.Transmuxer();
         transmuxerRef.current = transmuxer;
 
-        transmuxer.on('data', (segment: any) => {
+        const onTransmuxerData = (segment: any) => {
           if (segment.type === 'video' || segment.type === 'combined') {
             appendToBuffer(segment.data);
           }
-        });
+        };
+        transmuxer.on('data', onTransmuxerData);
+
+        // Register cleanup
+        mseCleanupRef.current = () => {
+          sb.removeEventListener('updateend', onUpdateEnd);
+          sb.removeEventListener('error', onSbError);
+          try { transmuxer.off('data', onTransmuxerData); } catch { /* mux.js may not support off */ }
+        };
 
         // Feed the first NAL
         feedNal(firstNal);
@@ -283,7 +308,9 @@ export default function ScrcpyPlayer({
         setError(`MediaSource init failed: ${err.message}`);
         setState('error');
       }
-    });
+    };
+
+    ms.addEventListener('sourceopen', onSourceOpen);
   }
 
   function feedNal(nalUnit: Uint8Array) {
@@ -329,7 +356,7 @@ export default function ScrcpyPlayer({
             if (end - start > 5) {
               sb.remove(start, start + (end - start) * 0.5);
             }
-          } catch { /* */ }
+          } catch (e) { console.warn('ScrcpyPlayer: buffer cleanup failed', e); }
         }
         sbUpdatingRef.current = false;
         processQueue();

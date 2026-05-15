@@ -1,5 +1,9 @@
 package com.phonefarm.client.ui.screens
 
+import android.content.Context
+import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -9,17 +13,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
+import com.phonefarm.client.data.local.SecurePreferences
+import com.phonefarm.client.di.TokenHolder
 import com.phonefarm.client.ui.theme.Primary
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,14 +43,20 @@ data class SplashUiState(
 )
 
 @HiltViewModel
-class SplashViewModel @Inject constructor() : ViewModel() {
+class SplashViewModel @Inject constructor(
+    private val securePreferences: SecurePreferences,
+    @ApplicationContext private val appContext: Context,
+) : ViewModel() {
+
+    companion object {
+        const val KEY_ACTIVATED = "device_activated"
+    }
 
     private val _uiState = MutableStateFlow(SplashUiState())
     val uiState: StateFlow<SplashUiState> = _uiState.asStateFlow()
 
     init {
         viewModelScope.launch {
-            // Show content after initial delay for smooth animation
             delay(200)
             _uiState.value = _uiState.value.copy(showContent = true)
 
@@ -78,7 +89,6 @@ class SplashViewModel @Inject constructor() : ViewModel() {
             delay(400)
             val isLoggedIn = checkLogin()
 
-            // Ensure minimum 1.5s display time
             delay(300)
 
             _uiState.value = _uiState.value.copy(
@@ -87,20 +97,32 @@ class SplashViewModel @Inject constructor() : ViewModel() {
         }
     }
 
-    private suspend fun checkActivation(): Boolean {
-        // TODO: Check activation status from ActivationDao
-        return false // Default to activation required for fresh install
+    private fun checkActivation(): Boolean {
+        val activated = securePreferences.getString(KEY_ACTIVATED)
+        return activated == "true"
     }
 
-    private suspend fun checkPermissions(): Boolean {
-        // TODO: Check accessibility, overlay, battery, notification permissions
-        // For now assume needed
-        return false
+    private fun checkPermissions(): Boolean {
+        val accessibilityEnabled = isAccessibilityServiceEnabled()
+        val overlayGranted = Settings.canDrawOverlays(appContext)
+        val batteryWhitelisted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val pm = appContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+            pm.isIgnoringBatteryOptimizations(appContext.packageName)
+        } else true
+        return accessibilityEnabled && overlayGranted && batteryWhitelisted
     }
 
-    private suspend fun checkLogin(): Boolean {
-        // TODO: Check server URL + auth token
-        return false
+    private fun isAccessibilityServiceEnabled(): Boolean {
+        val serviceName = "${appContext.packageName}/.service.PhoneFarmAccessibilityService"
+        val enabledServices = Settings.Secure.getString(
+            appContext.contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ) ?: return false
+        return enabledServices.split(':').any { it.equals(serviceName, ignoreCase = true) }
+    }
+
+    private fun checkLogin(): Boolean {
+        return TokenHolder.token.isNotBlank()
     }
 }
 

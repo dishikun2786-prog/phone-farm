@@ -1,12 +1,16 @@
 ﻿import fastifyCors from '@fastify/cors';
 import fastifyJwt from '@fastify/jwt';
+import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
 import bcrypt from 'bcryptjs';
 import 'dotenv/config';
-import { eq } from 'drizzle-orm';
+import { eq, or, and } from 'drizzle-orm';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { WebSocket } from 'ws';
-import { AuthService, requireAuth } from './auth/auth-middleware.js';
+import { z } from 'zod';
+import { AuthService, optionalAuth, requireAuth } from './auth/auth-middleware.js';
 import { config } from './config.js';
 import { db, pool } from './db.js';
 import { BridgeClient } from './relay/bridge-client.js';
@@ -14,6 +18,23 @@ import { accountRoutes, deviceRoutes, taskRoutes } from './routes.js';
 import { taskTemplates, users } from './schema.js';
 import { registerVlmRoutes } from './vlm/vlm-routes.js';
 import { initWsHub } from './ws-hub.js';
+import type { WsHub } from './ws-hub.js';
+import type { RuntimeConfig } from './config-manager/runtime-config.js';
+import type { AuthUser } from './auth/auth-middleware.js';
+
+// Fastify instance decoration type declarations
+declare module 'fastify' {
+  interface FastifyInstance {
+    wsHub: WsHub;
+    runtimeConfig: RuntimeConfig;
+    nats: NatsSync;
+    minio: MinioClient;
+    ray: RayClient;
+  }
+  interface FastifyRequest {
+    user?: AuthUser;
+  }
+}
 
 // ── Decision Engine (New Architecture) ──
 import { DecisionEngine } from './decision/decision-engine.js';
@@ -40,8 +61,14 @@ import { activationRoutes } from './activation/activation-routes.js';
 import { registerAiMemoryRoutes } from './ai-memory/ai-memory-routes.js';
 import { MemoryScheduler } from './ai-memory/memory-scheduler.js';
 import { alertRoutes } from './alerts/alert-routes.js';
+import { adminUserRoutes } from './auth/admin-user-routes.js';
 import { apiKeyRoutes } from './auth/api-key-routes.js';
+import { userRoutes } from './auth/user-routes.js';
 import { billingRoutes } from './billing/billing-routes.js';
+import { creditRoutes } from './billing/credit-routes.js';
+import { adminCreditRoutes } from './billing/admin-credit-routes.js';
+import { llmProxyRoutes } from './assistant/llm-proxy-routes.js';
+import { assistantConfigRoutes } from './assistant/assistant-config-routes.js';
 import { configRoutes, deviceConfigResolveRoute } from './config-manager/config-routes.js';
 import { initRuntimeConfig } from './config-manager/runtime-config.js';
 import { systemConfigRoutes } from './config-manager/system-config-routes.js';
@@ -58,6 +85,20 @@ import { statsRoutes } from './stats/stats-routes.js';
 import { promptTemplateRoutes } from './vlm/prompt-template-routes.js';
 import { DEFAULT_MODEL_SEEDS, registerVlmModelRoutes, type VlmModelConfig } from './vlm/vlm-model-routes.js';
 import { webhookRoutes } from './webhook/webhook-routes.js';
+import { tenantRoutes } from './tenant/tenant-routes.js';
+import { optionalTenant } from './tenant/tenant-middleware.js';
+import { paymentRoutes } from './billing/payment-routes.js';
+import { subscriptionScheduler } from './billing/subscription-scheduler.js';
+import { seedDefaultPlans } from './billing/plan-seed.js';
+import { portalRoutes } from './portal/portal-routes.js';
+import { ticketRoutes } from './support/ticket-routes.js';
+import { agentRoutes } from './agent/agent-routes.js';
+import { openApiRoutes } from './openapi/openapi-routes.js';
+import { openApiDocsRoutes } from './openapi/openapi-docs.js';
+import { apiKeyManagementRoutes } from './openapi/api-key-management-routes.js';
+import { whitelabelRoutes } from './whitelabel/whitelabel-routes.js';
+import { cardKeyRoutes } from './activation/card-key-routes.js';
+import { auditRoutes } from './audit/audit-routes.js';
 
 // ── Phase 2-5: New Architecture Modules ──
 import { NatsSync } from './nats/nats-sync.js';
@@ -74,14 +115,28 @@ await app.register(fastifyCors, { origin: true });
 await app.register(fastifyJwt, { secret: config.JWT_SECRET });
 await app.register(fastifyWebsocket);
 
+// Static file serving for dashboard
+await app.register(fastifyStatic, {
+  root: resolve(dirname(fileURLToPath(import.meta.url)), '../../dashboard/dist'),
+  prefix: '/',
+  decorateReply: false,
+});
+// SPA fallback: non-API, non-file routes → index.html
+app.setNotFoundHandler(async (request, reply) => {
+  if (request.url.startsWith('/api/') || request.url.startsWith('/ws/')) {
+    return reply.status(404).send({ error: 'Not found' });
+  }
+  return reply.sendFile('index.html');
+});
+
 // WebSocket hub
 const hub = initWsHub(config.DEVICE_AUTH_TOKEN);
-(app as any).wsHub = hub;
+app.decorate('wsHub', hub);
 
 // ── RuntimeConfig — unified config bridge (DB overrides > env > default) ──
 const runtimeConfig = initRuntimeConfig(config);
 await runtimeConfig.initialize();
-(app as any).runtimeConfig = runtimeConfig;
+app.decorate('runtimeConfig', runtimeConfig);
 console.log('[RuntimeConfig] Initialized — DB-backed configuration bridge ready');
 
 // ── VPS Bridge (optional — only when BRIDGE_RELAY_URL is set) ──
@@ -205,24 +260,122 @@ await app.register(accountRoutes);
 
 // ── Auth Service ──
 const authService = new AuthService(app, config.JWT_SECRET);
+(app as any).authService = authService;
+
+// ── User Routes (register/login/reset-password/profile) ──
+await app.register(userRoutes);
+// ── Admin User Management Routes ──
+await app.register(async function (scope) { await adminUserRoutes(scope, authService); });
 
 // ── Modular Routes ──
+// Device-facing routes (use device auth token, not JWT)
 await app.register(activationRoutes);
-await app.register(deviceGroupRoutes);
-await app.register(async function (scope) { await apiKeyRoutes(scope, authService); });
 await app.register(scriptsManifestRoutes);
-await app.register(platformAccountRoutes);
 await app.register(modelRoutes);
 await app.register(deviceConfigRoutes);
-await app.register(async function (scope) { await accountDeleteRoutes(scope, authService); });
-await app.register(remoteCommandRoutes);
-await app.register(alertRoutes);
-await app.register(queueRoutes);
-await app.register(webhookRoutes);
-await app.register(statsRoutes);
 await app.register(crashRoutes);
-await app.register(promptTemplateRoutes);
-await app.register(billingRoutes);
+
+// Dashboard/admin routes (require JWT auth)
+await app.register(async function (scope) {
+  scope.addHook('preHandler', requireAuth(authService));
+  await deviceGroupRoutes(scope);
+});
+await app.register(async function (scope) { await apiKeyRoutes(scope, authService); });
+await app.register(async function (scope) {
+  scope.addHook('preHandler', requireAuth(authService));
+  await platformAccountRoutes(scope);
+});
+await app.register(async function (scope) { await accountDeleteRoutes(scope, authService); });
+await app.register(async function (scope) {
+  scope.addHook('preHandler', requireAuth(authService));
+  await remoteCommandRoutes(scope);
+});
+await app.register(async function (scope) {
+  scope.addHook('preHandler', requireAuth(authService));
+  await alertRoutes(scope);
+});
+await app.register(async function (scope) {
+  scope.addHook('preHandler', requireAuth(authService));
+  await queueRoutes(scope);
+});
+await app.register(async function (scope) {
+  scope.addHook('preHandler', requireAuth(authService));
+  await webhookRoutes(scope);
+});
+await app.register(async function (scope) {
+  scope.addHook('preHandler', requireAuth(authService));
+  await statsRoutes(scope);
+});
+await app.register(async function (scope) {
+  scope.addHook('preHandler', requireAuth(authService));
+  await auditRoutes(scope);
+});
+await app.register(async function (scope) {
+  scope.addHook('preHandler', requireAuth(authService));
+  await promptTemplateRoutes(scope);
+});
+await app.register(async function (scope) {
+  scope.addHook('preHandler', requireAuth(authService));
+  await billingRoutes(scope);
+});
+
+// Payment routes (v2 API — subscription + orders + callbacks)
+await app.register(async function (paymentScope) {
+  paymentScope.addHook('preHandler', optionalAuth(authService));
+  await paymentRoutes(paymentScope);
+});
+
+// Portal BFF routes (customer self-service — require auth + tenant)
+await app.register(async function (portalScope) {
+  portalScope.addHook('preHandler', requireAuth(authService));
+  portalScope.addHook('preHandler', optionalTenant());
+  await portalRoutes(portalScope);
+  await apiKeyManagementRoutes(portalScope);
+  await cardKeyRoutes(portalScope);
+});
+
+// Support ticket routes (customer + staff)
+await app.register(async function (ticketScope) {
+  ticketScope.addHook('preHandler', requireAuth(authService));
+  await ticketRoutes(ticketScope);
+});
+
+// Agent routes (agent dashboard + admin agent/card-batch management)
+await app.register(async function (agentScope) {
+  agentScope.addHook('preHandler', requireAuth(authService));
+  agentScope.addHook('preHandler', optionalTenant());
+  await agentRoutes(agentScope);
+});
+
+// Open API routes (API Key auth — no JWT required)
+await app.register(async function (openapiScope) {
+  await openApiRoutes(openapiScope);
+});
+
+// Whitelabel routes (theme CSS is public; admin CRUD requires auth)
+await app.register(async function (wlScope) {
+  wlScope.addHook('preHandler', optionalTenant());
+  await whitelabelRoutes(wlScope);
+});
+
+// OpenAPI docs (public)
+await app.register(async function (docsScope) {
+  await openApiDocsRoutes(docsScope);
+});
+// Credit system routes (require JWT auth)
+await app.register(async function (creditScope) {
+  creditScope.addHook('preHandler', requireAuth(authService));
+  await creditRoutes(creditScope);
+  await adminCreditRoutes(creditScope);
+  await llmProxyRoutes(creditScope);
+  await assistantConfigRoutes(creditScope);
+});
+// Tenant management routes (super_admin only, with optional tenant resolution)
+await app.register(async function (tenantScope) {
+  tenantScope.addHook('preHandler', optionalTenant());
+  await tenantRoutes(tenantScope);
+});
+
 // Device-facing config resolve — no JWT auth (devices use WebSocket device token)
 await app.register(deviceConfigResolveRoute);
 
@@ -232,16 +385,19 @@ await app.register(async function (configScope) {
   await configRoutes(configScope);
 });
 
-// System config routes (per-route auth checks)
-await app.register(systemConfigRoutes);
+// System config routes — optional JWT auth (per-route permission checks)
+await app.register(async function (sysScope) {
+  sysScope.addHook('preHandler', optionalAuth(authService));
+  await systemConfigRoutes(sysScope);
+});
 
 // ── Phase 2-5: Initialize new architecture modules ──
 const nats = new NatsSync(config.NATS_URL, config.NATS_TOKEN);
 const minio = new MinioClient(undefined, undefined, undefined, undefined, runtimeConfig);
 const ray = new RayClient(config.RAY_ADDRESS);
-(app as any).nats = nats;
-(app as any).minio = minio;
-(app as any).ray = ray;
+app.decorate('nats', nats);
+app.decorate('minio', minio);
+app.decorate('ray', ray);
 if (config.NATS_ENABLED) await nats.connect().catch(() => {});
 if (config.MINIO_ENABLED) await minio.initialize().catch(() => {});
 
@@ -271,7 +427,7 @@ app.get('/api/v1/nats/status', async (_req, reply) => {
 });
 
 // Device group control via NATS (efficient broadcast)
-app.post('/api/v1/nats/broadcast', async (req, reply) => {
+app.post('/api/v1/nats/broadcast', { preHandler: requireAuth(authService) }, async (req, reply) => {
   const { subject, data } = req.body as { subject: string; data: unknown };
   if (!subject || !data) {
     return reply.status(400).send({ error: 'subject and data required' });
@@ -330,35 +486,60 @@ await app.register(async function (scope: FastifyInstance) {
 // aiMemoryScheduler.start();
 console.log("[AIMemory] Scheduler API registered, auto-scheduling DISABLED");
 
+const loginBodySchema = z.object({
+  account: z.string().min(1, '请输入用户名或手机号'),
+  password: z.string().min(1, '请输入密码'),
+});
+
 app.post('/api/v1/auth/login', async (req, reply) => {
-  const { username, password } = req.body as any;
-  if (!username || !password) {
-    return reply.status(400).send({ error: 'username and password required' });
+  const parsed = loginBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid request body' });
+  }
+  const { account, password } = parsed.data;
+
+  // Look up user by username or phone
+  const [user] = await db.select().from(users).where(
+    or(eq(users.username, account), eq(users.phone, account))
+  );
+  if (!user) {
+    return reply.status(401).send({ error: '账号或密码错误' });
   }
 
-  // Look up user in database
-  const [user] = await db.select().from(users).where(eq(users.username, username));
-  if (!user) {
-    return reply.status(401).send({ error: 'Invalid credentials' });
+  if (user.status === 'disabled') {
+    return reply.status(403).send({ error: '账号已被禁用' });
   }
 
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) {
-    return reply.status(401).send({ error: 'Invalid credentials' });
+    return reply.status(401).send({ error: '账号或密码错误' });
   }
 
-  const token = authService.signToken({
-    userId: user.id,
-    username: user.username,
-    role: user.role as 'admin' | 'operator' | 'viewer',
-  });
-  const refreshToken = authService.signRefreshToken({
-    userId: user.id,
-    username: user.username,
-    role: user.role as 'admin' | 'operator' | 'viewer',
-  });
+  // Update last login
+  await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
 
-  return { token, refreshToken, user: { id: user.id, username: user.username, role: user.role } };
+  const authUser: AuthUser = {
+    userId: user.id,
+    username: user.username,
+    role: user.role as AuthUser['role'],
+    tenantId: user.tenantId ?? undefined,
+  };
+
+  const token = authService.signToken(authUser);
+  const refreshToken = authService.signRefreshToken(authUser);
+
+  return {
+    token,
+    refreshToken,
+    user: {
+      id: user.id,
+      username: user.username,
+      phone: user.phone
+        ? user.phone.slice(0, 3) + '****' + user.phone.slice(-4)
+        : null,
+      role: user.role,
+    },
+  };
 });
 
 app.post('/api/v1/auth/refresh', async (req, reply) => {
@@ -375,7 +556,7 @@ app.register(async function (adminScope) {
 
   // Health check authenticated variant
   adminScope.get('/api/v1/admin/health', async (req) => {
-    const user = (req as any).user;
+    const user = req.user!;
     return {
       status: 'ok',
       uptime: process.uptime(),
@@ -449,11 +630,44 @@ try {
   process.exit(1);
 }
 
+// ── Initialize billing services ──
+try {
+  await seedDefaultPlans();
+  subscriptionScheduler.start();
+  console.log('[Billing] Plans seeded, subscription scheduler started');
+} catch (err) {
+  console.warn('[Billing] Non-critical billing init failed:', (err as Error).message);
+}
+
 // Graceful shutdown
 const shutdown = () => {
   console.log('\nShutting down...');
-  if (bridgeClient) bridgeClient.disconnect();
-  app.close().then(() => process.exit(0));
+
+  // Force exit after 10s if graceful shutdown hangs
+  const forceExit = setTimeout(() => {
+    console.error('Forced shutdown after 10s timeout');
+    process.exit(1);
+  }, 10000);
+  forceExit.unref();
+
+  (async () => {
+    try {
+      if (bridgeClient) bridgeClient.disconnect();
+      hub.dispose();
+      if (nats?.isConnected) await nats.disconnect();
+      if (minio) await minio.shutdown?.().catch(() => {});
+      if (experienceCompiler) experienceCompiler.stop();
+      subscriptionScheduler.stop();
+      await app.close();
+      await pool.end();
+      clearTimeout(forceExit);
+      process.exit(0);
+    } catch (err) {
+      console.error('Shutdown error:', err);
+      clearTimeout(forceExit);
+      process.exit(1);
+    }
+  })();
 };
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);

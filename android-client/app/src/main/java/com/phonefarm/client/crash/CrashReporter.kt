@@ -7,8 +7,8 @@ import android.os.Process
 import com.phonefarm.client.data.local.dao.CrashReportDao
 import com.phonefarm.client.data.local.entity.CrashReportEntity
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.PrintWriter
@@ -41,6 +41,28 @@ class CrashReporter @Inject constructor(
     companion object {
         private const val TAG = "CrashReporter"
         private const val MAX_LOG_LINES = 50
+
+        /** In-app ring buffer — logcat is empty on Android 8+. */
+        private val logBuffer = ArrayDeque<String>(MAX_LOG_LINES + 1)
+
+        /** Append a log line to the ring buffer. Call from anywhere that produces logs. */
+        @JvmStatic
+        fun appendLog(tag: String, message: String) {
+            synchronized(logBuffer) {
+                if (logBuffer.size >= MAX_LOG_LINES) logBuffer.removeFirst()
+                val ts = java.text.SimpleDateFormat("MM-dd HH:mm:ss.SSS", java.util.Locale.US)
+                    .format(java.util.Date())
+                logBuffer.addLast("$ts $tag: $message")
+            }
+        }
+
+        /** Snapshot the ring buffer. */
+        private fun snapshotLogBuffer(): String? {
+            synchronized(logBuffer) {
+                if (logBuffer.isEmpty()) return null
+                return logBuffer.joinToString("\n")
+            }
+        }
     }
 
     /** The original handler that was in place before [install]. */
@@ -72,13 +94,12 @@ class CrashReporter @Inject constructor(
                 crashType = "java_crash",
             )
 
-            // Persist synchronously on IO thread via a fire-and-forget coroutine.
+            // Persist asynchronously — let the process crash handler continue
+            // while the crash report is written in the background.
             try {
-                CoroutineScope(Dispatchers.IO).launch {
+                GlobalScope.launch(Dispatchers.IO) {
                     crashReportDao.insert(entity)
                 }
-                // Give Room a moment to flush the write.
-                Thread.sleep(500)
             } catch (_: Exception) {
                 // Last-resort: write crash info to a plain file on disk.
                 writeCrashToFile(entity)
@@ -212,10 +233,11 @@ class CrashReporter @Inject constructor(
 
     /**
      * Capture the last ~50 lines from logcat (runtime buffer only).
-     * Uses shell execution which may be rate-limited on newer Android versions.
+     * On Android 8+, logcat may return empty for the app's own PID.
+     * Falls back to the in-app ring buffer when logcat yields nothing.
      */
     private fun captureLogSnapshot(): String? {
-        return try {
+        val logcatLines = try {
             val process = Runtime.getRuntime().exec(
                 arrayOf("logcat", "-t", MAX_LOG_LINES.toString(), "-v", "threadtime")
             )
@@ -223,10 +245,13 @@ class CrashReporter @Inject constructor(
             val lines = reader.readLines()
             reader.close()
             process.destroy()
-            lines.joinToString("\n")
+            if (lines.isNotEmpty()) lines.joinToString("\n") else null
         } catch (_: Exception) {
             null
         }
+
+        // Fall back to in-app ring buffer on Android 8+ where logcat returns empty
+        return logcatLines ?: snapshotLogBuffer()
     }
 
     /**

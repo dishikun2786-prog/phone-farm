@@ -44,7 +44,7 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     const userId = (req as any).user?.userId;
     if (!userId) return reply.status(401).send({ error: "Unauthorized" });
 
-    const { planId } = req.body as { planId: string };
+    const { planId, skipPayment } = req.body as { planId: string; skipPayment?: boolean };
     if (!planId) return reply.status(400).send({ error: "planId required" });
 
     const [plan] = await db.select().from(billingPlans).where(eq(billingPlans.id, planId)).limit(1);
@@ -56,33 +56,42 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
       .set({ status: "cancelled", cancelledAt: new Date() })
       .where(and(eq(subscriptions.userId, userId), eq(subscriptions.status, "active")));
 
-    // Create new subscription
     const now = new Date();
     const periodEnd = new Date(now.getTime() + 30 * 24 * 3600 * 1000);
-    const [sub] = await db
-      .insert(subscriptions)
-      .values({
-        userId,
-        planId: plan.id,
-        status: "active",
-        currentPeriodStart: now,
-        currentPeriodEnd: periodEnd,
-      })
-      .returning();
 
-    // Create order
-    const [order] = await db
-      .insert(orders)
-      .values({
-        userId,
-        subscriptionId: sub.id,
-        amountCents: plan.monthlyPriceCents ?? 0,
-        status: "paid",
-        paidAt: now,
-      })
-      .returning();
+    // For skipPayment (admin/manual) or free plans, activate immediately
+    if (skipPayment || (plan.monthlyPriceCents ?? 0) === 0) {
+      const [sub] = await db
+        .insert(subscriptions)
+        .values({
+          userId,
+          planId: plan.id,
+          status: "active",
+          currentPeriodStart: now,
+          currentPeriodEnd: periodEnd,
+        })
+        .returning();
 
-    return reply.status(201).send({ subscription: sub, order });
+      const [order] = await db
+        .insert(orders)
+        .values({
+          userId,
+          subscriptionId: sub.id,
+          amountCents: plan.monthlyPriceCents ?? 0,
+          status: "paid",
+          paidAt: now,
+          paymentMethod: skipPayment ? "manual" : "free",
+        })
+        .returning();
+
+      return reply.status(201).send({ subscription: sub, order });
+    }
+
+    // For paid plans, create order as pending (payment handled by /api/v2/billing/orders)
+    return reply.status(400).send({
+      error: "Paid plans require payment. Use POST /api/v2/billing/orders with paymentMethod.",
+      redirectTo: "/api/v2/billing/orders",
+    });
   });
 
   app.post("/api/v1/billing/cancel", async (req, reply) => {

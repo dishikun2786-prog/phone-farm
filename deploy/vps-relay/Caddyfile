@@ -1,0 +1,53 @@
+# Caddy configuration for openedskill.com
+# Cloudflare handles public SSL; origin uses self-signed cert
+
+sr.openedskill.com {
+	tls internal
+
+	handle /socket.io/* {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	reverse_proxy 127.0.0.1:3001
+	encode gzip
+	header {
+		X-Forwarded-Proto https
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+	}
+}
+
+ht.openedskill.com {
+	tls internal
+	reverse_proxy localhost:3002
+	encode gzip
+	header {
+		X-Forwarded-Proto https
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+	}
+}
+
+phone.openedskill.com {
+	tls internal
+
+	handle /ws/* {
+		reverse_proxy 127.0.0.1:8499
+	}
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8443
+	}
+
+	handle /health {
+		reverse_proxy 127.0.0.1:8443
+	}
+
+	reverse_proxy 127.0.0.1:8499
+	encode gzip
+	header {
+		X-Forwarded-Proto https
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+	}
+}

@@ -106,9 +106,9 @@ export async function systemConfigRoutes(app: FastifyInstance): Promise<void> {
   // ── Feature Flags ──
 
   app.get("/api/v1/system/feature-flags", async (req, reply) => {
-    const user = (req as any).user as AuthUser;
-    if (!hasPermission(user.role, "config", "read")) {
-      return reply.status(403).send({ error: "Permission denied" });
+    const user = (req as any).user as AuthUser | null;
+    if (!user || !hasPermission(user.role, "config", "read")) {
+      return reply.status(user ? 403 : 401).send({ error: user ? "Permission denied" : "Authentication required" });
     }
 
     const rc = getRC();
@@ -149,9 +149,9 @@ export async function systemConfigRoutes(app: FastifyInstance): Promise<void> {
   // ── Infrastructure Status ──
 
   app.get("/api/v1/system/infrastructure/status", async (req, reply) => {
-    const user = (req as any).user as AuthUser;
-    if (!hasPermission(user.role, "config", "read")) {
-      return reply.status(403).send({ error: "Permission denied" });
+    const user = (req as any).user as AuthUser | null;
+    if (!user || !hasPermission(user.role, "config", "read")) {
+      return reply.status(user ? 403 : 401).send({ error: user ? "Permission denied" : "Authentication required" });
     }
 
     const status: Record<string, { connected: boolean; info: Record<string, any> }> = {};

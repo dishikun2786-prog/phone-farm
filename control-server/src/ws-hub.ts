@@ -1,6 +1,13 @@
 import { WebSocket } from 'ws';
 import jwt from 'jsonwebtoken';
 import zlib from 'zlib';
+import { config } from './config.js';
+
+// Optional modules — loaded at startup, used conditionally
+let natsSync: any;
+let signalingRelay: any;
+try { natsSync = require('./nats/nats-sync.js')?.natsSync; } catch { /* NATS optional */ }
+try { signalingRelay = require('./webrtc/signaling-relay.js'); } catch { /* signaling relay optional */ }
 
 interface DeviceConnection {
   ws: WebSocket;
@@ -12,12 +19,26 @@ interface DeviceConnection {
   currentTaskId?: string;
   runtime?: string;
   username?: string;
+  /** Rate limiting: message count in current window */
+  msgCount: number;
+  msgWindowStart: number;
 }
 
 interface FrontendConnection {
   ws: WebSocket;
   subscribedDevices: Set<string>;
+  authenticated: boolean;
+  connectedAt: Date;
+  /** Rate limiting: message count in current window */
+  msgCount: number;
+  msgWindowStart: number;
 }
+
+const MAX_MSG_SIZE = 1_048_576; // 1 MB max message size
+const RATE_LIMIT_WINDOW_MS = 1000; // 1 second window
+const RATE_LIMIT_MAX_MSGS = 60; // max 60 messages per second per connection
+const STALE_HEARTBEAT_MS = 120_000; // disconnect after 2 min without heartbeat
+const CLEANUP_INTERVAL_MS = 30_000; // run stale check every 30s
 
 export class WsHub {
   #devices = new Map<string, DeviceConnection>();
@@ -26,13 +47,37 @@ export class WsHub {
   #jwtSecret: string;
   #taskTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
   #TASK_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes default
+  #cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(deviceAuthToken: string, jwtSecret?: string) {
     this.#deviceAuthToken = deviceAuthToken;
     this.#jwtSecret = jwtSecret || deviceAuthToken;
+    this.#startCleanup();
+  }
+
+  #startCleanup(): void {
+    this.#cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      for (const [deviceId, conn] of this.#devices) {
+        if (now - conn.lastHeartbeat.getTime() > STALE_HEARTBEAT_MS) {
+          console.warn(`[ws-hub] Stale device connection: ${deviceId} (${Math.round((now - conn.lastHeartbeat.getTime()) / 1000)}s no heartbeat)`);
+          conn.ws.close();
+          this.#devices.delete(deviceId);
+          this.#broadcastToFrontends({ type: 'device_offline', deviceId });
+        }
+      }
+      for (const conn of this.#frontends) {
+        if (now - conn.connectedAt.getTime() > 3600_000 && !conn.authenticated) {
+          console.warn('[ws-hub] Stale unauthenticated frontend connection');
+          conn.ws.close();
+          this.#frontends.delete(conn);
+        }
+      }
+    }, CLEANUP_INTERVAL_MS);
   }
 
   handleDeviceUpgrade(ws: WebSocket, req: any) {
+    const now = Date.now();
     const conn: DeviceConnection = {
       ws,
       deviceId: '',
@@ -40,10 +85,25 @@ export class WsHub {
       authenticated: false,
       connectedAt: new Date(),
       lastHeartbeat: new Date(),
+      msgCount: 0,
+      msgWindowStart: now,
     };
 
     ws.on('message', (raw, isBinary) => {
       try {
+        // Rate limit check
+        if (!this.#checkRateLimit(conn)) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Rate limit exceeded' }));
+          return;
+        }
+
+        // Message size limit
+        const size = raw instanceof Buffer ? raw.length : (raw as ArrayBuffer).byteLength;
+        if (size > MAX_MSG_SIZE) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Message too large' }));
+          return;
+        }
+
         // Handle compressed binary messages (0x08 prefix = gzipped JSON)
         if (isBinary || (raw instanceof Buffer && raw.length > 0 && raw[0] === 0x08)) {
           const buffer = raw instanceof Buffer ? raw : Buffer.from(raw as ArrayBuffer);
@@ -67,13 +127,21 @@ export class WsHub {
 
     ws.on('close', () => {
       if (conn.deviceId) {
+        // Clean up any task timeouts for this device
+        for (const [taskId, timer] of this.#taskTimeouts) {
+          const deviceConn = this.#devices.get(conn.deviceId);
+          if (!deviceConn || deviceConn.currentTaskId === taskId) {
+            clearTimeout(timer);
+            this.#taskTimeouts.delete(taskId);
+          }
+        }
         this.#devices.delete(conn.deviceId);
         this.#broadcastToFrontends({ type: 'device_offline', deviceId: conn.deviceId });
         this.#publishNatsDeviceOffline(conn.deviceId);
       }
     });
 
-    ws.on('error', () => { });
+    ws.on('error', (err) => { console.warn('[ws-hub] WebSocket error:', err.message); });
   }
 
   #handleDeviceMessage(conn: DeviceConnection, msg: any) {
@@ -85,6 +153,13 @@ export class WsHub {
             type: 'auth_ok',
             udpPort: 8444,
             natProbeEnabled: true,
+            webrtc: {
+              enabled: config.WEBRTC_ENABLED,
+              turnServerUrl: config.TURN_SERVER_URL,
+              turnUsername: config.TURN_USERNAME,
+              turnCredential: config.TURN_CREDENTIAL,
+              stunServerUrl: config.STUN_SERVER_URL,
+            },
           }));
           this.#broadcastToFrontends({
             type: 'device_online',
@@ -176,38 +251,90 @@ export class WsHub {
         // Dynamic check for webrtc_* message types — routed via signaling-relay.ts
         if (typeof msg.type === 'string' && msg.type.startsWith('webrtc_')) {
           if (!conn.authenticated) return;
-          try {
-            const { handleWebrtcSignaling } = require('./webrtc/signaling-relay.js');
-            handleWebrtcSignaling(this, msg, conn.deviceId);
-          } catch { /* signaling relay optional */ }
+          if (signalingRelay?.handleWebrtcSignaling) {
+            try {
+              signalingRelay.handleWebrtcSignaling(this, msg, conn.deviceId);
+            } catch { console.warn('[ws-hub] Signaling relay error'); }
+          }
         }
         break;
     }
   }
 
-  handleFrontendUpgrade(ws: WebSocket, _req: any) {
+  handleFrontendUpgrade(ws: WebSocket, req: any) {
+    const now = Date.now();
+    // Extract token from query string for frontend auth
+    const url = new URL(req?.url || '/', 'http://localhost');
+    const token = url.searchParams.get('token') || '';
+
     const conn: FrontendConnection = {
       ws,
       subscribedDevices: new Set(),
+      authenticated: false,
+      connectedAt: new Date(),
+      msgCount: 0,
+      msgWindowStart: now,
     };
+
+    // Verify JWT token for frontend connections
+    try {
+      const decoded = jwt.verify(token, this.#jwtSecret, { algorithms: ['HS256'] }) as any;
+      if (decoded?.userId) {
+        conn.authenticated = true;
+      }
+    } catch {
+      // Token invalid or missing — allow connection but reject subscriptions
+    }
+
+    if (!conn.authenticated) {
+      ws.send(JSON.stringify({ type: 'auth_required', message: 'Send auth message with JWT token' }));
+    }
+
     this.#frontends.add(conn);
 
     ws.on('message', (raw) => {
       try {
+        // Rate limit check
+        if (!this.#checkRateLimit(conn)) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Rate limit exceeded' }));
+          return;
+        }
+
         const msg = JSON.parse(raw.toString());
+
+        // Auth message for frontend connections
+        if (msg.type === 'auth') {
+          try {
+            const decoded = jwt.verify(msg.token, this.#jwtSecret, { algorithms: ['HS256'] }) as any;
+            if (decoded?.userId) {
+              conn.authenticated = true;
+              ws.send(JSON.stringify({ type: 'auth_ok' }));
+            }
+          } catch {
+            ws.send(JSON.stringify({ type: 'auth_error', message: 'Invalid token' }));
+          }
+          return;
+        }
+
+        // Require auth for subscription operations
+        if (!conn.authenticated) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Authentication required' }));
+          return;
+        }
+
         if (msg.type === 'subscribe' && msg.deviceId) {
           conn.subscribedDevices.add(msg.deviceId);
         } else if (msg.type === 'unsubscribe' && msg.deviceId) {
           conn.subscribedDevices.delete(msg.deviceId);
         }
-      } catch { /* ignore */ }
+      } catch { console.warn('[ws-hub] Failed to parse message'); }
     });
 
     ws.on('close', () => {
       this.#frontends.delete(conn);
     });
 
-    ws.on('error', () => { });
+    ws.on('error', (err) => { console.warn('[ws-hub] WebSocket error:', err.message); });
   }
 
   sendToDevice(deviceId: string, message: object): boolean {
@@ -341,21 +468,53 @@ export class WsHub {
   // ── NATS integration hooks (no-op when NATS is disabled) ──
 
   #publishNatsDeviceOnline(deviceId: string, info: Record<string, unknown>): void {
-    try {
-      const { natsSync } = require('./nats/nats-sync.js');
-      if (natsSync?.isConnected) {
-        natsSync.publishDeviceOnline(deviceId, info as any);
-      }
-    } catch { /* NATS optional */ }
+    if (natsSync?.isConnected) {
+      try { natsSync.publishDeviceOnline(deviceId, info as any); } catch { /* NATS optional — no-op */ }
+    }
   }
 
   #publishNatsDeviceOffline(deviceId: string): void {
-    try {
-      const { natsSync } = require('./nats/nats-sync.js');
-      if (natsSync?.isConnected) {
-        natsSync.publishDeviceOffline(deviceId);
-      }
-    } catch { /* NATS optional */ }
+    if (natsSync?.isConnected) {
+      try { natsSync.publishDeviceOffline(deviceId); } catch { /* NATS optional — no-op */ }
+    }
+  }
+
+  /** Rate-limit check: returns false if connection exceeded message rate. */
+  #checkRateLimit(conn: DeviceConnection | FrontendConnection): boolean {
+    const now = Date.now();
+    if (now - conn.msgWindowStart > RATE_LIMIT_WINDOW_MS) {
+      conn.msgCount = 0;
+      conn.msgWindowStart = now;
+    }
+    conn.msgCount++;
+    return conn.msgCount <= RATE_LIMIT_MAX_MSGS;
+  }
+
+  /** Gracefully shut down: close all connections, clear all timers. */
+  dispose(): void {
+    // Stop cleanup interval
+    if (this.#cleanupInterval) {
+      clearInterval(this.#cleanupInterval);
+      this.#cleanupInterval = null;
+    }
+    // Clear all task timeouts
+    for (const [taskId, timer] of this.#taskTimeouts) {
+      clearTimeout(timer);
+    }
+    this.#taskTimeouts.clear();
+
+    // Close all device connections
+    for (const [deviceId, conn] of this.#devices) {
+      this.#publishNatsDeviceOffline(deviceId);
+      conn.ws.close();
+    }
+    this.#devices.clear();
+
+    // Close all frontend connections
+    for (const conn of this.#frontends) {
+      conn.ws.close();
+    }
+    this.#frontends.clear();
   }
 }
 

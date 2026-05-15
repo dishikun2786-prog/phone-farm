@@ -1,44 +1,81 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { useStore } from './store';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
-import { useCallback, useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useState, useRef, lazy, Suspense } from 'react';
 import Layout from './components/Layout';
 import Login from './pages/Login';
-import DeviceList from './pages/DeviceList';
-import DeviceDetail from './pages/DeviceDetail';
-import TaskList from './pages/TaskList';
-import TaskCreate from './pages/TaskCreate';
-import AccountList from './pages/AccountList';
-import VlmTaskPage from './pages/VlmTaskPage';
-import EpisodeListPage from './pages/EpisodeListPage';
-import ScriptManager from './pages/ScriptManager';
-import ModelConfigPage from './pages/ModelConfigPage';
-import KeyMapPage from './pages/KeyMapPage';
-import SystemControlPanel from './pages/SystemControlPanel';
-import GroupControlPanel from './components/GroupControlPanel';
-import EpisodePlayer from './components/EpisodePlayer';
-import AdminPanel from './pages/admin/AdminPanel';
-import CardKeyManagement from './pages/admin/CardKeyManagement';
-import DeviceGroupManagement from './pages/admin/DeviceGroupManagement';
-import BatchOperationPanel from './pages/admin/BatchOperationPanel';
-import AuditLogViewer from './pages/admin/AuditLogViewer';
-import VlmUsageDashboard from './pages/admin/VlmUsageDashboard';
-import AlertRuleConfig from './pages/admin/AlertRuleConfig';
-import ServerHealthDashboard from './pages/admin/ServerHealthDashboard';
-import SystemConfigPage from './pages/admin/SystemConfigPage';
-import FeatureFlagsPage from './pages/admin/FeatureFlagsPage';
-import InfrastructureMonitorPage from './pages/admin/InfrastructureMonitorPage';
-import ConfigManagement from './pages/config/ConfigManagement';
-import ConfigGlobalEditor from './pages/config/ConfigGlobalEditor';
-import ConfigDeviceEditor from './pages/config/ConfigDeviceEditor';
-import ConfigTemplateEditor from './pages/config/ConfigTemplateEditor';
-import ConfigAuditLog from './pages/config/ConfigAuditLog';
+import Register from './pages/Register';
 import type { EpisodeStep } from './components/EpisodePlayer';
 import ToastContainer from './components/Toast';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { api } from './lib/api';
 import { ArrowLeft, Loader2 } from 'lucide-react';
+import PortalSidebar from './components/portal/PortalSidebar';
+
+// ── Portal pages ──
+const PortalDashboardPage = lazy(() => import('./pages/portal/DashboardPage'));
+const PortalDeviceManagementPage = lazy(() => import('./pages/portal/DeviceManagementPage'));
+const PortalTaskManagementPage = lazy(() => import('./pages/portal/TaskManagementPage'));
+const PortalPlansPage = lazy(() => import('./pages/portal/PlansPage'));
+const PortalSubscribePage = lazy(() => import('./pages/portal/SubscribePage'));
+const PortalBillingHistoryPage = lazy(() => import('./pages/portal/BillingHistoryPage'));
+const PortalCardKeyListPage = lazy(() => import('./pages/portal/CardKeyListPage'));
+const PortalCardKeyGeneratePage = lazy(() => import('./pages/portal/CardKeyGeneratePage'));
+const PortalUsageAnalyticsPage = lazy(() => import('./pages/portal/UsageAnalyticsPage'));
+const PortalApiKeyPage = lazy(() => import('./pages/portal/ApiKeyPage'));
+const PortalSupportTicketsPage = lazy(() => import('./pages/portal/SupportTicketsPage'));
+const PortalSupportTicketDetail = lazy(() => import('./pages/portal/SupportTicketDetail'));
+const PortalAccountSettingsPage = lazy(() => import('./pages/portal/AccountSettingsPage'));
+const PortalNewTicketPage = lazy(() => import('./pages/portal/NewTicketPage'));
+const PortalApiDocsPage = lazy(() => import('./pages/portal/ApiDocsPage'));
+const PortalApiAppsPage = lazy(() => import('./pages/portal/ApiAppsPage'));
+
+// ── Route-level code splitting ──
+const DeviceList = lazy(() => import('./pages/DeviceList'));
+const DeviceDetail = lazy(() => import('./pages/DeviceDetail'));
+const TaskList = lazy(() => import('./pages/TaskList'));
+const TaskCreate = lazy(() => import('./pages/TaskCreate'));
+const AccountList = lazy(() => import('./pages/AccountList'));
+const VlmTaskPage = lazy(() => import('./pages/VlmTaskPage'));
+const EpisodeListPage = lazy(() => import('./pages/EpisodeListPage'));
+const ScriptManager = lazy(() => import('./pages/ScriptManager'));
+const ModelConfigPage = lazy(() => import('./pages/ModelConfigPage'));
+const KeyMapPage = lazy(() => import('./pages/KeyMapPage'));
+const SystemControlPanel = lazy(() => import('./pages/SystemControlPanel'));
+const GroupControlPanel = lazy(() => import('./components/GroupControlPanel'));
+const AdminPanel = lazy(() => import('./pages/admin/AdminPanel'));
+const CardKeyManagement = lazy(() => import('./pages/admin/CardKeyManagement'));
+const DeviceGroupManagement = lazy(() => import('./pages/admin/DeviceGroupManagement'));
+const BatchOperationPanel = lazy(() => import('./pages/admin/BatchOperationPanel'));
+const AuditLogViewer = lazy(() => import('./pages/admin/AuditLogViewer'));
+const VlmUsageDashboard = lazy(() => import('./pages/admin/VlmUsageDashboard'));
+const AlertRuleConfig = lazy(() => import('./pages/admin/AlertRuleConfig'));
+const ServerHealthDashboard = lazy(() => import('./pages/admin/ServerHealthDashboard'));
+const SystemConfigPage = lazy(() => import('./pages/admin/SystemConfigPage'));
+const FeatureFlagsPage = lazy(() => import('./pages/admin/FeatureFlagsPage'));
+const InfrastructureMonitorPage = lazy(() => import('./pages/admin/InfrastructureMonitorPage'));
+const AgentManagementPage = lazy(() => import('./pages/admin/AgentManagementPage'));
+const CommissionSettlementPage = lazy(() => import('./pages/admin/CommissionSettlementPage'));
+const CardBatchManagementPage = lazy(() => import('./pages/admin/CardBatchManagementPage'));
+const WhitelabelConfigPage = lazy(() => import('./pages/admin/WhitelabelConfigPage'));
+const UserManagement = lazy(() => import('./pages/admin/UserManagement'));
+const CreditManagementPage = lazy(() => import('./pages/admin/CreditManagementPage'));
+const TokenPricingPage = lazy(() => import('./pages/admin/TokenPricingPage'));
+const AssistantUsageDashboard = lazy(() => import('./pages/admin/AssistantUsageDashboard'));
+const ConfigManagement = lazy(() => import('./pages/config/ConfigManagement'));
+const ConfigGlobalEditor = lazy(() => import('./pages/config/ConfigGlobalEditor'));
+const ConfigDeviceEditor = lazy(() => import('./pages/config/ConfigDeviceEditor'));
+const ConfigTemplateEditor = lazy(() => import('./pages/config/ConfigTemplateEditor'));
+const ConfigAuditLog = lazy(() => import('./pages/config/ConfigAuditLog'));
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center py-20">
+      <Loader2 size={32} className="animate-spin text-purple-500" />
+    </div>
+  );
+}
 
 const PAGE_TITLES: Record<string, string> = {
   '/': '设备列表',
@@ -63,11 +100,34 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/system-config': '系统配置管理',
   '/admin/feature-flags': '功能开关管理',
   '/admin/infrastructure': '基础设施监控',
+  '/admin/users': '用户管理',
+  '/admin/credits': '积分管理',
+  '/admin/token-pricing': 'Token 定价',
+  '/admin/assistant-usage': 'AI 助手用量',
+  '/admin/agents': '代理商管理',
+  '/admin/commissions': '佣金结算',
+  '/admin/card-batches': '卡密批次',
+  '/admin/whitelabel': '白标配置',
+  '/register': '注册账号',
   '/config': '配置管理',
   '/config/global': '全局配置编辑',
   '/config/device': '设备配置编辑',
   '/config/templates': '配置模板管理',
   '/config/audit': '配置变更审计',
+  '/portal': '门户首页',
+  '/portal/devices': '我的设备',
+  '/portal/tasks': '我的任务',
+  '/portal/usage': '用量统计',
+  '/portal/plans': '套餐计划',
+  '/portal/plans/subscribe': '订阅支付',
+  '/portal/billing': '账单历史',
+  '/portal/card-keys': '我的卡密',
+  '/portal/card-keys/generate': '生成卡密',
+  '/portal/api-keys': 'API Keys',
+  '/portal/support': '技术支持',
+  '/portal/support/new': '新建工单',
+  '/portal/support/:id': '工单详情',
+  '/portal/account': '账户设置',
 };
 
 function useDocumentTitle() {
@@ -174,6 +234,41 @@ function EpisodeDetailPage() {
   );
 }
 
+function PortalLayout() {
+  const location = useLocation();
+  const isDetail = location.pathname.startsWith('/portal/support/') && location.pathname !== '/portal/support' && location.pathname !== '/portal/support/new';
+
+  return (
+    <div className="flex">
+      {!isDetail && <PortalSidebar />}
+      <div className="flex-1">
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/" element={<PortalDashboardPage />} />
+            <Route path="/devices" element={<PortalDeviceManagementPage />} />
+            <Route path="/tasks" element={<PortalTaskManagementPage />} />
+            <Route path="/usage" element={<PortalUsageAnalyticsPage />} />
+            <Route path="/plans" element={<PortalPlansPage />} />
+            <Route path="/plans/subscribe" element={<PortalSubscribePage />} />
+            <Route path="/billing" element={<PortalBillingHistoryPage />} />
+            <Route path="/card-keys" element={<PortalCardKeyListPage />} />
+            <Route path="/card-keys/generate" element={<PortalCardKeyGeneratePage />} />
+            <Route path="/api-keys" element={<PortalApiKeyPage />} />
+            <Route path="/api-apps" element={<PortalApiAppsPage />} />
+            <Route path="/api-docs" element={<PortalApiDocsPage />} />
+            <Route path="/support" element={<PortalSupportTicketsPage />} />
+            <Route path="/support/new" element={<PortalNewTicketPage />} />
+            <Route path="/support/:id" element={<PortalSupportTicketDetail />} />
+            <Route path="/account" element={<PortalAccountSettingsPage />} />
+            <Route path="/api-docs" element={<PortalApiDocsPage />} />
+            <Route path="*" element={<Navigate to="/portal" replace />} />
+          </Routes>
+        </Suspense>
+      </div>
+    </div>
+  );
+}
+
 function AppInner() {
   useDocumentTitle();
   const updateLiveInfo = useStore(s => s.updateLiveInfo);
@@ -184,7 +279,8 @@ function AppInner() {
     document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
 
-  useKeyboardShortcuts({
+  // Handlers stored in ref to avoid re-registering keyboard listener every render
+  const handlersRef = useRef({
     onToggleTheme: toggleTheme,
     onFocusSearch: () => {
       const searchInput = document.querySelector<HTMLInputElement>('input[type="text"][placeholder*="搜索"]');
@@ -196,6 +292,9 @@ function AppInner() {
       }
     },
   });
+  handlersRef.current = { ...handlersRef.current, onToggleTheme: toggleTheme };
+
+  useKeyboardShortcuts(handlersRef.current);
 
   const handleWsMessage = useCallback((msg: any) => {
     switch (msg.type) {
@@ -223,7 +322,6 @@ function AppInner() {
         });
         break;
       case 'config_update':
-        // Real-time config change notification
         console.log(`[Config] ${msg.configKey} updated (scope=${msg.scope}, v${msg.version})`);
         break;
     }
@@ -233,38 +331,49 @@ function AppInner() {
 
   return (
     <Layout connectionState={connectionState}>
-      <Routes>
-        <Route path="/" element={<DeviceList />} />
-        <Route path="/devices/:id" element={<DeviceDetail />} />
-        <Route path="/tasks" element={<TaskList />} />
-        <Route path="/tasks/new" element={<TaskCreate />} />
-        <Route path="/accounts" element={<AccountList />} />
-        <Route path="/vlm" element={<VlmTaskPage />} />
-        <Route path="/vlm/episodes" element={<EpisodeListPage />} />
-        <Route path="/vlm/episodes/:id" element={<EpisodeDetailPage />} />
-        <Route path="/vlm/scripts" element={<ScriptManager />} />
-        <Route path="/vlm/models" element={<ModelConfigPage />} />
-        <Route path="/groups" element={<GroupControlPanel />} />
-        <Route path="/keymaps" element={<KeyMapPage />} />
-        <Route path="/settings" element={<SystemControlPanel />} />
-        <Route path="/admin" element={<AdminPanel />} />
-        <Route path="/admin/card-keys" element={<CardKeyManagement />} />
-        <Route path="/admin/groups" element={<DeviceGroupManagement />} />
-        <Route path="/admin/batch" element={<BatchOperationPanel />} />
-        <Route path="/admin/audit" element={<AuditLogViewer />} />
-        <Route path="/admin/vlm-usage" element={<VlmUsageDashboard />} />
-        <Route path="/admin/alerts" element={<AlertRuleConfig />} />
-        <Route path="/admin/health" element={<ServerHealthDashboard />} />
-        <Route path="/admin/system-config" element={<SystemConfigPage />} />
-        <Route path="/admin/feature-flags" element={<FeatureFlagsPage />} />
-        <Route path="/admin/infrastructure" element={<InfrastructureMonitorPage />} />
-        <Route path="/config" element={<ConfigManagement />} />
-        <Route path="/config/global" element={<ConfigGlobalEditor />} />
-        <Route path="/config/device" element={<ConfigDeviceEditor />} />
-        <Route path="/config/templates" element={<ConfigTemplateEditor />} />
-        <Route path="/config/audit" element={<ConfigAuditLog />} />
-        <Route path="/login" element={<Navigate to="/" replace />} />
-      </Routes>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/" element={<DeviceList />} />
+          <Route path="/devices/:id" element={<DeviceDetail />} />
+          <Route path="/tasks" element={<TaskList />} />
+          <Route path="/tasks/new" element={<TaskCreate />} />
+          <Route path="/accounts" element={<AccountList />} />
+          <Route path="/vlm" element={<VlmTaskPage />} />
+          <Route path="/vlm/episodes" element={<EpisodeListPage />} />
+          <Route path="/vlm/episodes/:id" element={<EpisodeDetailPage />} />
+          <Route path="/vlm/scripts" element={<ScriptManager />} />
+          <Route path="/vlm/models" element={<ModelConfigPage />} />
+          <Route path="/groups" element={<GroupControlPanel />} />
+          <Route path="/keymaps" element={<KeyMapPage />} />
+          <Route path="/settings" element={<SystemControlPanel />} />
+          <Route path="/admin" element={<AdminPanel />} />
+          <Route path="/admin/card-keys" element={<CardKeyManagement />} />
+          <Route path="/admin/groups" element={<DeviceGroupManagement />} />
+          <Route path="/admin/batch" element={<BatchOperationPanel />} />
+          <Route path="/admin/audit" element={<AuditLogViewer />} />
+          <Route path="/admin/vlm-usage" element={<VlmUsageDashboard />} />
+          <Route path="/admin/alerts" element={<AlertRuleConfig />} />
+          <Route path="/admin/health" element={<ServerHealthDashboard />} />
+          <Route path="/admin/system-config" element={<SystemConfigPage />} />
+          <Route path="/admin/feature-flags" element={<FeatureFlagsPage />} />
+          <Route path="/admin/infrastructure" element={<InfrastructureMonitorPage />} />
+          <Route path="/admin/agents" element={<AgentManagementPage />} />
+          <Route path="/admin/commissions" element={<CommissionSettlementPage />} />
+          <Route path="/admin/card-batches" element={<CardBatchManagementPage />} />
+          <Route path="/admin/whitelabel" element={<WhitelabelConfigPage />} />
+          <Route path="/admin/users" element={<UserManagement />} />
+          <Route path="/admin/credits" element={<CreditManagementPage />} />
+          <Route path="/admin/token-pricing" element={<TokenPricingPage />} />
+          <Route path="/admin/assistant-usage" element={<AssistantUsageDashboard />} />
+          <Route path="/config" element={<ConfigManagement />} />
+          <Route path="/config/global" element={<ConfigGlobalEditor />} />
+          <Route path="/config/device" element={<ConfigDeviceEditor />} />
+          <Route path="/config/templates" element={<ConfigTemplateEditor />} />
+          <Route path="/config/audit" element={<ConfigAuditLog />} />
+          <Route path="/login" element={<Navigate to="/" replace />} />
+          <Route path="/portal/*" element={<PortalLayout />} />
+        </Routes>
+      </Suspense>
     </Layout>
   );
 }
@@ -274,16 +383,20 @@ function App() {
   const logout = useStore(s => s.logout);
   const [tokenValidated, setTokenValidated] = useState(false);
 
-  // Validate stored token against current server on first mount.
-  // Since we switched to thin-client (VPS as single source of truth),
-  // any stale localhost JWT must be purged.
+  // Listen for auth-expired events (dispatched by api.ts on 401)
+  useEffect(() => {
+    const handler = () => logout();
+    window.addEventListener('phonefarm:auth-expired', handler);
+    return () => window.removeEventListener('phonefarm:auth-expired', handler);
+  }, [logout]);
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { setTokenValidated(true); return; }
     api.health()
       .then(() => setTokenValidated(true))
       .catch(() => { logout(); setTokenValidated(true); });
-  }, []);
+  }, [logout]);
 
   if (!tokenValidated) {
     return (
@@ -297,15 +410,18 @@ function App() {
 
   return (
     <BrowserRouter>
-      <ToastContainer />
-      {isAuthenticated ? (
-        <AppInner />
-      ) : (
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-      )}
+      <ErrorBoundary>
+        <ToastContainer />
+        {isAuthenticated ? (
+          <AppInner />
+        ) : (
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        )}
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }

@@ -109,7 +109,7 @@ export class ActivationStore {
     return { valid: true };
   }
 
-  async consume(code: string, deviceId: string, deviceName: string): Promise<{
+  async consume(code: string, deviceId: string, deviceName: string, tenantId?: string): Promise<{
     success: boolean;
     error?: string;
     expiresAt?: number;
@@ -167,17 +167,22 @@ export class ActivationStore {
         cardKeyId: cardKey.id,
         deviceId,
         deviceName,
+        tenantId: tenantId || cardKey.tenantId,
         boundAt: new Date(now),
         expiresAt,
       })
       .returning();
 
-    // Update card key usage
+    // Update card key usage + tenant_id
     const newUsed = cardKey.usedDevices + 1;
     const newStatus = newUsed >= cardKey.maxDevices ? "used" : "active";
+    const updateData: Record<string, any> = { usedDevices: newUsed, status: newStatus };
+    if (tenantId && !cardKey.tenantId) {
+      updateData.tenantId = tenantId;
+    }
     await db
       .update(cardKeys)
-      .set({ usedDevices: newUsed, status: newStatus })
+      .set(updateData)
       .where(eq(cardKeys.id, cardKey.id));
 
     this.fastify.log.info(

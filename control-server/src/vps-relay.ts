@@ -10,8 +10,11 @@
 
 import 'dotenv/config';
 import Fastify from 'fastify';
-import fastifyWebsocket from '@fastify/websocket';
 import fastifyCors from '@fastify/cors';
+import fastifyStatic from '@fastify/static';
+import fastifyWebsocket from '@fastify/websocket';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { BridgeServer } from './relay/bridge-server';
 
 const PORT = parseInt(process.env.RELAY_PORT || '8499');
@@ -89,6 +92,19 @@ app.get('/api/v1/ai/stats', async () => {
 
 app.get('/api/v1/ai/workers', async () => {
   return { workers: bridge.aiRouter.getWorkers() };
+});
+
+// ── Dashboard static files (SPA) — must be after all API/WS routes ──
+const dashboardRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../dashboard/dist');
+await app.register(fastifyStatic, {
+  root: dashboardRoot,
+  prefix: '/',
+});
+app.setNotFoundHandler(async (request, reply) => {
+  if (request.url.startsWith('/api/') || request.url.startsWith('/ws/') || request.url === '/health') {
+    return reply.status(404).send({ error: 'Not found' });
+  }
+  return reply.sendFile('index.html');
 });
 
 // ── Shutdown ──

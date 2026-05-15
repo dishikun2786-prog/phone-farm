@@ -17,12 +17,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.phonefarm.client.network.ApiService
 import com.phonefarm.client.ui.components.*
 import com.phonefarm.client.ui.theme.Error
 import com.phonefarm.client.ui.theme.Success
 import com.phonefarm.client.ui.theme.Warning
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,10 +37,13 @@ data class HomeUiState(
     val todayExecutionCount: Int = 0,
     val activeTaskCount: Int = 0,
     val activityItems: List<ActivityItem> = emptyList(),
+    val errorMessage: String? = null,
 )
 
 @HiltViewModel
-class HomeViewModel @Inject constructor() : ViewModel() {
+class HomeViewModel @Inject constructor(
+    private val apiService: ApiService,
+) : ViewModel() {
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
@@ -48,32 +51,38 @@ class HomeViewModel @Inject constructor() : ViewModel() {
 
     fun loadDashboardData() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
-            delay(800)
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
 
-            val devices = listOf(
-                DeviceGridItem("d1", "Pixel 7 Pro", "Pixel 7 Pro · Android 15", true, "idle", 23, 0),
-                DeviceGridItem("d2", "Galaxy S24", "SM-S9210 · Android 14", true, "executing", 18, 3),
-                DeviceGridItem("d3", "OnePlus 12", "PJD110 · Android 15", false, "offline", 11, 0),
-                DeviceGridItem("d4", "Xiaomi 14", "23127PN0CC · MIUI 15", true, "idle", 31, 0),
-            )
+            try {
+                // Fetch device config (this device) to confirm connectivity
+                val config = apiService.getDeviceConfig(android.provider.Settings.Secure.ANDROID_ID)
+                val scriptManifest = apiService.getScriptManifest()
 
-            _uiState.value = HomeUiState(
-                isLoading = false,
-                devices = devices,
-                onlineCount = devices.count { it.isOnline },
-                scriptCount = 42,
-                todayExecutionCount = 156,
-                activeTaskCount = devices.sumOf { it.activeTaskCount },
-                activityItems = listOf(
-                    ActivityItem("t1", "抖音推荐营销", "Pixel 7 Pro", ActivityStatus.COMPLETED, "2分钟前"),
-                    ActivityItem("t2", "快手搜索用户", "Galaxy S24", ActivityStatus.RUNNING, "5分钟前"),
-                    ActivityItem("t3", "微信视频号推荐", "OnePlus 12", ActivityStatus.FAILED, "15分钟前"),
-                    ActivityItem("t4", "小红书涨粉", "Xiaomi 14", ActivityStatus.COMPLETED, "1小时前"),
-                    ActivityItem("t5", "抖音同城营销", "Pixel 7 Pro", ActivityStatus.COMPLETED, "2小时前"),
-                    ActivityItem("t6", "抖音AI智能回复", "Galaxy S24", ActivityStatus.FAILED, "3小时前"),
-                ),
-            )
+                val deviceItem = DeviceGridItem(
+                    id = config.deviceId,
+                    name = config.deviceName,
+                    subtitle = "Android · ${android.os.Build.MODEL}",
+                    isOnline = true,
+                    status = "connected",
+                    battery = 0,
+                    activeTaskCount = 0,
+                )
+
+                _uiState.value = HomeUiState(
+                    isLoading = false,
+                    devices = listOf(deviceItem),
+                    onlineCount = 1,
+                    scriptCount = scriptManifest.size,
+                    todayExecutionCount = 0,
+                    activeTaskCount = 0,
+                    activityItems = emptyList(),
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    errorMessage = "无法连接服务器: ${e.message}",
+                )
+            }
         }
     }
 }

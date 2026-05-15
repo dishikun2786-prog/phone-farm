@@ -40,6 +40,7 @@ class VlmAgent @Inject constructor(
     private val memoryManager: MemoryManager,
     private val promptTemplateManager: PromptTemplateManager,
     private val actionExecutor: com.phonefarm.client.edge.ActionExecutor,
+    private val vlmScreenCapture: VlmScreenCapture?,
 ) {
 
     private val _agentState = MutableStateFlow<AgentState>(AgentState.Idle)
@@ -47,8 +48,6 @@ class VlmAgent @Inject constructor(
 
     private val _currentStep = MutableStateFlow<VlmStep?>(null)
     val currentStep: StateFlow<VlmStep?> = _currentStep.asStateFlow()
-
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     // Control flags
     @Volatile private var isPaused = false
@@ -200,6 +199,10 @@ class VlmAgent @Inject constructor(
                     )
                     history.add(feedbackEntry)
                     recentScreenshots.add(screenshot)
+                    while (recentScreenshots.size > 5) {
+                        val old = recentScreenshots.removeAt(0)
+                        if (old !== screenshot) old.recycle()
+                    }
                     continue // retry from screenshot
                 }
 
@@ -221,6 +224,10 @@ class VlmAgent @Inject constructor(
                     )
                     history.add(feedbackEntry)
                     recentScreenshots.add(screenshot)
+                    while (recentScreenshots.size > 5) {
+                        val old = recentScreenshots.removeAt(0)
+                        if (old !== screenshot) old.recycle()
+                    }
                     continue // retry
                 }
 
@@ -409,11 +416,24 @@ class VlmAgent @Inject constructor(
     }
 
     /**
-     * Capture screen via AccessibilityService (API 34+). Returns null on failure.
+     * Capture screen for VLM inference.
+     *
+     * Primary: VlmScreenCapture (I-frame extraction from video encoder, zero-cost, API 29+).
+     * Fallback: AccessibilityService takeScreenshot() (API 34+).
+     * Last resort: screencap shell command.
      */
-    private fun captureScreen(): Bitmap? {
-        val service = PhoneFarmAccessibilityService.instance ?: return null
-        return service.captureScreen()
+    private suspend fun captureScreen(): Bitmap? {
+        // Try VlmScreenCapture first (I-frame from video encoder)
+        if (vlmScreenCapture != null) {
+            val bitmap = vlmScreenCapture.capture()
+            if (bitmap != null) return bitmap
+        }
+        // Fallback to AccessibilityService
+        val service = PhoneFarmAccessibilityService.instance
+        if (service != null) {
+            return service.captureScreen()
+        }
+        return null
     }
 
     /**

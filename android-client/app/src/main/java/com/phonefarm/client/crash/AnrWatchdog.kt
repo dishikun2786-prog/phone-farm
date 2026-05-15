@@ -1,8 +1,17 @@
 package com.phonefarm.client.crash
 
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Printer
+import com.phonefarm.client.data.local.dao.CrashReportDao
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import com.phonefarm.client.data.local.entity.CrashReportEntity
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,7 +32,10 @@ import javax.inject.Singleton
  * contributing to main-thread congestion.
  */
 @Singleton
-class AnrWatchdog @Inject constructor() {
+class AnrWatchdog @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val crashReportDao: CrashReportDao,
+) {
 
     companion object {
         private const val TAG = "AnrWatchdog"
@@ -33,7 +45,7 @@ class AnrWatchdog @Inject constructor() {
         private const val CHECK_INTERVAL_MS = 1000L
     }
 
-    private val mainHandler = Handler(Looper.getMainLooper())
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var isRunning = false
 
     /** A dedicated background thread for monitor ticks. */
@@ -59,6 +71,9 @@ class AnrWatchdog @Inject constructor() {
         isRunning = true
 
         // Install a Printer on the main looper to track message dispatch timing.
+        // setMessageLogging is deprecated from API 30 but still functional;
+        // the replacement (Looper.setObserver) is only available from API 35.
+        @Suppress("DEPRECATION")
         Looper.getMainLooper().setMessageLogging(object : Printer {
             override fun println(x: String?) {
                 if (x == null) return
@@ -98,6 +113,7 @@ class AnrWatchdog @Inject constructor() {
         isRunning = false
         monitorThread?.interrupt()
         monitorThread = null
+        scope.cancel()
         dispatchStartTime = 0L
         Looper.getMainLooper().setMessageLogging(null)
     }
@@ -147,9 +163,39 @@ class AnrWatchdog @Inject constructor() {
 
         android.util.Log.e(TAG, stackTrace)
 
-        // TODO: Persist ANR report via CrashReportDao or direct file write.
-        //       Create a CrashReportEntity with crashType = "anr", stackTrace = stackTrace,
-        //       timestamp = now, reported = false.
+        // Persist ANR report to Room DB; fall back to plain file.
+        val deviceInfo = try {
+            org.json.JSONObject().apply {
+                put("brand", android.os.Build.BRAND)
+                put("model", android.os.Build.MODEL)
+                put("androidVersion", android.os.Build.VERSION.RELEASE)
+                put("sdkInt", android.os.Build.VERSION.SDK_INT)
+                put("blockedMs", blockedMs)
+            }.toString(2)
+        } catch (_: Exception) { "{}" }
+
+        val entity = CrashReportEntity(
+            crashType = "anr",
+            stackTrace = stackTrace,
+            deviceInfo = deviceInfo,
+            scriptName = null,
+            memoryInfo = null,
+            logSnapshot = null,
+            timestamp = System.currentTimeMillis(),
+            reported = false,
+        )
+        try {
+            scope.launch { crashReportDao.insert(entity) }
+        } catch (_: Exception) {
+            // Fallback: write to plain file
+            try {
+                val anrDir = java.io.File(context.filesDir, "anrs")
+                anrDir.mkdirs()
+                val ts = java.text.SimpleDateFormat("yyyyMMdd_HHmmss_SSS", java.util.Locale.US)
+                    .format(java.util.Date())
+                java.io.File(anrDir, "anr_$ts.txt").writeText(stackTrace)
+            } catch (_: Exception) { }
+        }
 
         // Reset the dispatch start time to avoid duplicate reports for
         // the same blocking event.

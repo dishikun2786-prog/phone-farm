@@ -499,7 +499,7 @@ class GuardService : Service() {
                 "$WAKELOCK_TAG:${getProcessName()}"
             ).apply {
                 setReferenceCounted(false)
-                acquire(10_000) // 10 second timeout per acquisition
+                acquire() // Held until service stops (released in onDestroy)
             }
             Log.d(TAG, "WakeLock acquired")
         } catch (e: Exception) {

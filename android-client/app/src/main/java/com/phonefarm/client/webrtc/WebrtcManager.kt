@@ -49,6 +49,7 @@ import kotlin.coroutines.resumeWithException
  */
 @Singleton
 class WebrtcManager @Inject constructor(
+    private val resources: WebrtcSharedResources,
     private val signalingSender: SignalingSender,
 ) {
 
@@ -56,14 +57,16 @@ class WebrtcManager @Inject constructor(
         private const val TAG = "WebrtcManager"
 
         // ICE server presets
+        // Use VPS-hosted STUN/TURN for both primary and fallback
         private val DEFAULT_STUN_SERVER = PeerConnection.IceServer.builder(
-            "stun:stun.l.google.com:19302"
+            "stun:47.243.254.248:3478"
         ).createIceServer()
 
         // TURN server — populated from config/remote
-        private var TURN_SERVER_URL: String = "turn:CHANGE_ME:3478?transport=udp"
+        // VPS TURN server (47.243.254.248) — can be overridden via configureTurn()
+        private var TURN_SERVER_URL: String = "turn:47.243.254.248:3478?transport=udp"
         private var TURN_SERVER_USER: String = "phonefarm"
-        private var TURN_SERVER_CREDENTIAL: String = "CHANGE_ME_PASSWORD"
+        private var TURN_SERVER_CREDENTIAL: String = "" // Must be configured from server
 
         // Data channel labels
         const val DATA_CHANNEL_CONTROL = "phonefarm-control"
@@ -82,35 +85,11 @@ class WebrtcManager @Inject constructor(
     private val _iceConnectionStates = MutableStateFlow<Map<String, PeerConnection.IceConnectionState>>(emptyMap())
     val iceConnectionStates: StateFlow<Map<String, PeerConnection.IceConnectionState>> = _iceConnectionStates.asStateFlow()
 
-    // ---- PeerConnectionFactory ----
+    // ---- Shared resources (EglBase + PeerConnectionFactory) ----
 
-    private val factory: PeerConnectionFactory
+    private var myDeviceId: String = ""
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-
-    init {
-        // Initialize WebRTC PeerConnectionFactory with H.264 preference.
-        val options = PeerConnectionFactory.InitializationOptions.builder(android.app.Application())
-            .setFieldTrials("WebRTC-H264HighProfile/Enabled/")
-            .createInitializationOptions()
-        PeerConnectionFactory.initialize(options)
-
-        val encoderFactory = org.webrtc.DefaultVideoEncoderFactory(
-            org.webrtc.EglBase.create().eglBaseContext,
-            true,  // enable Intel VA-API
-            true,  // enable H.264 High Profile
-        )
-        val decoderFactory = org.webrtc.DefaultVideoDecoderFactory(
-            org.webrtc.EglBase.create().eglBaseContext,
-        )
-
-        factory = PeerConnectionFactory.builder()
-            .setVideoEncoderFactory(encoderFactory)
-            .setVideoDecoderFactory(decoderFactory)
-            .createPeerConnectionFactory()
-
-        android.util.Log.i(TAG, "PeerConnectionFactory initialized (H.264 preferred)")
-    }
 
     // ---- Public API ----
 
@@ -122,6 +101,11 @@ class WebrtcManager @Inject constructor(
         TURN_SERVER_USER = username
         TURN_SERVER_CREDENTIAL = credential
         android.util.Log.i(TAG, "TURN server configured: $url")
+    }
+
+    /** Set the local device ID — must be called before creating connections. */
+    fun setLocalDeviceId(deviceId: String) {
+        myDeviceId = deviceId
     }
 
     /**
@@ -158,7 +142,7 @@ class WebrtcManager @Inject constructor(
         }
 
         val observer = createPeerConnectionObserver(deviceId)
-        val connection = factory.createPeerConnection(rtcConfig, observer) ?: run {
+        val connection = resources.acquire().createPeerConnection(rtcConfig, observer) ?: run {
             throw IllegalStateException("Failed to create PeerConnection for device $deviceId")
         }
 
@@ -327,8 +311,9 @@ class WebrtcManager @Inject constructor(
             android.util.Log.w(TAG, "No SurfaceViewRenderer provided — skipping video track")
             return null
         }
-        val videoSource = factory.createVideoSource(false) // false = not screencast at source level
-        val videoTrack = factory.createVideoTrack("phonefarm-video-${System.currentTimeMillis()}", videoSource)
+        val f = resources.acquire()
+        val videoSource = f.createVideoSource(false) // false = not screencast at source level
+        val videoTrack = f.createVideoTrack("phonefarm-video-${System.currentTimeMillis()}", videoSource)
         android.util.Log.i(TAG, "Video track created: ${videoTrack.id()}")
         return videoTrack
     }
@@ -390,12 +375,7 @@ class WebrtcManager @Inject constructor(
         connections.keys.toList().forEach { deviceId ->
             closeConnection(deviceId)
         }
-        try {
-            factory.dispose()
-            android.util.Log.i(TAG, "PeerConnectionFactory disposed")
-        } catch (e: Exception) {
-            android.util.Log.e(TAG, "Error disposing PeerConnectionFactory", e)
-        }
+        resources.release()
         scope.cancel()
     }
 
@@ -428,9 +408,8 @@ class WebrtcManager @Inject constructor(
         return object : PeerConnection.Observer {
             override fun onIceCandidate(candidate: IceCandidate?) {
                 if (candidate == null) return
-                // Send this candidate to the remote peer via signaling.
                 signalingSender.sendIceCandidate(
-                    deviceId = "self",  // Will be resolved by caller in production context
+                    deviceId = myDeviceId,
                     targetId = deviceId,
                     candidate = candidate.sdp,
                     sdpMid = candidate.sdpMid,

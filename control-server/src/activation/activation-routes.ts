@@ -17,6 +17,17 @@ export async function activationRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(result);
   });
 
+  // Android alias: POST /api/v1/activation/bind uses different field names
+  app.post("/api/v1/activation/bind", async (req, reply) => {
+    const { activationCode, code, deviceId, deviceName } = req.body as {
+      activationCode?: string; code?: string; deviceId: string; deviceName?: string;
+    };
+    const actualCode = activationCode ?? code ?? "";
+    const result = await store.consume(actualCode, deviceId, deviceName ?? deviceId);
+    if (!result.success) return reply.status(400).send({ error: result.error });
+    return reply.send(result);
+  });
+
   // 查询设备激活状态
   app.get("/api/v1/activation/status/:deviceId", async (req, reply) => {
     const { deviceId } = req.params as { deviceId: string };

@@ -148,6 +148,14 @@ class ReconnectManager @Inject constructor() {
         val jitterAmount = (capped * jitterFactor * (Math.random() * 2 - 1)).toLong()
         return (capped + jitterAmount).coerceIn(0, maxDelayMs)
     }
+
+    /** Cancel all pending work and release resources. */
+    fun destroy() {
+        scheduledReconnectJob?.cancel()
+        scheduledReconnectJob = null
+        scope.cancel()
+        _reconnectState.value = ReconnectState.FATAL
+    }
 }
 
 /**

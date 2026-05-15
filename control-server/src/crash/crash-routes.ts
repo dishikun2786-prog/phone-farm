@@ -75,6 +75,26 @@ export async function crashRoutes(app: FastifyInstance): Promise<void> {
     return reply.status(201).send({ id: report.id });
   });
 
+  // Android alias: POST /api/v1/crash with Android field names
+  app.post("/api/v1/crash", async (req, reply) => {
+    const body = req.body as {
+      crashType?: string; stackTrace?: string; deviceInfo?: string;
+      scriptName?: string; timestamp?: number;
+    };
+    const report = store.receive({
+      deviceId: body.deviceInfo ?? "unknown",
+      deviceName: "unknown",
+      appVersion: "unknown",
+      androidVersion: "unknown",
+      crashType: (body.crashType as any) ?? "unknown",
+      stackTrace: body.stackTrace ?? "",
+      threadName: "unknown",
+      scriptName: body.scriptName,
+      timestamp: body.timestamp ?? Date.now(),
+    });
+    return reply.status(201).send({ id: report.id });
+  });
+
   // 查询崩溃报告（管理员）
   app.get("/api/v1/crash/reports", async (req, reply) => {
     const params = req.query as Record<string, string>;

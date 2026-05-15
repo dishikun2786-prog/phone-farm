@@ -76,6 +76,7 @@ export class DecisionRouter {
   private memoryRetriever: MemoryRetrieverLike;
 
   private sessions = new Map<string, DecisionSession>();
+  private readonly SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes max session lifetime
 
   private routeStats = {
     deepseekCount: 0,
@@ -143,6 +144,11 @@ export class DecisionRouter {
     const session = this.sessions.get(input.deviceId);
     if (!session) throw new Error(`No active session for ${input.deviceId}`);
 
+    // 0. Stale session check
+    if (Date.now() - session.startedAt > this.SESSION_TTL_MS) {
+      return this.terminate(input.deviceId, session, "session_timeout");
+    }
+
     // 1. Max steps check
     if (session.stepNumber >= session.maxSteps) {
       return this.terminate(input.deviceId, session, "max_steps");
@@ -205,9 +211,14 @@ export class DecisionRouter {
       modelUsed: route.model,
     };
 
-    // 9. Update session state
+    // 9. Update session state — strip screenshot from history to limit memory
     session.stepNumber++;
-    session.history.push({ input, decision, route, timestamp: Date.now(), apiLatencyMs });
+    const historyInput = { ...input, screenshotBase64: undefined };
+    // Cap history at maxSteps to prevent unbounded growth
+    if (session.history.length >= session.maxSteps) {
+      session.history.shift();
+    }
+    session.history.push({ input: historyInput, decision, route, timestamp: Date.now(), apiLatencyMs });
     this.updateSessionStats(session, decision);
 
     // 10. Update route stats
@@ -312,6 +323,41 @@ export class DecisionRouter {
       switchReasons: Object.fromEntries(this.routeStats.switchReasons),
       activeSessions: this.sessions.size,
     };
+  }
+
+  /** Remove sessions that have exceeded the TTL (zombie cleanup). */
+  cleanupStaleSessions(): number {
+    const now = Date.now();
+    let removed = 0;
+    for (const [deviceId, session] of this.sessions) {
+      if (now - session.startedAt > this.SESSION_TTL_MS) {
+        this.sessions.delete(deviceId);
+        this.onComplete?.(deviceId, {
+          deviceId,
+          status: "timeout",
+          message: "Session timed out (stale cleanup)",
+          totalSteps: session.stepNumber,
+          durationMs: now - session.startedAt,
+        });
+        removed++;
+      }
+    }
+    return removed;
+  }
+
+  /** Release all resources: clear sessions, route stats, and expire any pending timers. */
+  dispose(): void {
+    for (const [deviceId, session] of this.sessions) {
+      this.onComplete?.(deviceId, {
+        deviceId,
+        status: "cancelled",
+        message: "Server shutting down",
+        totalSteps: session.stepNumber,
+        durationMs: Date.now() - session.startedAt,
+      });
+    }
+    this.sessions.clear();
+    this.routeStats.clear();
   }
 
   // ── Internal ──

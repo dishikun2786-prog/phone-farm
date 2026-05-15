@@ -39,6 +39,23 @@ sealed class WebSocketMessage {
         val seq: Int,
     ) : WebSocketMessage()
 
+    @Serializable
+    data class AuthOk(
+        override val type: String = "auth_ok",
+        val udpPort: Int = 8444,
+        val natProbeEnabled: Boolean = true,
+        val webrtc: WebrtcConfig? = null,
+    ) : WebSocketMessage()
+
+    @Serializable
+    data class WebrtcConfig(
+        val enabled: Boolean = true,
+        val turnServerUrl: String = "",
+        val turnUsername: String = "",
+        val turnCredential: String = "",
+        val stunServerUrl: String = "",
+    )
+
     // ---- Device ----
 
     @Serializable

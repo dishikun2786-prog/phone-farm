@@ -1,6 +1,5 @@
 package com.phonefarm.client.ui.screens
 
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -27,7 +26,7 @@ import com.phonefarm.client.ui.theme.Error
 import com.phonefarm.client.ui.theme.Success
 import com.phonefarm.client.ui.theme.Warning
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.delay
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -58,7 +57,9 @@ data class PermissionGuideUiState(
 )
 
 @HiltViewModel
-class PermissionGuideViewModel @Inject constructor() : ViewModel() {
+class PermissionGuideViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PermissionGuideUiState())
     val uiState: StateFlow<PermissionGuideUiState> = _uiState.asStateFlow()
@@ -66,7 +67,7 @@ class PermissionGuideViewModel @Inject constructor() : ViewModel() {
     fun refreshPermissions(context: Context) {
         viewModelScope.launch {
             val updated = _uiState.value.permissions.map { perm ->
-                perm.copy(isAuthorized = checkPermission(context, perm.item))
+                perm.copy(isAuthorized = checkPermission(perm.item))
             }
             val allGranted = updated.all { it.isAuthorized }
             val firstPending = updated.indexOfFirst { !it.isAuthorized }.coerceAtLeast(0)
@@ -78,20 +79,32 @@ class PermissionGuideViewModel @Inject constructor() : ViewModel() {
         }
     }
 
-    private suspend fun checkPermission(context: Context, item: PermissionItem): Boolean {
-        // Simulate permission check - TODO: Implement actual checks
-        delay(200)
+    private fun checkPermission(item: PermissionItem): Boolean {
         return when (item) {
-            PermissionItem.ACCESSIBILITY -> false
-            PermissionItem.OVERLAY -> Settings.canDrawOverlays(context)
+            PermissionItem.ACCESSIBILITY -> isAccessibilityServiceEnabled()
+            PermissionItem.OVERLAY -> Settings.canDrawOverlays(appContext)
             PermissionItem.BATTERY -> {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-                    pm.isIgnoringBatteryOptimizations(context.packageName)
+                    val pm = appContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+                    pm.isIgnoringBatteryOptimizations(appContext.packageName)
                 } else true
             }
-            PermissionItem.NOTIFICATION -> true // Simplified
+            PermissionItem.NOTIFICATION -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    val nm = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                    nm.areNotificationsEnabled()
+                } else true
+            }
         }
+    }
+
+    private fun isAccessibilityServiceEnabled(): Boolean {
+        val serviceName = "${appContext.packageName}/.service.PhoneFarmAccessibilityService"
+        val enabledServices = Settings.Secure.getString(
+            appContext.contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ) ?: return false
+        return enabledServices.split(':').any { it.equals(serviceName, ignoreCase = true) }
     }
 
     fun getPermissionIntent(context: Context, item: PermissionItem): Intent {

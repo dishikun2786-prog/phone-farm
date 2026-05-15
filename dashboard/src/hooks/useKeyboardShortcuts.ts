@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 interface ShortcutHandlers {
   onToggleTheme?: () => void;
@@ -7,39 +7,39 @@ interface ShortcutHandlers {
 }
 
 export function useKeyboardShortcuts(handlers: ShortcutHandlers) {
+  const handlersRef = useRef(handlers);
+  handlersRef.current = handlers;
+
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
+      const h = handlersRef.current;
       const target = e.target as HTMLElement;
       const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
 
       if ((e.key === 'k' || e.key === 'K') && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        if (!isInput) {
-          handlers.onFocusSearch?.();
-        }
+        if (!isInput) h.onFocusSearch?.();
         return;
       }
 
       if ((e.key === 'b' || e.key === 'B') && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        handlers.onToggleTheme?.();
+        h.onToggleTheme?.();
         return;
       }
 
       if (e.key === 'Escape') {
-        if (!isInput) {
-          handlers.onEscape?.();
-        }
+        if (!isInput) h.onEscape?.();
         return;
       }
 
       if (e.key === '/' && !isInput) {
         e.preventDefault();
-        handlers.onFocusSearch?.();
+        h.onFocusSearch?.();
       }
     }
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [handlers]);
+  }, []); // Only register once — handlers accessed via ref
 }

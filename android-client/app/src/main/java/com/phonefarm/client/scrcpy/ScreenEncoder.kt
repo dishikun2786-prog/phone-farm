@@ -9,7 +9,12 @@ import android.media.MediaCodecList
 import android.media.MediaFormat
 import android.media.projection.MediaProjection
 import android.os.Build
+import android.os.Bundle
 import android.view.Surface
+import com.phonefarm.client.data.repository.DeviceRepository
+import com.phonefarm.client.network.codec.DeviceMeta
+import com.phonefarm.client.network.codec.ProtobufCodec
+import com.phonefarm.client.network.transport.TransportSelector
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,21 +29,22 @@ import javax.inject.Singleton
 /**
  * Hardware-accelerated H.264 screen encoding via MediaProjection + MediaCodec.
  *
- * Captures the device screen, encodes it to H.264, and streams the encoded
- * frames to the WebSocket server. This implements the video path of the
- * scrcpy-like remote screen viewing feature.
+ * Captures the device screen, encodes to H.264, and streams frames via
+ * TransportSelector (UDP preferred, WebSocket fallback). Also provides
+ * I-frame extraction for VLM screenshot capture.
  *
  * Supported configurations with automatic bandwidth adaptation:
  *  - WiFi:  1080p @ 15fps, 3 Mbps
  *  - 4G:    720p  @ 10fps, 1.5 Mbps
  *  - 5G:    1080p @ 10fps, 2 Mbps
- *
- * The encoder runs on a dedicated background thread. Encoded frames are
- * transmitted as binary WebSocket messages.
  */
 @Singleton
 class ScreenEncoder @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val transportSelector: TransportSelector,
+    private val frameController: VideoFrameController,
+    private val protobufCodec: ProtobufCodec,
+    private val deviceRepository: DeviceRepository,
 ) {
 
     companion object {
@@ -51,13 +57,26 @@ class ScreenEncoder @Inject constructor(
     private val _isEncoding = MutableStateFlow(false)
     val isEncoding: StateFlow<Boolean> = _isEncoding.asStateFlow()
 
-    /** Callback invoked for each encoded H.264 frame. Receiver should send via WebSocket. */
+    /** Callback invoked for each encoded H.264 frame. Kept for legacy compatibility. */
     var onFrameEncoded: ((ByteArray, Boolean) -> Unit)? = null
+
+    /** Callback invoked when a new keyframe is produced (for VLM screenshot). */
+    var onKeyFrame: ((ByteArray) -> Unit)? = null
 
     private var mediaProjection: MediaProjection? = null
     private var mediaCodec: MediaCodec? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var encoderThread: Thread? = null
+
+    /** Cached encoder dimensions — updated on format change. */
+    @Volatile
+    private var encodedWidth: Int = 0
+    @Volatile
+    private var encodedHeight: Int = 0
+    @Volatile
+    private var currentBitRate: Int = 0
+    @Volatile
+    private var currentMaxFps: Int = 15
 
     // ---- public API ----
 
@@ -84,6 +103,8 @@ class ScreenEncoder @Inject constructor(
         if (_isEncoding.value) return
 
         this.mediaProjection = mediaProjection
+        this.currentBitRate = bitRate
+        this.currentMaxFps = maxFps
 
         val width: Int
         val height: Int
@@ -106,8 +127,11 @@ class ScreenEncoder @Inject constructor(
 
         // Scale to maxSize while preserving aspect ratio.
         val (scaledWidth, scaledHeight) = computeScaledDimensions(width, height, maxSize)
+        encodedWidth = scaledWidth
+        encodedHeight = scaledHeight
 
         _isEncoding.value = true
+        frameController.reset()
 
         withContext(Dispatchers.IO) {
             try {
@@ -126,6 +150,39 @@ class ScreenEncoder @Inject constructor(
             }
         }
     }
+
+    /**
+     * Request an immediate keyframe from the encoder.
+     * Used by VlmScreenCapture to get a fresh I-frame for VLM inference.
+     */
+    fun requestKeyFrame() {
+        val codec = mediaCodec ?: return
+        try {
+            val params = Bundle()
+            params.putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0)
+            codec.setParameters(params)
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "Failed to request keyframe: ${e.message}")
+        }
+    }
+
+    /**
+     * Dynamically update the encoder bitrate (called by QoS controller).
+     */
+    fun updateBitRate(newBitRate: Int) {
+        val codec = mediaCodec ?: return
+        currentBitRate = newBitRate
+        try {
+            val params = Bundle()
+            params.putInt(MediaCodec.PARAMETER_KEY_VIDEO_BITRATE, newBitRate)
+            codec.setParameters(params)
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "Failed to set bitrate: ${e.message}")
+        }
+    }
+
+    /** Get current encoder dimensions (for coordinate normalization). */
+    fun getEncodedDimensions(): Pair<Int, Int> = Pair(encodedWidth, encodedHeight)
 
     /**
      * Stop screen encoding and release resources.
@@ -199,10 +256,31 @@ class ScreenEncoder @Inject constructor(
         // Encode loop.
         try {
             val bufferInfo = MediaCodec.BufferInfo()
+            var deviceMetaSent = false
+            val deviceInfo = deviceRepository.collectDeviceInfo()
+
             while (_isEncoding.value) {
                 val outputIndex = codec.dequeueOutputBuffer(bufferInfo, 10_000)
                 if (outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                    // Format changed — potentially send SPS/PPS to WebSocket.
+                    // Send DeviceMeta to server for browser decoder initialization
+                    if (!deviceMetaSent) {
+                        val meta = DeviceMeta(
+                            deviceId = deviceInfo.deviceId,
+                            deviceName = deviceInfo.model.ifBlank { "Unknown" },
+                            width = width,
+                            height = height,
+                            codec = "h264",
+                            bitRate = bitRate,
+                            maxFps = maxFps,
+                        )
+                        try {
+                            val encoded = protobufCodec.encodeDeviceMeta(meta)
+                            transportSelector.sendBinaryFrame(encoded, isVideo = true)
+                            deviceMetaSent = true
+                        } catch (e: Exception) {
+                            android.util.Log.w(TAG, "Failed to send DeviceMeta: ${e.message}")
+                        }
+                    }
                     continue
                 }
                 if (outputIndex >= 0) {
@@ -211,7 +289,44 @@ class ScreenEncoder @Inject constructor(
                     outputBuffer.get(frameData, bufferInfo.offset, bufferInfo.size)
 
                     val isKeyFrame = (bufferInfo.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME) != 0
+                    val ptsUs = bufferInfo.presentationTimeUs
+
+                    // Backpressure check: drop non-key frames when at capacity
+                    if (!frameController.shouldSend(isKeyFrame)) {
+                        codec.releaseOutputBuffer(outputIndex, false)
+                        continue
+                    }
+
+                    val seq = frameController.nextSequence()
+
+                    // Build VideoFrame protobuf
+                    val videoFrame = com.phonefarm.client.network.codec.VideoFrame(
+                        frameId = seq,
+                        timestampMs = System.currentTimeMillis(),
+                        isKeyframe = isKeyFrame,
+                        format = com.phonefarm.client.network.codec.VideoFormat.H264,
+                        width = width,
+                        height = height,
+                        data = frameData,
+                    )
+
+                    try {
+                        val encoded = protobufCodec.encodeVideoFrame(videoFrame)
+                        val sent = transportSelector.sendVideoFrame(encoded)
+                        if (sent) {
+                            frameController.onFrameSent(seq)
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.w(TAG, "Failed to send video frame seq=$seq: ${e.message}")
+                    }
+
+                    // Legacy callback (for downstream consumers)
                     onFrameEncoded?.invoke(frameData, isKeyFrame)
+
+                    // Notify VLM screenshot listener on keyframes
+                    if (isKeyFrame) {
+                        onKeyFrame?.invoke(frameData)
+                    }
 
                     codec.releaseOutputBuffer(outputIndex, false)
                 }

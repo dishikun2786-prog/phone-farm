@@ -7,7 +7,7 @@
  * Admin Dashboard menu visibility is derived from role permissions.
  */
 
-export type Role = "super_admin" | "admin" | "operator" | "viewer";
+export type Role = "super_admin" | "admin" | "operator" | "viewer" | "customer" | "agent";
 
 export type Resource =
   | "devices"
@@ -29,7 +29,9 @@ export type Resource =
   | "stats"
   | "platform_accounts"
   | "system"
-  | "config";
+  | "config"
+  | "tenants"
+  | "billing";
 
 export type Action = "read" | "write" | "delete" | "manage";
 
@@ -56,6 +58,8 @@ const PERMISSIONS: Record<Role, Partial<Record<Resource, Action[]>>> = {
     platform_accounts: ["read", "write", "delete", "manage"],
     system: ["read", "manage"],
     config: ["read", "write", "manage"],
+    tenants: ["read", "write", "delete", "manage"],
+    billing: ["read", "write", "delete", "manage"],
   },
   admin: {
     devices: ["read", "write", "manage"],
@@ -78,6 +82,8 @@ const PERMISSIONS: Record<Role, Partial<Record<Resource, Action[]>>> = {
     platform_accounts: ["read", "write", "manage"],
     system: ["read"],
     config: ["read", "write"],
+    tenants: [],
+    billing: ["read", "write"],
   },
   operator: {
     devices: ["read", "write"],
@@ -123,6 +129,52 @@ const PERMISSIONS: Record<Role, Partial<Record<Resource, Action[]>>> = {
     system: [],
     config: ["read"],
   },
+  customer: {
+    devices: ["read", "write"],
+    device_groups: ["read"],
+    tasks: ["read", "write"],
+    task_templates: ["read"],
+    accounts: ["read", "write"],
+    users: [],
+    activation: ["read"],
+    vlm: ["read", "write"],
+    vlm_episodes: ["read"],
+    vlm_scripts: ["read"],
+    plugins: [],
+    models: [],
+    audit_logs: [],
+    alerts: ["read"],
+    webhooks: [],
+    api_keys: ["read", "write"],
+    stats: ["read"],
+    platform_accounts: ["read", "write"],
+    system: [],
+    config: ["read"],
+    tenants: [],
+    billing: ["read", "write"],
+  },
+  agent: {
+    devices: ["read"],
+    device_groups: ["read"],
+    tasks: ["read"],
+    task_templates: ["read"],
+    accounts: ["read"],
+    users: [],
+    activation: ["read", "write"],
+    vlm: ["read"],
+    vlm_episodes: ["read"],
+    vlm_scripts: [],
+    plugins: [],
+    models: [],
+    audit_logs: [],
+    alerts: [],
+    webhooks: [],
+    api_keys: [],
+    stats: ["read"],
+    platform_accounts: [],
+    system: [],
+    config: [],
+  },
 };
 
 /** Check if a role has permission to perform an action on a resource */
@@ -163,6 +215,8 @@ export const ADMIN_MENU_ITEMS: Record<Resource, { label: string; icon: string; p
   platform_accounts: { label: "平台账号", icon: "at-sign", path: "/platform-accounts" },
   system: { label: "系统设置", icon: "settings", path: "/system" },
   config: { label: "配置管理", icon: "sliders", path: "/config" },
+  tenants: { label: "租户管理", icon: "building", path: "/admin/tenants" },
+  billing: { label: "计费管理", icon: "credit-card", path: "/admin/billing" },
 };
 
 /** Build the visible menu tree for a given role */
@@ -171,4 +225,14 @@ export function buildMenuForRole(role: Role): Array<{ label: string; icon: strin
   return resources
     .filter((r) => r in ADMIN_MENU_ITEMS)
     .map((r) => ADMIN_MENU_ITEMS[r]);
+}
+
+/** Fastify preHandler middleware — require specific permission */
+export function requirePermission(resource: Resource, action: Action) {
+  return async (req: any, reply: any) => {
+    const role = req.user?.role as Role | undefined;
+    if (!role || !hasPermission(role, resource, action)) {
+      return reply.status(403).send({ error: 'Insufficient permissions' });
+    }
+  };
 }

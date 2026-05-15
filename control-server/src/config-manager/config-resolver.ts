@@ -13,7 +13,7 @@ import {
 } from "./config-schema.js";
 import { subscriptions } from "../billing/billing-schema.js";
 import { deviceGroups } from "../schema.js";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 
 export interface ResolvedConfig {
   key: string;
@@ -39,21 +39,44 @@ const SCOPE_PRIORITY: ResolvedConfig["source"][] = [
   "device", "group", "template", "plan", "global",
 ];
 
+/** Cache entry with expiration timestamp. */
+interface CacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
+
 export class ConfigResolver {
+  private cache = new Map<string, CacheEntry<ResolvedConfig[]>>();
+  private cacheTtlMs = 30_000; // 30 seconds
+
+  private cacheKey(ctx: ConfigResolutionContext): string {
+    return `${ctx.deviceId ?? ""}|${ctx.groupId ?? ""}|${ctx.templateId ?? ""}|${ctx.userId ?? ""}`;
+  }
 
   async resolve(ctx: ConfigResolutionContext): Promise<ResolvedConfig[]> {
+    const key = this.cacheKey(ctx);
+    const cached = this.cache.get(key);
+    if (cached && cached.expiresAt > Date.now()) return cached.data;
+
+    const result = await this.resolveUncached(ctx);
+    this.cache.set(key, { data: result, expiresAt: Date.now() + this.cacheTtlMs });
+    return result;
+  }
+
+  private async resolveUncached(ctx: ConfigResolutionContext): Promise<ResolvedConfig[]> {
     const definitions = await db.select().from(configDefinitions);
     const categories = await db.select().from(configCategories);
     const catMap = new Map(categories.map((c) => [c.id, c]));
 
-    // Resolve groupId from device membership
+    // Resolve groupId from device membership (uses JSONB containment for efficiency)
     let groupId = ctx.groupId;
     if (!groupId && ctx.deviceId) {
-      const allGroups = await db.select().from(deviceGroups);
-      const match = allGroups.find((g) =>
-        (g.deviceIds as string[]).includes(ctx.deviceId!)
-      );
-      if (match) groupId = match.id;
+      const match = await db
+        .select({ id: deviceGroups.id })
+        .from(deviceGroups)
+        .where(sql`${deviceGroups.deviceIds} @> ${JSON.stringify([ctx.deviceId])}::jsonb`)
+        .limit(1);
+      if (match.length > 0) groupId = match[0].id;
     }
 
     // Resolve planId from active subscription
@@ -139,12 +162,100 @@ export class ConfigResolver {
     return resolved;
   }
 
+  /** Resolve a single key — queries DB directly instead of full scan. */
   async resolveKey(
     ctx: ConfigResolutionContext,
     key: string,
   ): Promise<ResolvedConfig | null> {
-    const all = await this.resolve(ctx);
-    return all.find((r) => r.key === key) ?? null;
+    // Query the specific definition directly
+    const [def] = await db
+      .select()
+      .from(configDefinitions)
+      .where(eq(configDefinitions.key, key))
+      .limit(1);
+    if (!def) return null;
+
+    const [cat] = await db
+      .select()
+      .from(configCategories)
+      .where(eq(configCategories.id, def.categoryId))
+      .limit(1);
+
+    // Resolve groupId from device membership
+    let groupId = ctx.groupId;
+    if (!groupId && ctx.deviceId) {
+      const match = await db
+        .select({ id: deviceGroups.id })
+        .from(deviceGroups)
+        .where(sql`${deviceGroups.deviceIds} @> ${JSON.stringify([ctx.deviceId])}::jsonb`)
+        .limit(1);
+      if (match.length > 0) groupId = match[0].id;
+    }
+
+    // Resolve planId
+    let planId = ctx.planId;
+    if (!planId && ctx.userId) {
+      const [sub] = await db
+        .select()
+        .from(subscriptions)
+        .where(and(eq(subscriptions.userId, ctx.userId), eq(subscriptions.status, "active")))
+        .limit(1);
+      if (sub) planId = sub.planId;
+    }
+
+    // Build scope filter conditions for this definition
+    const scopeConditions: ReturnType<typeof eq>[] = [];
+    scopeConditions.push(and(eq(configValues.scope, "global"), eq(configValues.scopeId, "")));
+    if (planId) scopeConditions.push(and(eq(configValues.scope, "plan"), eq(configValues.scopeId, planId)));
+    if (ctx.templateId) scopeConditions.push(and(eq(configValues.scope, "template"), eq(configValues.scopeId, ctx.templateId)));
+    if (groupId) scopeConditions.push(and(eq(configValues.scope, "group"), eq(configValues.scopeId, groupId)));
+    if (ctx.deviceId) scopeConditions.push(and(eq(configValues.scope, "device"), eq(configValues.scopeId, ctx.deviceId)));
+
+    // Fetch only values for this specific definition
+    const values = await db
+      .select()
+      .from(configValues)
+      .where(eq(configValues.definitionId, def.id));
+
+    // Resolve by scope priority
+    type Scope = ResolvedConfig["source"];
+    for (const scope of ["device", "group", "template", "plan", "global"] as Scope[]) {
+      const entry = values.find((v) => {
+        if (v.scope !== scope) return false;
+        if (scope === "global") return true;
+        const expectedId = scope === "plan" ? planId : scope === "group" ? groupId : scope === "template" ? ctx.templateId : ctx.deviceId;
+        return v.scopeId === expectedId;
+      });
+      if (entry && entry.value != null) {
+        return {
+          key: def.key,
+          displayName: def.displayName,
+          value: entry.value,
+          valueType: def.valueType,
+          source: scope,
+          sourceId: entry.scopeId ?? undefined,
+          isSecret: def.isSecret,
+          categoryKey: cat?.key ?? "",
+          categoryDisplayName: cat?.displayName ?? "",
+        };
+      }
+    }
+
+    return {
+      key: def.key,
+      displayName: def.displayName,
+      value: def.defaultValue ?? "",
+      valueType: def.valueType,
+      source: "default",
+      isSecret: def.isSecret,
+      categoryKey: cat?.key ?? "",
+      categoryDisplayName: cat?.displayName ?? "",
+    };
+  }
+
+  /** Invalidate cache — call after config writes. */
+  invalidateCache(): void {
+    this.cache.clear();
   }
 
   async applyTemplate(
@@ -198,6 +309,7 @@ export class ConfigResolver {
       applied++;
     }
 
+    this.invalidateCache();
     return { applied };
   }
 }

@@ -48,3 +48,37 @@ message DeviceMeta {
   int32 bit_rate = 6;
   int32 max_fps = 7;
 }
+
+// Audio frame for A/V sync streaming
+message AudioFrame {
+  // Device that produced this frame
+  string device_id = 1;
+
+  // Monotonic frame sequence number
+  uint32 frame_seq = 2;
+
+  // Presentation timestamp in microseconds (for A/V sync)
+  int64 pts_us = 3;
+
+  // Audio codec: "aac", "opus", "pcm"
+  string codec = 4;
+
+  // Encoded audio data
+  bytes audio_data = 5;
+
+  // Sample rate in Hz (e.g. 44100, 48000)
+  int32 sample_rate = 6;
+
+  // Number of channels (1 = mono, 2 = stereo)
+  int32 channels = 7;
+
+  // Audio sample format (0=s16le, 1=fltp, 2=flt)
+  int32 sample_format = 8;
+}
+
+// ACK message for backpressure control
+message FrameAck {
+  string device_id = 1;
+  uint32 acked_seq = 2;
+  int64 recv_timestamp_ms = 3;
+}

@@ -1,5 +1,6 @@
 package com.phonefarm.client.ui.screens
 
+import android.provider.Settings
 import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicTextField
@@ -14,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -23,11 +25,12 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.phonefarm.client.data.local.SecurePreferences
+import com.phonefarm.client.network.ActivationRequest
+import com.phonefarm.client.network.ApiService
 import com.phonefarm.client.ui.theme.Error
 import com.phonefarm.client.ui.theme.Success
-import com.phonefarm.client.ui.theme.Warning
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -51,7 +54,15 @@ data class ActivationInfo(
 )
 
 @HiltViewModel
-class ActivationViewModel @Inject constructor() : ViewModel() {
+class ActivationViewModel @Inject constructor(
+    private val apiService: ApiService,
+    private val securePreferences: SecurePreferences,
+) : ViewModel() {
+
+    companion object {
+        const val KEY_ACTIVATED = "device_activated"
+        const val KEY_ACTIVATION_CODE = "activation_code"
+    }
 
     private val _uiState = MutableStateFlow(ActivationUiState())
     val uiState: StateFlow<ActivationUiState> = _uiState.asStateFlow()
@@ -61,7 +72,6 @@ class ActivationViewModel @Inject constructor() : ViewModel() {
     fun onCodeCharChanged(index: Int, char: String) {
         val current = _uiState.value
         when {
-            // Paste support: if input contains multiple chars, fill from current index
             char.length > 1 -> {
                 val sanitized = char.uppercase().filter { it in 'A'..'Z' || it in '0'..'9' }
                 val newChars = current.codeChars.toMutableList()
@@ -78,12 +88,10 @@ class ActivationViewModel @Inject constructor() : ViewModel() {
                     errorMessage = null
                 )
             }
-            // Single character or empty
             else -> {
                 val sanitized = char.uppercase().take(1).filter { it in 'A'..'Z' || it in '0'..'9' }
                 val newChars = current.codeChars.toMutableList()
                 newChars[index] = sanitized
-
                 val nextIndex = if (sanitized.isNotEmpty() && index < 15) index + 1 else index
                 _uiState.value = current.copy(
                     codeChars = newChars,
@@ -97,19 +105,13 @@ class ActivationViewModel @Inject constructor() : ViewModel() {
     fun onCodeBackspace(index: Int) {
         val current = _uiState.value
         val newChars = current.codeChars.toMutableList()
-
         if (newChars[index].isNotEmpty()) {
             newChars[index] = ""
         } else if (index > 0) {
             newChars[index - 1] = ""
-            _uiState.value = current.copy(
-                codeChars = newChars,
-                focusedIndex = index - 1,
-                errorMessage = null
-            )
+            _uiState.value = current.copy(codeChars = newChars, focusedIndex = index - 1, errorMessage = null)
             return
         }
-
         _uiState.value = current.copy(codeChars = newChars, errorMessage = null)
     }
 
@@ -126,33 +128,43 @@ class ActivationViewModel @Inject constructor() : ViewModel() {
             _uiState.value = state.copy(isLoading = true, errorMessage = null)
 
             try {
-                // TODO: Call actual activation API
-                delay(1500)
+                val deviceId = Settings.Secure.ANDROID_ID
+                val response = apiService.activateDevice(
+                    ActivationRequest(deviceId = deviceId, activationCode = code)
+                )
 
-                // Simulate expired code error
-                if (code.startsWith("E")) {
+                if (response.success) {
+                    securePreferences.putString(KEY_ACTIVATED, "true")
+                    securePreferences.putString(KEY_ACTIVATION_CODE, code)
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        errorMessage = "激活码已过期，请联系管理员获取新码"
+                        isSuccess = true,
+                        activationInfo = ActivationInfo(
+                            activationCode = code,
+                            deviceQuota = 0,
+                            expiresAt = response.expiresAt?.toString() ?: "无限制",
+                            activatedDevices = 0
+                        )
                     )
-                    return@launch
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = response.message ?: "激活失败，请检查激活码是否正确"
+                    )
                 }
-
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    isSuccess = true,
-                    activationInfo = ActivationInfo(
-                        activationCode = code,
-                        deviceQuota = 10,
-                        expiresAt = "2026-12-31",
-                        activatedDevices = 3
-                    )
-                )
+            } catch (e: retrofit2.HttpException) {
+                val msg = when (e.code()) {
+                    400 -> "激活码无效或格式错误"
+                    404 -> "激活码不存在"
+                    409 -> "该激活码已达到设备上限"
+                    410 -> "激活码已过期，请联系管理员获取新码"
+                    else -> "服务器错误 (${e.code()})"
+                }
+                _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = msg)
+            } catch (e: java.net.ConnectException) {
+                _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = "无法连接服务器，请检查网络")
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    errorMessage = "网络错误: ${e.message}"
-                )
+                _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = "激活失败: ${e.message}")
             }
         }
     }

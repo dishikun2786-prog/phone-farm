@@ -146,6 +146,10 @@ export async function scriptsManifestRoutes(app: FastifyInstance): Promise<void>
   app.get("/api/v1/scripts/manifest", async (req, reply) => {
     const { runtime } = req.query as Record<string, string>;
     const manifest = store.getManifest(runtime ?? "phonefarm-native");
+    // Android client expects bare Map<String, String>; dashboard expects full manifest
+    if (runtime) {
+      return reply.send(manifest.files);
+    }
     return reply.send(manifest);
   });
 
@@ -157,6 +161,37 @@ export async function scriptsManifestRoutes(app: FastifyInstance): Promise<void>
       result[name] = store.getScriptContent(name);
     }
     return reply.send({ files: result });
+  });
+
+  // Android alias: GET /api/v1/scripts/{name}/download (single script download)
+  app.get("/api/v1/scripts/:name/download", async (req, reply) => {
+    const { name } = req.params as { name: string };
+    const content = store.getScriptContent(name);
+    if (!content) return reply.status(404).send({ error: `Script "${name}" not found` });
+    const manifest = store.getManifest("phonefarm-native");
+    const hash = manifest.files[name] ?? "000000";
+    return reply.send({
+      name,
+      content,
+      version: manifest.version,
+      platform: null,
+      checksum: hash,
+    });
+  });
+
+  // Android: GET /api/v1/plugins/manifest (plugin sync manifest)
+  app.get("/api/v1/plugins/manifest", async (_req, reply) => {
+    const manifest = store.getManifest("phonefarm-native");
+    const plugins = Object.entries(manifest.files).map(([name, sha256]) => ({
+      pluginId: name.replace(/\.js$/, ""),
+      name,
+      version: manifest.version,
+      downloadUrl: null,
+      sha256,
+      sizeBytes: 0,
+      isRequired: name === "app-automation.js",
+    }));
+    return reply.send({ plugins, updatedAt: manifest.updatedAt });
   });
 
   // 上传新脚本（管理员）

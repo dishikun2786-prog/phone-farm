@@ -1,5 +1,9 @@
 package com.phonefarm.client.ui.screens
 
+import android.content.Context
+import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,15 +17,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.phonefarm.client.network.ApiService
+import com.phonefarm.client.service.GuardService
+import com.phonefarm.client.service.PhoneFarmDeviceAdminReceiver
 import com.phonefarm.client.ui.theme.Error
 import com.phonefarm.client.ui.theme.Success
 import com.phonefarm.client.ui.theme.Warning
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -57,26 +66,23 @@ data class DiagnosticsUiState(
 )
 
 @HiltViewModel
-class DiagnosticsViewModel @Inject constructor() : ViewModel() {
+class DiagnosticsViewModel @Inject constructor(
+    private val apiService: ApiService,
+    @ApplicationContext private val appContext: Context,
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DiagnosticsUiState())
     val uiState: StateFlow<DiagnosticsUiState> = _uiState.asStateFlow()
 
     fun runDiagnostics() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                isRunning = true,
-                overallStatus = DiagnosticStatus.CHECKING
-            )
+            _uiState.value = _uiState.value.copy(isRunning = true, overallStatus = DiagnosticStatus.CHECKING)
 
             val items = _uiState.value.items.toMutableList()
-
-            // Run each check sequentially with brief delay
             for (i in items.indices) {
                 items[i] = items[i].copy(status = DiagnosticStatus.CHECKING)
                 _uiState.value = _uiState.value.copy(items = items.toList())
-
-                delay(600 + (i * 200L))
+                delay(300)
 
                 val (status, detail, fixAction) = when (items[i].id) {
                     "accessibility" -> checkAccessibility()
@@ -88,11 +94,7 @@ class DiagnosticsViewModel @Inject constructor() : ViewModel() {
                     else -> Triple(DiagnosticStatus.PASS, "正常", null)
                 }
 
-                items[i] = items[i].copy(
-                    status = status,
-                    detail = detail,
-                    fixAction = fixAction
-                )
+                items[i] = items[i].copy(status = status, detail = detail, fixAction = fixAction)
                 _uiState.value = _uiState.value.copy(items = items.toList())
             }
 
@@ -100,34 +102,102 @@ class DiagnosticsViewModel @Inject constructor() : ViewModel() {
             _uiState.value = _uiState.value.copy(
                 isRunning = false,
                 overallStatus = if (allPassed) DiagnosticStatus.PASS else DiagnosticStatus.FAIL,
-                allChecked = true
+                allChecked = true,
             )
         }
     }
 
-    private suspend fun checkAccessibility(): Triple<DiagnosticStatus, String, String?> {
-        // TODO: Actual accessibility check
-        return Triple(DiagnosticStatus.FAIL, "无障碍服务未开启", "开启无障碍")
+    private fun checkAccessibility(): Triple<DiagnosticStatus, String, String?> {
+        val serviceName = "${appContext.packageName}/.service.PhoneFarmAccessibilityService"
+        val enabledServices = Settings.Secure.getString(
+            appContext.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ) ?: ""
+        val enabled = enabledServices.split(':').any { it.equals(serviceName, ignoreCase = true) }
+        return if (enabled) Triple(DiagnosticStatus.PASS, "无障碍服务已开启", null)
+        else Triple(DiagnosticStatus.FAIL, "无障碍服务未开启", "accessibility")
     }
 
     private suspend fun checkWebSocket(): Triple<DiagnosticStatus, String, String?> {
-        return Triple(DiagnosticStatus.PASS, "已连接到服务器 (42ms)", null)
+        return try {
+            val start = System.currentTimeMillis()
+            val health = apiService.healthCheck()
+            val elapsed = System.currentTimeMillis() - start
+            if (health.status == "ok") Triple(DiagnosticStatus.PASS, "已连接到服务器 (${elapsed}ms)", null)
+            else Triple(DiagnosticStatus.FAIL, "服务器状态异常: ${health.status}", null)
+        } catch (e: Exception) {
+            Triple(DiagnosticStatus.FAIL, "连接失败: ${e.message}", null)
+        }
     }
 
-    private suspend fun checkPermissions(): Triple<DiagnosticStatus, String, String?> {
-        return Triple(DiagnosticStatus.FAIL, "悬浮窗权限未授权 (已授权: 3/6)", "修复权限")
+    private fun checkPermissions(): Triple<DiagnosticStatus, String, String?> {
+        var granted = 0
+        val total = 4
+        val issues = mutableListOf<String>()
+
+        // Accessibility
+        val serviceName = "${appContext.packageName}/.service.PhoneFarmAccessibilityService"
+        val enabledServices = Settings.Secure.getString(appContext.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
+        if (enabledServices.split(':').any { it.equals(serviceName, ignoreCase = true) }) granted++ else issues.add("无障碍")
+
+        // Overlay
+        if (Settings.canDrawOverlays(appContext)) granted++ else issues.add("悬浮窗")
+
+        // Battery
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val pm = appContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+            if (pm.isIgnoringBatteryOptimizations(appContext.packageName)) granted++ else issues.add("电池优化")
+        } else granted++
+
+        // Notification
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            val nm = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            if (nm.areNotificationsEnabled()) granted++ else issues.add("通知")
+        } else granted++
+
+        return if (granted == total) Triple(DiagnosticStatus.PASS, "所有权限已授权 ($granted/$total)", null)
+        else Triple(DiagnosticStatus.FAIL, "缺少: ${issues.joinToString(", ")} (已授权: $granted/$total)", "permissions")
     }
 
-    private suspend fun checkStorage(): Triple<DiagnosticStatus, String, String?> {
-        return Triple(DiagnosticStatus.PASS, "可用空间: 82GB / 128GB (63%)", null)
+    private fun checkStorage(): Triple<DiagnosticStatus, String, String?> {
+        val stat = android.os.StatFs(android.os.Environment.getDataDirectory().absolutePath)
+        val totalBytes = stat.totalBytes
+        val availableBytes = stat.availableBytes
+        val usedPercent = ((totalBytes - availableBytes).toFloat() / totalBytes * 100).toInt()
+        return if (availableBytes > 500_000_000) Triple(DiagnosticStatus.PASS,
+            "可用: ${readableSize(availableBytes)} / ${readableSize(totalBytes)} (${100 - usedPercent}%)", null)
+        else Triple(DiagnosticStatus.FAIL,
+            "存储空间不足: ${readableSize(availableBytes)} 可用", null)
     }
 
     private suspend fun checkPlugins(): Triple<DiagnosticStatus, String, String?> {
-        return Triple(DiagnosticStatus.PASS, "所有插件版本正常 (3/3)", null)
+        return try {
+            val manifest = apiService.syncPlugins()
+            Triple(DiagnosticStatus.PASS, "插件清单正常 (${manifest.plugins.size} 个)", null)
+        } catch (e: Exception) {
+            Triple(DiagnosticStatus.FAIL, "插件同步失败: ${e.message}", null)
+        }
     }
 
     private suspend fun checkModels(): Triple<DiagnosticStatus, String, String?> {
-        return Triple(DiagnosticStatus.PASS, "AutoGLM-Phone-9B 已加载", null)
+        return try {
+            val models = apiService.getLocalModelManifest()
+            Triple(DiagnosticStatus.PASS, "模型清单已获取 (${models.size} 个可用)", null)
+        } catch (e: Exception) {
+            Triple(DiagnosticStatus.FAIL, "模型同步失败: ${e.message}", null)
+        }
+    }
+
+    private fun readableSize(bytes: Long): String {
+        if (bytes < 1024) return "$bytes B"
+        val units = arrayOf("KB", "MB", "GB", "TB")
+        var size = bytes.toFloat()
+        var unit = "B"
+        for (u in units) {
+            size /= 1024f
+            unit = u
+            if (size < 1024f) break
+        }
+        return "%.1f %s".format(size, unit)
     }
 
     fun clearResults() {

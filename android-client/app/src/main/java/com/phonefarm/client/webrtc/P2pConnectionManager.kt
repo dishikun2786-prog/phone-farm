@@ -1,11 +1,9 @@
 package com.phonefarm.client.webrtc
 
-import android.content.Context
 import android.util.Log
 import com.phonefarm.client.network.ConnectionState
 import com.phonefarm.client.network.WebSocketClient
 import com.phonefarm.client.network.WebSocketMessage
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
@@ -47,7 +45,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class P2pConnectionManager @Inject constructor(
-    @ApplicationContext private val appContext: Context,
+    private val resources: WebrtcSharedResources,
     private val webSocketClient: WebSocketClient,
 ) {
 
@@ -56,7 +54,7 @@ class P2pConnectionManager @Inject constructor(
         private const val CONNECTION_TIMEOUT_MS = 30_000L
         private const val HEARTBEAT_INTERVAL_MS = 5_000L
         private const val HEARTBEAT_TIMEOUT_MS = 20_000L
-        private const val ICE_SERVER_URL = "stun:stun.l.google.com:19302"
+        private const val ICE_SERVER_URL = "stun:47.243.254.248:3478"
 
         // DataChannel labels
         const val DC_LABEL_CONTROL = "phonefarm-control"
@@ -67,7 +65,6 @@ class P2pConnectionManager @Inject constructor(
     private val connections = ConcurrentHashMap<String, P2pConnection>()
     private val pendingConnections = ConcurrentHashMap<String, CompletableDeferred<P2pConnection>>()
 
-    private var peerConnectionFactory: PeerConnectionFactory? = null
     private var myDeviceId: String = ""
 
     // ── Data Classes ──
@@ -88,32 +85,6 @@ class P2pConnectionManager @Inject constructor(
      */
     fun setLocalDeviceId(deviceId: String) {
         myDeviceId = deviceId
-    }
-
-    /**
-     * Initialize the PeerConnectionFactory. Should be called once during app startup.
-     */
-    fun initialize() {
-        if (peerConnectionFactory != null) return
-
-        val options = PeerConnectionFactory.InitializationOptions.builder(appContext)
-            .setFieldTrials("")
-            .createInitializationOptions()
-        PeerConnectionFactory.initialize(options)
-
-        val encoderFactory = org.webrtc.DefaultVideoEncoderFactory(
-            org.webrtc.EglBase.create().eglBaseContext, true, true
-        )
-        val decoderFactory = org.webrtc.DefaultVideoDecoderFactory(
-            org.webrtc.EglBase.create().eglBaseContext
-        )
-
-        peerConnectionFactory = PeerConnectionFactory.builder()
-            .setVideoEncoderFactory(encoderFactory)
-            .setVideoDecoderFactory(decoderFactory)
-            .createPeerConnectionFactory()
-
-        Log.i(TAG, "PeerConnectionFactory initialized")
     }
 
     // ── Public API ──
@@ -140,7 +111,7 @@ class P2pConnectionManager @Inject constructor(
             return Result.failure(IllegalStateException("Server WebSocket not connected — cannot signal P2P"))
         }
 
-        ensureFactoryInitialized()
+        resources.acquire()
 
         Log.i(TAG, "Connecting to device: $deviceId")
 
@@ -259,7 +230,7 @@ class P2pConnectionManager @Inject constructor(
      */
     fun handleIncomingRequest(fromDeviceId: String): Boolean {
         Log.i(TAG, "Incoming connection request from $fromDeviceId")
-        ensureFactoryInitialized()
+        resources.acquire()
 
         // Auto-accept: send accept message back
         webSocketClient.send(
@@ -340,8 +311,7 @@ class P2pConnectionManager @Inject constructor(
     fun shutdown() {
         disconnectAll()
         scope.cancel()
-        peerConnectionFactory?.dispose()
-        peerConnectionFactory = null
+        resources.release()
         Log.i(TAG, "P2pConnectionManager shut down")
     }
 
@@ -407,8 +377,7 @@ class P2pConnectionManager @Inject constructor(
     }
 
     private fun createConnection(deviceId: String): P2pConnection {
-        val factory = peerConnectionFactory
-            ?: throw IllegalStateException("PeerConnectionFactory not initialized")
+        val factory = resources.acquire()
 
         val iceServers = listOf(
             PeerConnection.IceServer.builder(ICE_SERVER_URL).createIceServer()
@@ -511,12 +480,6 @@ class P2pConnectionManager @Inject constructor(
                     break
                 }
             }
-        }
-    }
-
-    private fun ensureFactoryInitialized() {
-        if (peerConnectionFactory == null) {
-            initialize()
         }
     }
 

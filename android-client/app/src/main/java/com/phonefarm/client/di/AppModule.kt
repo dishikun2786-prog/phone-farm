@@ -42,51 +42,51 @@ object AppModule {
             .build()
     }
 
-    @Provides
+    @Provides @Singleton
     fun provideActivationDao(db: AppDatabase): ActivationDao = db.activationDao()
 
-    @Provides
+    @Provides @Singleton
     fun provideScriptFileDao(db: AppDatabase): ScriptFileDao = db.scriptFileDao()
 
-    @Provides
+    @Provides @Singleton
     fun provideTaskLogDao(db: AppDatabase): TaskLogDao = db.taskLogDao()
 
-    @Provides
+    @Provides @Singleton
     fun provideEpisodeDao(db: AppDatabase): EpisodeDao = db.episodeDao()
 
-    @Provides
+    @Provides @Singleton
     fun provideVlmStepDao(db: AppDatabase): VlmStepDao = db.vlmStepDao()
 
-    @Provides
+    @Provides @Singleton
     fun provideCloudConfigDao(db: AppDatabase): CloudConfigDao = db.cloudConfigDao()
 
-    @Provides
+    @Provides @Singleton
     fun provideFloatConversationDao(db: AppDatabase): FloatConversationDao = db.floatConversationDao()
 
-    @Provides
+    @Provides @Singleton
     fun provideSavedScriptDao(db: AppDatabase): SavedScriptDao = db.savedScriptDao()
 
-    @Provides
+    @Provides @Singleton
     fun provideQuickChipDao(db: AppDatabase): QuickChipDao = db.quickChipDao()
 
-    @Provides
+    @Provides @Singleton
     fun providePluginRegistryDao(db: AppDatabase): PluginRegistryDao = db.pluginRegistryDao()
 
-    @Provides
+    @Provides @Singleton
     fun provideModelRegistryDao(db: AppDatabase): ModelRegistryDao = db.modelRegistryDao()
 
-    @Provides
+    @Provides @Singleton
     fun provideNotificationDao(db: AppDatabase): NotificationDao = db.notificationDao()
 
-    @Provides
+    @Provides @Singleton
     fun provideLocalCronJobDao(db: AppDatabase): LocalCronJobDao = db.localCronJobDao()
 
-    @Provides
+    @Provides @Singleton
     fun provideOfflineMessageDao(db: AppDatabase): OfflineMessageDao = db.offlineMessageDao()
 
-    @Provides
+    @Provides @Singleton
     fun provideCrashReportDao(db: AppDatabase): CrashReportDao = db.crashReportDao()
 
-    @Provides
+    @Provides @Singleton
     fun providePlatformAccountDao(db: AppDatabase): PlatformAccountDao = db.platformAccountDao()
 }

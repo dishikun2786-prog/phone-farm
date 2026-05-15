@@ -1,0 +1,528 @@
+{
+  "skills": [
+    {
+      "id": "order_food_meituan",
+      "name": "美团点外卖",
+      "description": "在美团上搜索并下单外卖",
+      "category": "外卖",
+      "keywords": ["点外卖", "叫外卖", "美团外卖", "点餐", "饿了", "叫个外卖", "外卖", "送餐"],
+      "params": [
+        { "name": "food", "type": "string", "description": "想吃什么", "required": true }
+      ],
+      "relatedApps": [
+        {
+          "package": "com.meituan.android.beantech.aiassistant",
+          "name": "小美AI",
+          "type": "delegation",
+          "priority": 100,
+          "deepLink": "meituan://ai/chat?query=帮我点一份{food}"
+        },
+        {
+          "package": "com.sankuai.meituan",
+          "name": "美团",
+          "type": "gui_automation",
+          "priority": 90,
+          "steps": ["打开美团", "点击搜索框", "输入{food}", "点击搜索", "选择第一个结果", "点击下单"]
+        },
+        {
+          "package": "me.ele",
+          "name": "饿了么",
+          "type": "gui_automation",
+          "priority": 70,
+          "steps": ["打开饿了么", "点击搜索框", "输入{food}", "点击搜索", "选择商家", "下单"]
+        }
+      ],
+      "promptHint": "注意避开广告标签的店铺，选择评分高的商家"
+    },
+    {
+      "id": "send_wechat_message",
+      "name": "发微信消息",
+      "description": "打开微信给指定联系人发送消息",
+      "category": "聊天",
+      "keywords": ["发微信", "微信发消息", "给XX发微信", "微信聊天", "wechat", "wx"],
+      "params": [
+        { "name": "contact", "type": "string", "description": "联系人名称", "required": true },
+        { "name": "message", "type": "string", "description": "消息内容", "required": true }
+      ],
+      "relatedApps": [
+        {
+          "package": "com.tencent.mm",
+          "name": "微信",
+          "type": "gui_automation",
+          "priority": 100,
+          "steps": ["打开微信", "点击搜索", "输入{contact}", "点击联系人", "点击输入框", "输入{message}", "点击发送"]
+        }
+      ],
+      "promptHint": "发送前确认联系人正确，避免发错人"
+    },
+    {
+      "id": "hail_ride_didi",
+      "name": "滴滴打车",
+      "description": "使用滴滴出行打车去目的地",
+      "category": "出行",
+      "keywords": ["打车", "叫车", "滴滴", "叫滴滴", "出行", "去机场", "去火车站", "叫个车"],
+      "params": [
+        { "name": "destination", "type": "string", "description": "目的地", "required": true }
+      ],
+      "relatedApps": [
+        {
+          "package": "com.sdu.didi.psnger",
+          "name": "滴滴出行",
+          "type": "gui_automation",
+          "priority": 100,
+          "steps": ["打开滴滴", "点击目的地输入框", "输入{destination}", "选择目的地", "点击呼叫"]
+        },
+        {
+          "package": "com.autonavi.minimap",
+          "name": "高德地图",
+          "type": "gui_automation",
+          "priority": 80,
+          "steps": ["打开高德地图", "点击打车", "输入目的地{destination}", "点击呼叫"]
+        }
+      ],
+      "promptHint": "确认上车地点准确后再呼叫"
+    },
+    {
+      "id": "navigate_amap",
+      "name": "高德导航",
+      "description": "使用高德地图导航到目的地",
+      "category": "出行",
+      "keywords": ["导航", "去", "怎么去", "路线", "高德导航", "地图导航", "开车去"],
+      "params": [
+        { "name": "destination", "type": "string", "description": "目的地", "required": true }
+      ],
+      "relatedApps": [
+        {
+          "package": "com.autonavi.minimap",
+          "name": "高德地图",
+          "type": "gui_automation",
+          "priority": 100,
+          "steps": ["打开高德地图", "点击搜索框", "输入{destination}", "点击搜索", "点击路线", "选择驾车", "点击开始导航"]
+        },
+        {
+          "package": "com.baidu.BaiduMap",
+          "name": "百度地图",
+          "type": "gui_automation",
+          "priority": 80,
+          "steps": ["打开百度地图", "搜索{destination}", "点击路线", "开始导航"]
+        }
+      ],
+      "promptHint": "导航前确认GPS已打开"
+    },
+    {
+      "id": "ai_image_gen",
+      "name": "AI生图",
+      "description": "使用豆包/即梦AI生成图片",
+      "category": "AI",
+      "keywords": ["AI生图", "生成图片", "画一张", "AI画画", "AI绘画", "生成一张", "帮我画", "创作图片"],
+      "params": [
+        { "name": "prompt", "type": "string", "description": "图片描述", "required": true }
+      ],
+      "relatedApps": [
+        {
+          "package": "com.larus.nova",
+          "name": "豆包",
+          "type": "delegation",
+          "priority": 100,
+          "deepLink": "doubao://chat?message=帮我生成一张图片:{prompt}"
+        },
+        {
+          "package": "com.larus.nova",
+          "name": "豆包",
+          "type": "gui_automation",
+          "priority": 80,
+          "steps": ["打开豆包", "点击输入框", "输入帮我生成一张图片:{prompt}", "点击发送"]
+        },
+        {
+          "package": "com.jimeng.android",
+          "name": "即梦AI",
+          "type": "delegation",
+          "priority": 95,
+          "deepLink": "jimeng://create?prompt={prompt}"
+        }
+      ],
+      "promptHint": "描述越详细，生成效果越好"
+    },
+    {
+      "id": "shop_taobao",
+      "name": "淘宝购物",
+      "description": "在淘宝上搜索商品并浏览",
+      "category": "购物",
+      "keywords": ["购物", "买", "淘宝", "下单", "网购", "买东西", "搜商品", "找东西"],
+      "params": [
+        { "name": "product", "type": "string", "description": "商品名称", "required": true }
+      ],
+      "relatedApps": [
+        {
+          "package": "com.taobao.taobao",
+          "name": "淘宝",
+          "type": "gui_automation",
+          "priority": 100,
+          "steps": ["打开淘宝", "点击搜索框", "输入{product}", "点击搜索", "浏览结果"]
+        },
+        {
+          "package": "com.jingdong.app.mall",
+          "name": "京东",
+          "type": "gui_automation",
+          "priority": 90,
+          "steps": ["打开京东", "点击搜索", "输入{product}", "搜索"]
+        },
+        {
+          "package": "com.xunmeng.pinduoduo",
+          "name": "拼多多",
+          "type": "gui_automation",
+          "priority": 70,
+          "steps": ["打开拼多多", "搜索{product}"]
+        }
+      ],
+      "promptHint": "注意对比价格和评价后再下单"
+    },
+    {
+      "id": "watch_douyin",
+      "name": "刷抖音",
+      "description": "打开抖音并搜索/浏览视频",
+      "category": "视频",
+      "keywords": ["刷抖音", "看抖音", "抖音", "短视频", "douyin", "刷视频", "看短视频"],
+      "params": [
+        { "name": "query", "type": "string", "description": "搜索内容(可选)", "required": false }
+      ],
+      "relatedApps": [
+        {
+          "package": "com.ss.android.ugc.aweme",
+          "name": "抖音",
+          "type": "gui_automation",
+          "priority": 100,
+          "steps": ["打开抖音", "点击搜索", "输入{query}", "点击搜索", "浏览视频"]
+        }
+      ],
+      "promptHint": ""
+    },
+    {
+      "id": "watch_kuaishou",
+      "name": "刷快手",
+      "description": "打开快手浏览短视频",
+      "category": "视频",
+      "keywords": ["刷快手", "快手", "看快手", "kuaishou"],
+      "params": [],
+      "relatedApps": [
+        {
+          "package": "com.smile.gifmaker",
+          "name": "快手",
+          "type": "gui_automation",
+          "priority": 100,
+          "steps": ["打开快手", "浏览视频"]
+        }
+      ],
+      "promptHint": ""
+    },
+    {
+      "id": "watch_bilibili",
+      "name": "B站看视频",
+      "description": "在哔哩哔哩上搜索并观看视频",
+      "category": "视频",
+      "keywords": ["B站", "bilibili", "看B站", "二次元", "看番", "看动漫", "哔哩哔哩"],
+      "params": [
+        { "name": "query", "type": "string", "description": "搜索内容", "required": false }
+      ],
+      "relatedApps": [
+        {
+          "package": "tv.danmaku.bili",
+          "name": "哔哩哔哩",
+          "type": "gui_automation",
+          "priority": 100,
+          "steps": ["打开B站", "点击搜索框", "输入{query}", "点击搜索", "播放第一个视频"]
+        }
+      ],
+      "promptHint": ""
+    },
+    {
+      "id": "listen_music",
+      "name": "听音乐",
+      "description": "打开音乐APP播放歌曲",
+      "category": "音乐",
+      "keywords": ["听音乐", "放音乐", "听歌", "放歌", "播放", "音乐", "来首歌", "放一首"],
+      "params": [
+        { "name": "song", "type": "string", "description": "歌曲名或歌手", "required": false }
+      ],
+      "relatedApps": [
+        {
+          "package": "com.netease.cloudmusic",
+          "name": "网易云音乐",
+          "type": "gui_automation",
+          "priority": 100,
+          "steps": ["打开网易云音乐", "点击搜索", "输入{song}", "点击播放"]
+        },
+        {
+          "package": "com.tencent.qqmusic",
+          "name": "QQ音乐",
+          "type": "gui_automation",
+          "priority": 90,
+          "steps": ["打开QQ音乐", "搜索{song}", "播放"]
+        },
+        {
+          "package": "com.kugou.android",
+          "name": "酷狗音乐",
+          "type": "gui_automation",
+          "priority": 70,
+          "steps": ["打开酷狗", "搜索{song}", "播放"]
+        }
+      ],
+      "promptHint": ""
+    },
+    {
+      "id": "post_xiaohongshu",
+      "name": "发小红书",
+      "description": "打开小红书发笔记",
+      "category": "社交",
+      "keywords": ["发小红书", "小红书", "发笔记", "RED", "种草"],
+      "params": [
+        { "name": "content", "type": "string", "description": "笔记内容", "required": true }
+      ],
+      "relatedApps": [
+        {
+          "package": "com.xingin.xhs",
+          "name": "小红书",
+          "type": "gui_automation",
+          "priority": 100,
+          "steps": ["打开小红书", "点击+号", "选择图文", "输入{content}", "点击发布"]
+        }
+      ],
+      "promptHint": "发布前检查内容是否违规"
+    },
+    {
+      "id": "post_weibo",
+      "name": "发微博",
+      "description": "打开微博发布内容",
+      "category": "社交",
+      "keywords": ["发微博", "微博", "发帖", "weibo", "发个微博"],
+      "params": [
+        { "name": "content", "type": "string", "description": "微博内容", "required": true }
+      ],
+      "relatedApps": [
+        {
+          "package": "com.sina.weibo",
+          "name": "微博",
+          "type": "gui_automation",
+          "priority": 100,
+          "steps": ["打开微博", "点击+号", "输入{content}", "点击发送"]
+        }
+      ],
+      "promptHint": ""
+    },
+    {
+      "id": "take_photo",
+      "name": "拍照",
+      "description": "打开系统相机拍照",
+      "category": "工具",
+      "keywords": ["拍照", "照相", "拍张照", "拍照片", "拍照了", "拍一张"],
+      "params": [],
+      "relatedApps": [
+        {
+          "package": "com.android.camera",
+          "name": "相机",
+          "type": "gui_automation",
+          "priority": 100,
+          "steps": ["打开相机", "点击快门"]
+        },
+        {
+          "package": "com.android.camera2",
+          "name": "相机",
+          "type": "gui_automation",
+          "priority": 90,
+          "steps": ["打开相机", "点击拍照"]
+        }
+      ],
+      "promptHint": ""
+    },
+    {
+      "id": "scan_qr_pay",
+      "name": "扫码支付",
+      "description": "打开支付宝或微信扫一扫",
+      "category": "支付",
+      "keywords": ["扫码", "扫一扫", "付款", "支付", "扫码支付", "扫二维码"],
+      "params": [],
+      "relatedApps": [
+        {
+          "package": "com.eg.android.AlipayGphone",
+          "name": "支付宝",
+          "type": "gui_automation",
+          "priority": 100,
+          "steps": ["打开支付宝", "点击扫一扫"]
+        },
+        {
+          "package": "com.tencent.mm",
+          "name": "微信",
+          "type": "gui_automation",
+          "priority": 90,
+          "steps": ["打开微信", "点击发现", "点击扫一扫"]
+        }
+      ],
+      "promptHint": "注意核对收款方信息，避免诈骗"
+    },
+    {
+      "id": "translate_text",
+      "name": "翻译文字",
+      "description": "使用翻译APP翻译文字",
+      "category": "工具",
+      "keywords": ["翻译", "翻译成", "英文怎么说", "翻译一下", "怎么翻译"],
+      "params": [
+        { "name": "text", "type": "string", "description": "要翻译的文字", "required": true },
+        { "name": "targetLang", "type": "string", "description": "目标语言", "required": false }
+      ],
+      "relatedApps": [
+        {
+          "package": "com.google.android.apps.translate",
+          "name": "Google翻译",
+          "type": "gui_automation",
+          "priority": 100,
+          "steps": ["打开翻译", "输入{text}", "查看翻译结果"]
+        },
+        {
+          "package": "com.baidu.translate",
+          "name": "百度翻译",
+          "type": "gui_automation",
+          "priority": 80,
+          "steps": ["打开百度翻译", "输入{text}", "查看翻译"]
+        }
+      ],
+      "promptHint": ""
+    },
+    {
+      "id": "check_weather",
+      "name": "查看天气",
+      "description": "查看当前和未来天气预报",
+      "category": "工具",
+      "keywords": ["天气", "今天天气", "明天天气", "天气预报", "会不会下雨", "温度", "多少度"],
+      "params": [
+        { "name": "city", "type": "string", "description": "城市名称", "required": false }
+      ],
+      "relatedApps": [
+        {
+          "package": "com.android.weather",
+          "name": "天气",
+          "type": "gui_automation",
+          "priority": 100,
+          "steps": ["打开天气"]
+        },
+        {
+          "package": "com.moji.mjweather",
+          "name": "墨迹天气",
+          "type": "gui_automation",
+          "priority": 80,
+          "steps": ["打开墨迹天气", "查看天气"]
+        }
+      ],
+      "promptHint": ""
+    },
+    {
+      "id": "set_alarm",
+      "name": "设置闹钟",
+      "description": "打开系统时钟设置闹钟",
+      "category": "工具",
+      "keywords": ["闹钟", "设闹钟", "定闹钟", "设置闹铃", "叫我起床", "提醒我"],
+      "params": [
+        { "name": "time", "type": "string", "description": "时间如 7:30", "required": true }
+      ],
+      "relatedApps": [
+        {
+          "package": "com.android.deskclock",
+          "name": "时钟",
+          "type": "gui_automation",
+          "priority": 100,
+          "steps": ["打开时钟", "点击闹钟", "点击添加", "设置时间{time}", "保存"]
+        },
+        {
+          "package": "com.google.android.deskclock",
+          "name": "Google时钟",
+          "type": "gui_automation",
+          "priority": 90,
+          "steps": ["打开时钟", "添加闹钟{time}"]
+        }
+      ],
+      "promptHint": ""
+    },
+    {
+      "id": "send_email",
+      "name": "发送邮件",
+      "description": "打开邮件APP撰写并发送邮件",
+      "category": "工具",
+      "keywords": ["发邮件", "邮件", "发送邮件", "email", "写邮件"],
+      "params": [
+        { "name": "to", "type": "string", "description": "收件人邮箱", "required": true },
+        { "name": "subject", "type": "string", "description": "邮件主题", "required": true },
+        { "name": "body", "type": "string", "description": "邮件正文", "required": true }
+      ],
+      "relatedApps": [
+        {
+          "package": "com.google.android.gm",
+          "name": "Gmail",
+          "type": "gui_automation",
+          "priority": 100,
+          "steps": ["打开Gmail", "点击撰写", "输入收件人{to}", "输入主题{subject}", "输入正文{body}", "发送"]
+        },
+        {
+          "package": "com.tencent.androidqqmail",
+          "name": "QQ邮箱",
+          "type": "gui_automation",
+          "priority": 80,
+          "steps": ["打开QQ邮箱", "写邮件", "收件人:{to}", "主题:{subject}", "内容:{body}", "发送"]
+        }
+      ],
+      "promptHint": ""
+    },
+    {
+      "id": "search_web",
+      "name": "浏览器搜索",
+      "description": "在浏览器中搜索指定内容",
+      "category": "工具",
+      "keywords": ["搜索", "搜一下", "查一下", "百度一下", "Google搜索", "网上搜", "搜搜看"],
+      "params": [
+        { "name": "query", "type": "string", "description": "搜索关键词", "required": true }
+      ],
+      "relatedApps": [
+        {
+          "package": "com.android.chrome",
+          "name": "Chrome",
+          "type": "gui_automation",
+          "priority": 100,
+          "steps": ["打开Chrome", "点击搜索栏", "输入{query}", "搜索"]
+        },
+        {
+          "package": "com.baidu.searchbox",
+          "name": "百度",
+          "type": "gui_automation",
+          "priority": 80,
+          "steps": ["打开百度", "输入{query}", "搜索"]
+        }
+      ],
+      "promptHint": ""
+    },
+    {
+      "id": "ai_chat",
+      "name": "AI聊天助手",
+      "description": "打开AI聊天APP进行对话",
+      "category": "AI",
+      "keywords": ["AI聊天", "豆包", "ChatGPT", "和AI聊天", "问AI", "问一下", "AI助手"],
+      "params": [
+        { "name": "question", "type": "string", "description": "要问的问题", "required": true }
+      ],
+      "relatedApps": [
+        {
+          "package": "com.larus.nova",
+          "name": "豆包",
+          "type": "delegation",
+          "priority": 100,
+          "deepLink": "doubao://chat?message={question}"
+        },
+        {
+          "package": "com.openai.chatgpt",
+          "name": "ChatGPT",
+          "type": "delegation",
+          "priority": 95,
+          "deepLink": "https://chat.openai.com/?q={question}"
+        }
+      ],
+      "promptHint": ""
+    }
+  ]
+}

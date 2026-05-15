@@ -5,6 +5,7 @@
     "bradlc.vscode-tailwindcss",
     "ms-azuretools.vscode-docker",
     "cweijan.vscode-postgresql-client2",
-    "deekescript.deekescript"
+    "deekescript.deekescript",
+    "anthropic.claude-code"
   ]
 }
