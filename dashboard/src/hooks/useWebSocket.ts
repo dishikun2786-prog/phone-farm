@@ -3,10 +3,19 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 type MessageHandler = (msg: any) => void;
 export type ConnectionState = 'connected' | 'connecting' | 'disconnected';
 
+function getToken(): string {
+  try {
+    const token = localStorage.getItem('token');
+    return token || '';
+  } catch { return ''; }
+}
+
 function buildWsUrls(): string[] {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const primary = `${protocol}//${window.location.host}/ws/frontend`;
-  const bypass = `wss://ws-${window.location.host}/ws/frontend`;
+  const token = getToken();
+  const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
+  const primary = `${protocol}//${window.location.host}/ws/frontend${tokenParam}`;
+  const bypass = `wss://ws-${window.location.host}/ws/frontend${tokenParam}`;
   return [primary, bypass];
 }
 
@@ -22,6 +31,7 @@ export function useWebSocket(onMessage: MessageHandler) {
   useEffect(() => {
     const urls = buildWsUrls();
     let reconnectTimer: ReturnType<typeof setTimeout>;
+    let heartbeatTimer: ReturnType<typeof setInterval>;
     let destroyed = false;
 
     const connect = () => {
@@ -37,16 +47,35 @@ export function useWebSocket(onMessage: MessageHandler) {
         reconnectAttemptRef.current = 0;
         urlIndexRef.current = 0;
         if (!destroyed) setConnectionState('connected');
+        // Heartbeat every 30s to prevent proxy idle timeout
+        heartbeatTimer = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'ping' }));
+          }
+        }, 30000);
       };
 
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
+          if (msg.type === 'auth_required') {
+            const token = getToken();
+            if (token) {
+              ws.send(JSON.stringify({ type: 'auth', token }));
+            }
+            return;
+          }
+          if (msg.type === 'auth_ok') { return; }
+          if (msg.type === 'auth_error') {
+            console.warn('[WS] Auth error:', msg.message);
+            return;
+          }
           handlersRef.current(msg);
         } catch { /* ignore */ }
       };
 
       ws.onclose = () => {
+        clearInterval(heartbeatTimer);
         console.log('[WS] Disconnected, reconnecting...');
         if (!destroyed) {
           setConnectionState('disconnected');
@@ -70,6 +99,7 @@ export function useWebSocket(onMessage: MessageHandler) {
     return () => {
       destroyed = true;
       clearTimeout(reconnectTimer);
+      clearInterval(heartbeatTimer);
       wsRef.current?.close();
     };
   }, []);
