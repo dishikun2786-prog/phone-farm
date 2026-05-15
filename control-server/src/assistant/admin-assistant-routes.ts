@@ -31,16 +31,20 @@ const ADMIN_ROLE_TOOLS: Record<string, string[]> = {
   ],
 };
 
-/** Direct DeepSeek call — Anthropic Messages API */
-async function callDeepSeek(
-  messages: unknown[],
-  tools: AdminToolDef[],
-): Promise<{
+interface DeepSeekResult {
   content: string;
   inputTokens: number;
   outputTokens: number;
   toolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }>;
-}> {
+  /** All blocks returned by DeepSeek (text + thinking + tool_use) */
+  allBlocks: unknown[];
+}
+
+/** Direct DeepSeek call — Anthropic Messages API */
+async function callDeepSeek(
+  messages: unknown[],
+  tools: AdminToolDef[],
+): Promise<DeepSeekResult> {
   const body: Record<string, unknown> = {
     model: config.DEEPSEEK_MODEL,
     messages,
@@ -73,7 +77,7 @@ async function callDeepSeek(
 
   const data = (await resp.json()) as any;
   if (!data || !Array.isArray(data.content)) {
-    throw new Error("DeepSeek 返回格式异常: content 不是数组");
+    throw new Error("DeepSeek returned unexpected format: content is not an array");
   }
   const inputTokens = data.usage?.input_tokens ?? 0;
   const outputTokens = data.usage?.output_tokens ?? 0;
@@ -89,7 +93,7 @@ async function callDeepSeek(
     }
   }
 
-  return { content, inputTokens, outputTokens, toolCalls };
+  return { content, inputTokens, outputTokens, toolCalls, allBlocks: data.content };
 }
 
 /** Format tool result as Anthropic tool_result content blocks */
@@ -110,7 +114,7 @@ export async function adminAssistantRoutes(app: FastifyInstance, authService: an
   const requireAdmin = async (req: any, reply: any) => {
     const role = req.user?.role;
     if (role !== "super_admin" && role !== "admin") {
-      return reply.status(403).send({ error: "仅管理员可使用 AI 助手" });
+      return reply.status(403).send({ error: "Only admins can use the AI assistant" });
     }
   };
 
@@ -123,7 +127,7 @@ export async function adminAssistantRoutes(app: FastifyInstance, authService: an
       if (!user?.userId) return reply.status(401).send({ error: "Unauthorized" });
 
       if (!config.DEEPSEEK_API_KEY) {
-        return reply.status(503).send({ error: "DeepSeek API 未配置，请在 .env 中设置 DEEPSEEK_API_KEY" });
+        return reply.status(503).send({ error: "DeepSeek API not configured" });
       }
 
       const { messages, sessionId } = req.body as {
@@ -132,7 +136,7 @@ export async function adminAssistantRoutes(app: FastifyInstance, authService: an
       };
 
       if (!messages || !Array.isArray(messages)) {
-        return reply.status(400).send({ error: "messages 数组为必填项" });
+        return reply.status(400).send({ error: "messages array is required" });
       }
 
       // Filter tools by role
@@ -140,10 +144,10 @@ export async function adminAssistantRoutes(app: FastifyInstance, authService: an
       const availableTools = ADMIN_TOOLS.filter((t) => allowedToolNames.includes(t.name));
 
       try {
-        // Convert frontend messages to Anthropic format (content can be string or blocks[])
+        // Convert frontend messages to Anthropic format
         const apiMessages: Array<{ role: string; content: unknown }> = messages.map((m) => ({
           role: m.role === "assistant" ? "assistant" : "user",
-          content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+          content: m.content,
         }));
 
         const allToolCalls: Array<{
@@ -163,7 +167,7 @@ export async function adminAssistantRoutes(app: FastifyInstance, authService: an
         for (let i = 0; i < MAX_TOOL_LOOP_ITERATIONS; i++) {
           if (Date.now() - loopStart > LOOP_TIMEOUT_MS) {
             return reply.send({
-              content: "操作超时，已完成部分操作。请继续指示以完成剩余操作。",
+              content: "Operation timed out. Partial results returned.",
               toolCalls: allToolCalls,
               usage: { inputTokens: totalInputTokens, outputTokens: totalOutputTokens },
               sessionId,
@@ -175,12 +179,6 @@ export async function adminAssistantRoutes(app: FastifyInstance, authService: an
 
           // No tool calls — return final text response
           if (result.toolCalls.length === 0) {
-            // Save to session
-            const msgHistory = [
-              ...messages,
-              { role: "assistant", content: result.content, toolCalls: allToolCalls },
-            ];
-
             if (sessionId) {
               await db
                 .update(assistantSessions)
@@ -190,7 +188,7 @@ export async function adminAssistantRoutes(app: FastifyInstance, authService: an
                   endedAt: new Date(),
                 })
                 .where(eq(assistantSessions.id, sessionId))
-                .catch(() => {}); // non-critical
+                .catch(() => {});
             }
 
             return reply.send({
@@ -218,24 +216,33 @@ export async function adminAssistantRoutes(app: FastifyInstance, authService: an
                 success: false,
                 result: null,
                 error: err.message,
-                summary: `工具调用失败: ${err.message}`,
+                summary: `Tool call failed: ${err.message}`,
               });
             }
           }
 
-          // Add assistant message (with tool_use blocks) and tool results to conversation
-          const toolUseBlocks = result.toolCalls.map((tc) => ({
-            type: "tool_use",
-            id: tc.id,
-            name: tc.name,
-            input: tc.input,
-          }));
+          // Build assistant message — include all original blocks (thinking + text) + tool_use blocks
+          // DeepSeek requires thinking blocks to be passed back in subsequent requests
+          const assistantBlocks = [...result.allBlocks];
+
+          // Only add tool_use blocks that weren't already in allBlocks
+          const existingToolUseIds = new Set(
+            result.toolCalls.map((tc) => tc.id)
+          );
+          for (const tc of result.toolCalls) {
+            if (!existingToolUseIds.has(tc.id)) {
+              assistantBlocks.push({
+                type: "tool_use",
+                id: tc.id,
+                name: tc.name,
+                input: tc.input,
+              });
+            }
+          }
 
           currentMessages.push({
             role: "assistant",
-            content: result.content
-              ? [{ type: "text", text: result.content }, ...toolUseBlocks]
-              : toolUseBlocks,
+            content: assistantBlocks,
           } as any);
 
           currentMessages.push({
@@ -246,14 +253,14 @@ export async function adminAssistantRoutes(app: FastifyInstance, authService: an
 
         // Max iterations reached
         return reply.send({
-          content: "操作步骤较多，已完成部分操作。请继续指示以完成剩余操作。",
+          content: "Too many steps. Partial results returned.",
           toolCalls: allToolCalls,
           usage: { inputTokens: totalInputTokens, outputTokens: totalOutputTokens },
           sessionId,
         });
       } catch (err: any) {
         console.error("[AdminAssistant] Chat error:", err.message);
-        return reply.status(502).send({ error: `AI 服务不可用: ${err.message}` });
+        return reply.status(502).send({ error: `AI service unavailable: ${err.message}` });
       }
     },
   );
@@ -294,7 +301,7 @@ export async function adminAssistantRoutes(app: FastifyInstance, authService: an
         .where(and(eq(assistantSessions.id, id), eq(assistantSessions.userId, user.userId)))
         .limit(1);
 
-      if (!row[0]) return reply.status(404).send({ error: "会话不存在" });
+      if (!row[0]) return reply.status(404).send({ error: "Session not found" });
       return row[0];
     },
   );
@@ -312,7 +319,7 @@ export async function adminAssistantRoutes(app: FastifyInstance, authService: an
         .where(and(eq(assistantSessions.id, id), eq(assistantSessions.userId, user.userId)));
 
       if (result.rowCount === 0) {
-        return reply.status(404).send({ error: "会话不存在或无权删除" });
+        return reply.status(404).send({ error: "Session not found or access denied" });
       }
       return { ok: true };
     },
