@@ -249,19 +249,6 @@ export async function scriptsManifestRoutes(app: FastifyInstance): Promise<void>
     return reply.send({ ok: true, groupId, deployed: 0 });
   });
 
-  // 获取当前脚本版本号
-  app.get("/api/v1/scripts/version", async (_req, reply) => {
-    const manifest = store.getManifest("phonefarm-native");
-    return reply.send({ version: manifest.version, runtime: manifest.runtime, updatedAt: manifest.updatedAt });
-  });
-
-  // 检查设备脚本版本
-  app.get("/api/v1/scripts/version/:deviceId", async (req, reply) => {
-    const { deviceId } = req.params as { deviceId: string };
-    const manifest = store.getManifest("phonefarm-native");
-    return reply.send({ deviceId, serverVersion: manifest.version, needsUpdate: true });
-  });
-
   // 批量部署脚本到多台设备
   app.post("/api/v1/scripts/deploy-batch", async (req, reply) => {
     const { deviceIds } = req.body as { deviceIds: string[] };
