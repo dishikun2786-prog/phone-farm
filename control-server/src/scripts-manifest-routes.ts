@@ -215,22 +215,6 @@ export async function scriptsManifestRoutes(app: FastifyInstance): Promise<void>
     return reply.send({ name, versions });
   });
 
-  // 推送脚本到指定设备
-  app.post("/api/v1/scripts/deploy/:deviceId", async (req, reply) => {
-    const { deviceId } = req.params as { deviceId: string };
-    const { files } = req.body as { files: Record<string, string> };
-    const wsHub = (app as any).wsHub;
-    if (wsHub) {
-      wsHub.sendToDevice(deviceId, {
-        type: "deploy_scripts",
-        version: store.getManifest("phonefarm-native").version,
-        files,
-        timestamp: Date.now(),
-      });
-    }
-    return reply.send({ ok: true, deviceId, deployed: Object.keys(files).length });
-  });
-
   // 批量推送脚本到分组设备
   app.post("/api/v1/scripts/deploy/group/:groupId", async (req, reply) => {
     const { groupId } = req.params as { groupId: string };
@@ -249,9 +233,4 @@ export async function scriptsManifestRoutes(app: FastifyInstance): Promise<void>
     return reply.send({ ok: true, groupId, deployed: 0 });
   });
 
-  // 批量部署脚本到多台设备
-  app.post("/api/v1/scripts/deploy-batch", async (req, reply) => {
-    const { deviceIds } = req.body as { deviceIds: string[] };
-    return reply.send({ ok: true, deviceIds: deviceIds || [], deployed: 0 });
-  });
 }
