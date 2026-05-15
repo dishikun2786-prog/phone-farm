@@ -553,15 +553,16 @@ export class MinioClient {
       ...extraHeaders,
     };
 
-    const signedHeaders = Object.keys(headers)
+    const headerKeys = Object.keys(headers).filter((k) => headers[k] != null);
+    const signedHeaders = headerKeys
       .map((k) => k.toLowerCase())
       .sort()
       .join(";");
 
-    const canonicalHeaders = Object.keys(headers)
+    const canonicalHeaders = headerKeys
       .map((k) => k.toLowerCase())
       .sort()
-      .map((k) => `${k}:${headers[k]!.trim()}`)
+      .map((k) => `${k}:${(headers[k] ?? "").trim()}`)
       .join("\n");
 
     const canonicalURI = resource.split("?")[0]!.split("/").map(encodeURIComponent).join("/");
