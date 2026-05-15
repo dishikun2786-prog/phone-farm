@@ -24,6 +24,7 @@ interface Template {
 }
 
 interface Category {
+  id: string;
   key: string;
   displayName: string;
 }
@@ -172,7 +173,7 @@ export default function ConfigTemplateEditor() {
   const filteredDefs = definitions.filter((d) => {
     const cat = categories.find((c) => c.key === activeCategory);
     if (!cat) return true;
-    return d.categoryId === cat.key;
+    return d.categoryId === cat.id;
   });
 
   if (loading) {

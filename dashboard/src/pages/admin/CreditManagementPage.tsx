@@ -2,26 +2,26 @@ import { useState, useEffect } from 'react';
 import PageWrapper from '../../components/PageWrapper';
 import { api } from '../../lib/api';
 import { toast } from '../../hooks/useToast';
-import { Coins, ArrowUpCircle, ArrowDownCircle, Users, Search, X } from 'lucide-react';
+import { Coins, ArrowUpCircle, ArrowDownCircle, Users, X } from 'lucide-react';
 
 interface CreditOverview {
   totalUsers: number;
   totalCreditsIssued: number;
   totalCreditsSpent: number;
-  activeBalance: number;
-  byPlan: Record<string, { users: number; credits: number }>;
+  activeSessionsToday: number;
 }
 
 interface CreditTransaction {
   id: string;
-  userId: string;
+  user_id: string;
   username: string;
-  type: 'grant' | 'consume' | 'refund' | 'expire';
+  type: string;
   amount: number;
-  balanceAfter: number;
-  reason: string;
-  sessionId?: string;
-  createdAt: string;
+  balance_after: number;
+  scene: string;
+  reference_id?: string;
+  metadata?: any;
+  created_at: string;
 }
 
 export default function CreditManagementPage() {
@@ -31,21 +31,17 @@ export default function CreditManagementPage() {
   const [txLoading, setTxLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [totalTx, setTotalTx] = useState(0);
+  const PAGE_SIZE = 20;
 
   // Grant modal
   const [showGrant, setShowGrant] = useState(false);
   const [grantUserId, setGrantUserId] = useState('');
   const [grantAmount, setGrantAmount] = useState('');
-  const [grantReason, setGrantReason] = useState('');
+  const [grantNote, setGrantNote] = useState('');
   const [granting, setGranting] = useState(false);
 
-  // Search
-  const [searchUser, setSearchUser] = useState('');
-
-  const PAGE_SIZE = 20;
-
   useEffect(() => { loadOverview(); }, []);
-  useEffect(() => { loadTransactions(); }, [page, searchUser]);
+  useEffect(() => { loadTransactions(); }, [page]);
 
   async function loadOverview() {
     try {
@@ -58,11 +54,9 @@ export default function CreditManagementPage() {
   async function loadTransactions() {
     setTxLoading(true);
     try {
-      const params = new URLSearchParams();
-      params.set('page', String(page));
-      params.set('pageSize', String(PAGE_SIZE));
-      if (searchUser) params.set('keyword', searchUser);
-      const data = await api.request(`/admin/credits/transactions?${params.toString()}`) as { transactions: CreditTransaction[]; total: number };
+      const limit = PAGE_SIZE;
+      const offset = (page - 1) * PAGE_SIZE;
+      const data = await api.request(`/admin/credits/transactions?limit=${limit}&offset=${offset}`) as { transactions: CreditTransaction[]; total: number };
       setTransactions(data.transactions);
       setTotalTx(data.total);
     } catch { toast('error', '加载交易记录失败'); }
@@ -75,13 +69,13 @@ export default function CreditManagementPage() {
     try {
       await api.request('/admin/credits/grant', {
         method: 'POST',
-        body: JSON.stringify({ userId: grantUserId, amount: Number(grantAmount), reason: grantReason || '管理员手动发放' }),
+        body: JSON.stringify({ userId: grantUserId, amount: Number(grantAmount), note: grantNote || '管理员手动发放' }),
       });
       toast('success', `成功发放 ${grantAmount} 积分`);
       setShowGrant(false);
       setGrantUserId('');
       setGrantAmount('');
-      setGrantReason('');
+      setGrantNote('');
       loadOverview();
       loadTransactions();
     } catch { toast('error', '发放积分失败'); }
@@ -109,8 +103,8 @@ export default function CreditManagementPage() {
           <div className="text-2xl font-bold text-orange-600">{overview?.totalCreditsSpent?.toLocaleString() ?? '-'}</div>
         </div>
         <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-4">
-          <div className="flex items-center gap-2 text-gray-400 dark:text-slate-500 mb-1"><Coins size={16} /><span className="text-xs">活跃余额</span></div>
-          <div className="text-2xl font-bold text-blue-600">{overview?.activeBalance?.toLocaleString() ?? '-'}</div>
+          <div className="flex items-center gap-2 text-gray-400 dark:text-slate-500 mb-1"><Coins size={16} /><span className="text-xs">今日活跃会话</span></div>
+          <div className="text-2xl font-bold text-blue-600">{overview?.activeSessionsToday?.toLocaleString() ?? '-'}</div>
         </div>
       </div>
 
@@ -122,33 +116,7 @@ export default function CreditManagementPage() {
         >
           <Coins size={16} /> 发放积分
         </button>
-        <div className="relative flex-1 max-w-xs">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="搜索用户..."
-            value={searchUser}
-            onChange={e => { setSearchUser(e.target.value); setPage(1); }}
-            className="w-full pl-9 pr-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
       </div>
-
-      {/* By Plan Distribution */}
-      {overview?.byPlan && Object.keys(overview.byPlan).length > 0 && (
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 p-4 mb-4">
-          <h3 className="font-semibold text-sm mb-3 text-gray-900 dark:text-slate-100">按套餐分布</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {Object.entries(overview.byPlan).map(([plan, data]) => (
-              <div key={plan} className="p-3 rounded-lg border border-gray-100 dark:border-slate-700">
-                <div className="text-xs text-gray-500 dark:text-slate-400 mb-1">{plan}</div>
-                <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">{data.users} 用户</div>
-                <div className="text-xs text-gray-400 dark:text-slate-500">{data.credits.toLocaleString()} 积分</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Transaction History */}
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
@@ -173,29 +141,32 @@ export default function CreditManagementPage() {
                 </tr>
               </thead>
               <tbody>
-                {transactions.map(tx => (
+                {transactions.map(tx => {
+                  const txType = tx.type || '';
+                  const note = typeof tx.metadata === 'object' && tx.metadata ? (tx.metadata.note || tx.metadata.reason || '') : '';
+                  return (
                   <tr key={tx.id} className="border-b border-gray-50 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700/50">
-                    <td className="px-4 py-2.5 text-gray-900 dark:text-slate-100 font-medium">{tx.username}</td>
+                    <td className="px-4 py-2.5 text-gray-900 dark:text-slate-100 font-medium">{tx.username || tx.user_id}</td>
                     <td className="px-4 py-2.5">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
-                        tx.type === 'grant' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                        tx.type === 'refund' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                        tx.type === 'expire' ? 'bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400' :
-                        'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                        txType === 'admin_grant' || txType === 'grant' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                        txType === 'refund' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                        txType === 'spend' || txType === 'consume' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
+                        'bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400'
                       }`}>
-                        {tx.type === 'grant' ? '发放' : tx.type === 'consume' ? '消费' : tx.type === 'refund' ? '退款' : '过期'}
+                        {txType === 'admin_grant' || txType === 'grant' ? '发放' : txType === 'spend' || txType === 'consume' ? '消费' : txType === 'refund' ? '退款' : txType || '未知'}
                       </span>
                     </td>
                     <td className={`px-4 py-2.5 text-right font-mono font-medium ${tx.amount > 0 ? 'text-green-600' : 'text-orange-600'}`}>
-                      {tx.amount > 0 ? '+' : ''}{tx.amount.toLocaleString()}
+                      {tx.amount > 0 ? '+' : ''}{Number(tx.amount).toLocaleString()}
                     </td>
-                    <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-slate-100">{tx.balanceAfter.toLocaleString()}</td>
-                    <td className="px-4 py-2.5 text-gray-500 dark:text-slate-400 max-w-[200px] truncate">{tx.reason || '-'}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-gray-900 dark:text-slate-100">{Number(tx.balance_after).toLocaleString()}</td>
+                    <td className="px-4 py-2.5 text-gray-500 dark:text-slate-400 max-w-[200px] truncate">{note || tx.scene || '-'}</td>
                     <td className="px-4 py-2.5 text-right text-gray-400 dark:text-slate-500 text-xs whitespace-nowrap">
-                      {new Date(tx.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      {tx.created_at ? new Date(tx.created_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           </div>
@@ -242,10 +213,10 @@ export default function CreditManagementPage() {
                   placeholder="输入积分数" min="1" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">原因(可选)</label>
-                <input type="text" value={grantReason} onChange={e => setGrantReason(e.target.value)}
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">备注(可选)</label>
+                <input type="text" value={grantNote} onChange={e => setGrantNote(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="发放原因" />
+                  placeholder="发放备注" />
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">

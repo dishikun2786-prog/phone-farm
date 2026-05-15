@@ -18,18 +18,27 @@ import (
 )
 
 // ── Domain Types ──
+//
+// JSON tags use camelCase to match the TS/Android naming convention.
+// Subject naming: phonefarm.{resource}.{id}.{event}
+//   Examples: phonefarm.devices.abc123.online, phonefarm.tasks.xyz.status
+//
+// NOTE for Go→TS alignment:
+//   When publishing from Go, use NC.Publish(fmt.Sprintf("phonefarm.devices.%s.online", deviceId), data)
+//   When publishing from TS (nats-sync.ts), use NATS_SUBJECTS.deviceOnline(deviceId)
+//   Both sides MUST use identical camelCase JSON field names.
 
 // DeviceEvent represents a device state change pushed via NATS.
 type DeviceEvent struct {
-	DeviceID  string                 `json:"device_id"`
-	EventType string                 `json:"event_type"` // "online", "offline", "heartbeat"
+	DeviceID  string                 `json:"deviceId"`
+	EventType string                 `json:"eventType"` // "online", "offline", "heartbeat"
 	Timestamp time.Time              `json:"timestamp"`
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // TaskStatus reports the current state of a task running on a device.
 type TaskStatus struct {
-	TaskID    string    `json:"task_id"`
+	TaskID    string    `json:"taskId"`
 	Status    string    `json:"status"` // "pending", "running", "completed", "failed", "timeout"
 	Step      int       `json:"step"`
 	Message   string    `json:"message,omitempty"`
@@ -38,7 +47,7 @@ type TaskStatus struct {
 
 // DeviceAction describes a command to execute on a device.
 type DeviceAction struct {
-	ActionType string                 `json:"action_type"`
+	ActionType string                 `json:"actionType"`
 	Params     map[string]interface{} `json:"params"`
 }
 
@@ -47,7 +56,7 @@ type ActionResult struct {
 	Success  bool          `json:"success"`
 	Output   string        `json:"output,omitempty"`
 	Error    string        `json:"error,omitempty"`
-	Duration time.Duration `json:"duration_ms"`
+	Duration time.Duration `json:"durationMs"`
 }
 
 // Stats provides a snapshot of handler state.
@@ -58,14 +67,32 @@ type Stats struct {
 }
 
 // ── NATS Subject Constants ──
+//
+// Convention: phonefarm.{resource}.{id}.{event}  (camelCase IDs, kebab/snake-free)
+//
+// Alignment with TS (nats-sync.ts):
+//   Go:  fmt.Sprintf("phonefarm.devices.%s.online", deviceID)   → NATS_SUBJECTS.deviceOnline(deviceId)
+//   Go:  fmt.Sprintf("phonefarm.tasks.%s.status", taskID)        → NATS_SUBJECTS.taskStatus(taskId)
+//
+// NOTE: TS publishes to specific per-event subjects (online/offline/heartbeat/status/result).
+//       On the Go side, SubscribeDeviceEvents uses a "*.events" wildcard for backward compat
+//       but new code should prefer subscribing to individual subjects when possible.
 
 const (
-	SubjectDeviceEvents    = "phonefarm.devices.%s.events"     // device_id
-	SubjectDeviceCommand   = "phonefarm.devices.%s.command"    // device_id
-	SubjectTaskStatus      = "phonefarm.tasks.%s.status"       // task_id
-	SubjectTaskResult      = "phonefarm.tasks.%s.result"       // task_id
-	SubjectDeviceActionReq = "phonefarm.devices.%s.action.req" // device_id
-	SubjectDeviceActionRes = "phonefarm.devices.%s.action.res" // device_id
+	// Per-event device subjects (preferred for granular subscriptions)
+	SubjectDeviceOnline    = "phonefarm.devices.%s.online"    // device_id → device online
+	SubjectDeviceOffline   = "phonefarm.devices.%s.offline"   // device_id → device offline
+	SubjectDeviceHeartbeat = "phonefarm.devices.%s.heartbeat" // device_id → device heartbeat
+	SubjectDeviceEvents    = "phonefarm.devices.%s.events"    // device_id → generic event envelope (legacy)
+
+	// Device command subjects
+	SubjectDeviceCommand   = "phonefarm.devices.%s.command"    // device_id → inbound command
+	SubjectDeviceActionReq = "phonefarm.devices.%s.action.req" // device_id → request-reply action
+	SubjectDeviceActionRes = "phonefarm.devices.%s.action.res" // device_id → request-reply response
+
+	// Task subjects
+	SubjectTaskStatus = "phonefarm.tasks.%s.status" // task_id → task status update
+	SubjectTaskResult = "phonefarm.tasks.%s.result" // task_id → final task result
 )
 
 // RequestTimeout is the default timeout for device action request-reply.

@@ -526,8 +526,10 @@ const createSystemSlice: StateCreator<AppState, [], [], SystemSlice> = (set) => 
 
   toggleFeatureFlag: async (key) => {
     const api = getApi();
-    await api.toggleFeatureFlag(key);
-    set((state) => ({ featureFlags: { ...state.featureFlags, [key]: !state.featureFlags[key] } }));
+    const current = get().featureFlags[key] as boolean | undefined;
+    const next = !current;
+    await api.toggleFeatureFlag(key, next);
+    set((state) => ({ featureFlags: { ...state.featureFlags, [key]: next } }));
   },
 
   loadInfraStatus: async () => {

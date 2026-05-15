@@ -231,11 +231,37 @@ export class WsHub {
         break;
 
       case 'screenshot':
+      case 'device_screenshot':
         if (!conn.authenticated) return;
         this.#broadcastToFrontends({
           type: 'device_screenshot',
           deviceId: conn.deviceId,
-          data: msg.data,
+          imageBase64: msg.imageBase64 || msg.data,
+          format: msg.format || 'jpeg',
+          width: msg.width || 0,
+          height: msg.height || 0,
+          timestamp: msg.timestamp || Date.now(),
+        }, conn.deviceId);
+        break;
+
+      case 'edge_state':
+        if (!conn.authenticated) return;
+        this.#broadcastToFrontends({
+          type: 'edge_state',
+          deviceId: conn.deviceId,
+          stateJson: msg.stateJson,
+          screenshotBase64: msg.screenshotBase64,
+        }, conn.deviceId);
+        break;
+
+      case 'step_result':
+        if (!conn.authenticated) return;
+        this.#broadcastToFrontends({
+          type: 'step_result',
+          deviceId: conn.deviceId,
+          outcome: msg.outcome,
+          action: msg.action,
+          durationMs: msg.durationMs,
         }, conn.deviceId);
         break;
 
@@ -395,7 +421,7 @@ export class WsHub {
       // Phase 1: send stop_task
       conn.ws.send(JSON.stringify({
         type: 'stop_task',
-        task_id: taskId,
+        taskId,
         reason: 'timeout',
       }));
 

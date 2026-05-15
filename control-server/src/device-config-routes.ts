@@ -189,8 +189,11 @@ export async function deviceConfigRoutes(app: FastifyInstance): Promise<void> {
     if (wsHub) {
       wsHub.sendToDevice(deviceId, {
         type: "config_update",
-        config,
-        timestamp: Date.now(),
+        configKey: "device.full_config",
+        configValue: JSON.stringify(config),
+        version: 1,
+        scope: "device",
+        scopeId: deviceId,
       });
     }
     app.log.info(`[Config] Updated config for device ${deviceId}`);
@@ -207,7 +210,7 @@ export async function deviceConfigRoutes(app: FastifyInstance): Promise<void> {
     let pushed = 0;
     if (wsHub) {
       for (const deviceId of deviceIds) {
-        if (wsHub.sendToDevice(deviceId, { type: "config_update", config, timestamp: Date.now() })) {
+        if (wsHub.sendToDevice(deviceId, { type: "config_update", configKey: "device.full_config", configValue: JSON.stringify(config), version: 1, scope: "device", scopeId: deviceId })) {
           pushed++;
         }
       }

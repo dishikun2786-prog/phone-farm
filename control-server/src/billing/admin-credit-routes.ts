@@ -30,11 +30,11 @@ export async function adminCreditRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/api/v1/admin/credits/transactions", async (req, reply) => {
     const { limit, offset } = req.query as Record<string, string>;
-    const transactions = await creditService.getAllTransactions(
+    const { transactions, total } = await creditService.getAllTransactions(
       Number(limit) || 100,
       Number(offset) || 0,
     );
-    return reply.send({ transactions, total: transactions.length });
+    return reply.send({ transactions, total });
   });
 
   app.post("/api/v1/admin/credits/balances", async (req, reply) => {

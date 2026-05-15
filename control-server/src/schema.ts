@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, integer, boolean, timestamp, jsonb, text, pgEnum, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, varchar, integer, boolean, timestamp, jsonb, text, pgEnum, index, doublePrecision } from 'drizzle-orm/pg-core';
 
 export const platformEnum = pgEnum('platform', ['dy', 'ks', 'wx', 'xhs']);
 export const deviceStatusEnum = pgEnum('device_status', ['online', 'offline', 'busy', 'error']);
@@ -24,6 +24,8 @@ export const devices = pgTable('devices', {
 }, (table) => [
   index('idx_devices_last_seen').on(table.lastSeen),
   index('idx_devices_status').on(table.status),
+  index('idx_devices_public_ip').on(table.publicIp),
+  index('idx_devices_tenant').on(table.tenantId),
 ]);
 
 export const accounts = pgTable('accounts', {
@@ -37,7 +39,10 @@ export const accounts = pgTable('accounts', {
   metadata: jsonb('metadata').default({}),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_accounts_platform').on(table.platform),
+  index('idx_accounts_tenant').on(table.tenantId),
+]);
 
 export const taskTemplates = pgTable('task_templates', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -65,6 +70,7 @@ export const tasks = pgTable('tasks', {
 }, (table) => [
   index('idx_tasks_device').on(table.deviceId),
   index('idx_tasks_template').on(table.templateId),
+  index('idx_tasks_tenant').on(table.tenantId),
 ]);
 
 export const executions = pgTable('executions', {
@@ -85,6 +91,7 @@ export const executions = pgTable('executions', {
   index('idx_executions_created').on(table.createdAt),
   index('idx_executions_started').on(table.startedAt),
   index('idx_executions_status').on(table.status),
+  index('idx_executions_tenant').on(table.tenantId),
 ]);
 
 export const userStatusEnum = pgEnum('user_status', ['active', 'disabled', 'deleted']);
@@ -101,7 +108,11 @@ export const users = pgTable('users', {
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_users_role').on(table.role),
+  index('idx_users_status').on(table.status),
+  index('idx_users_tenant').on(table.tenantId),
+]);
 
 // ── SMS Verification Codes ──
 
@@ -139,6 +150,7 @@ export const vlmEpisodes = pgTable('vlm_episodes', {
   index('idx_vlm_episodes_device').on(table.deviceId),
   index('idx_vlm_episodes_created').on(table.createdAt),
   index('idx_vlm_episodes_status').on(table.status),
+  index('idx_vlm_episodes_tenant').on(table.tenantId),
 ]);
 
 export const vlmSteps = pgTable('vlm_steps', {
@@ -170,7 +182,10 @@ export const vlmScripts = pgTable('vlm_scripts', {
   validationEpisodeId: uuid('validation_episode_id').references(() => vlmEpisodes.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_vlm_scripts_platform').on(table.platform),
+  index('idx_vlm_scripts_validation').on(table.validationStatus),
+]);
 
 // ── Activation (card key system) ──
 
@@ -179,7 +194,7 @@ export const cardKeys = pgTable('card_keys', {
   tenantId: uuid('tenant_id'),
   batchId: uuid('batch_id'),
   code: varchar('code', { length: 64 }).unique().notNull(),
-  days: integer('days').notNull(),
+  days: integer('days').default(365).notNull(),
   maxDevices: integer('max_devices').default(1).notNull(),
   usedDevices: integer('used_devices').default(0).notNull(),
   status: varchar('status', { length: 16 }).default('active').notNull(), // active, used, expired, disabled
@@ -187,7 +202,11 @@ export const cardKeys = pgTable('card_keys', {
   note: text('note'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   expiresAt: timestamp('expires_at', { withTimezone: true }),
-});
+}, (table) => [
+  index('idx_card_keys_code').on(table.code),
+  index('idx_card_keys_status').on(table.status),
+  index('idx_card_keys_tenant').on(table.tenantId),
+]);
 
 export const deviceBindings = pgTable('device_bindings', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -197,7 +216,9 @@ export const deviceBindings = pgTable('device_bindings', {
   deviceName: varchar('device_name', { length: 256 }).notNull(),
   boundAt: timestamp('bound_at', { withTimezone: true }).defaultNow().notNull(),
   expiresAt: timestamp('expires_at', { withTimezone: true }),
-});
+}, (table) => [
+  index('idx_device_bindings_device').on(table.deviceId),
+]);
 
 // ── Device Groups ──
 
@@ -210,9 +231,13 @@ export const deviceGroups = pgTable('device_groups', {
   tags: jsonb('tags').default([]).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_device_groups_tenant').on(table.tenantId),
+]);
 
 // ── Platform Accounts (social media) ──
+// DEPRECATED: use `accounts` table instead. This table is retained for backward compatibility
+// and will be merged into `accounts` in a future migration.
 
 export const platformAccounts = pgTable('platform_accounts', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -279,7 +304,10 @@ export const crashReports = pgTable('crash_reports', {
   memoryInfo: jsonb('memory_info'),
   recentLogs: jsonb('recent_logs'),
   timestamp: timestamp('timestamp', { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index('idx_crash_reports_device').on(table.deviceId),
+  index('idx_crash_reports_timestamp').on(table.timestamp),
+]);
 
 // ── Account Deletions (GDPR) ──
 
@@ -338,9 +366,14 @@ export const deviceMemories = pgTable('device_memories', {
   successCount: integer('success_count').default(1),
   failCount: integer('fail_count').default(0),
   lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).defaultNow(),
+  embedding: jsonb('embedding'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   expiresAt: timestamp('expires_at', { withTimezone: true }),
-});
+}, (table) => [
+  index('idx_memory_signature').on(table.stateSignature, table.platform),
+  index('idx_memory_platform').on(table.platform, table.pageType),
+  index('idx_memory_outcome').on(table.outcome, table.platform),
+]);
 
 export const experienceRules = pgTable('experience_rules', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -349,7 +382,7 @@ export const experienceRules = pgTable('experience_rules', {
   scenario: text('scenario').notNull(),
   conditions: jsonb('conditions').default({}).notNull(),
   autoAction: jsonb('auto_action').default({}).notNull(),
-  confidence: integer('confidence').default(0.5),
+  confidence: doublePrecision('confidence').default(0.5),
   verifiedByDevices: integer('verified_by_devices').default(0),
   totalSuccesses: integer('total_successes').default(0),
   totalTrials: integer('total_trials').default(0),

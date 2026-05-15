@@ -266,14 +266,20 @@ export class CreditService {
   }
 
   /** Get all transactions (admin). */
-  async getAllTransactions(limit = 100, offset = 0): Promise<any[]> {
-    const result = await pool.query(
-      `SELECT ct.*, u.username FROM ${CREDIT_TRANSACTIONS} ct
-       JOIN users u ON ct.user_id = u.id
-       ORDER BY ct.created_at DESC LIMIT $1 OFFSET $2`,
-      [limit, offset]
-    );
-    return result.rows;
+  async getAllTransactions(limit = 100, offset = 0): Promise<{ transactions: any[]; total: number }> {
+    const [txResult, countResult] = await Promise.all([
+      pool.query(
+        `SELECT ct.*, u.username FROM ${CREDIT_TRANSACTIONS} ct
+         JOIN users u ON ct.user_id = u.id
+         ORDER BY ct.created_at DESC LIMIT $1 OFFSET $2`,
+        [limit, offset]
+      ),
+      pool.query(`SELECT COUNT(*) FROM ${CREDIT_TRANSACTIONS}`),
+    ]);
+    return {
+      transactions: txResult.rows,
+      total: parseInt(countResult.rows[0]?.count ?? '0'),
+    };
   }
 
   /** Get active token pricing configuration. */

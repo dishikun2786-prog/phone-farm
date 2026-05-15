@@ -139,9 +139,10 @@ export class CronScheduler {
         for (const deviceId of record.deviceIds) {
           hub.sendToDevice(deviceId, {
             type: "start_task",
-            task_id: record.taskId,
-            triggered_by: "cron",
-            cron_expr: record.cronExpr,
+            taskId: record.taskId,
+            scriptName: "cron_task",
+            config: {},
+            priority: 0,
           });
         }
       }

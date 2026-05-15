@@ -594,10 +594,10 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ value: String(enabled) }),
     }),
-  toggleFeatureFlag: (key: string) =>
+  toggleFeatureFlag: (key: string, enabled: boolean) =>
     request(`/system/feature-flags/${encodeURIComponent(key)}`, {
       method: "PUT",
-      body: JSON.stringify({ value: "toggle" }),
+      body: JSON.stringify({ value: String(enabled) }),
     }),
   systemGetInfrastructureStatus: () => request("/system/infrastructure/status"),
   getInfraStatus: () => request("/system/infrastructure/status"),
@@ -643,7 +643,7 @@ export const api = {
     request(`/api/v2/support/tickets/${id}/close`, { method: 'POST' }),
 
   // ── Credits ──
-  getCreditsOverview: () => request('/credits/overview'),
+  getCreditsOverview: () => request('/admin/credits/overview'),
   getCreditTransactions: (params?: { userId?: string; limit?: number; offset?: number }) => {
     const search = new URLSearchParams();
     if (params?.userId) search.set('userId', params.userId);
@@ -657,15 +657,15 @@ export const api = {
     if (params?.limit) search.set('limit', String(params.limit));
     if (params?.offset) search.set('offset', String(params.offset));
     const qs = search.toString();
-    return request(`/credits/admin/transactions${qs ? `?${qs}` : ''}`);
+    return request(`/admin/credits/transactions${qs ? `?${qs}` : ''}`);
   },
   grantCredits: (userId: string, amount: number, note?: string) =>
-    request('/credits/admin/grant', { method: 'POST', body: JSON.stringify({ userId, amount, note }) }),
+    request('/admin/credits/grant', { method: 'POST', body: JSON.stringify({ userId, amount, note }) }),
 
   // ── Token Pricing ──
-  getTokenPricing: () => request('/credits/pricing'),
+  getTokenPricing: () => request('/admin/credits/pricing'),
   updateTokenPricing: (modelName: string, inputTokensPerCredit: number, outputTokensPerCredit: number) =>
-    request('/credits/pricing', { method: 'PUT', body: JSON.stringify({ modelName, inputTokensPerCredit, outputTokensPerCredit }) }),
+    request('/admin/credits/pricing', { method: 'PUT', body: JSON.stringify({ modelName, inputTokensPerCredit, outputTokensPerCredit }) }),
 
   // ── Assistant Usage ──
   getAssistantUsage: (params?: { from?: number; to?: number }) => {

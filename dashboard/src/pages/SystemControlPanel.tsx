@@ -99,7 +99,7 @@ export default function SystemControlPanel() {
         updates.push(['ai.gui_plus.api_key', guiPlusApiKey]);
       }
       // Save feature flag
-      await api.toggleFeatureFlag('ff.gui_plus');
+      await api.toggleFeatureFlag('ff.gui_plus', true);
       // Save all config values
       await Promise.all(updates.map(([k, v]) => api.updateSystemConfig(k, v)));
       addLog('info', 'GUI-Plus 配置已保存');
@@ -401,7 +401,7 @@ export default function SystemControlPanel() {
               <button
                 onClick={async () => {
                   try {
-                    await api.toggleFeatureFlag('ff.gui_plus');
+                    await api.toggleFeatureFlag('ff.gui_plus', !guiPlusEnabled);
                     setGuiPlusEnabled(!guiPlusEnabled);
                     addLog('info', `GUI-Plus ${!guiPlusEnabled ? '已启用' : '已禁用'}`);
                   } catch (err: any) {

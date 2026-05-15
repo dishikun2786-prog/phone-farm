@@ -70,10 +70,19 @@ export class RuntimeConfig {
     const dbVal = this.dbOverrides.get(key);
     if (dbVal !== undefined) return dbVal;
 
-    // Check env values (maps to config.ts uppercase keys)
+    // Check env values using full key in SCREAMING_SNAKE_CASE
     const envKey = key.replace(/\./g, "_").toUpperCase();
     const envVal = this.envValues[envKey];
     if (envVal !== undefined && envVal !== "") return envVal;
+
+    // Fallback: strip category prefix (first dot-segment) and try again
+    // e.g. "ai.deepseek.api_key" → "DEEPSEEK_API_KEY" (matches config.ts naming)
+    const dotIdx = key.indexOf(".");
+    if (dotIdx > 0) {
+      const shortKey = key.substring(dotIdx + 1).replace(/\./g, "_").toUpperCase();
+      const shortVal = this.envValues[shortKey];
+      if (shortVal !== undefined && shortVal !== "") return shortVal;
+    }
 
     // Check lowercase env key as fallback
     if (envKey !== key) {

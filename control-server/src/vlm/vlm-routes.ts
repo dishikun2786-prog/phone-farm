@@ -432,7 +432,7 @@ export function commandFromAction(action: VLMAction): object {
       return { type: 'command', action: 'launch', params: { package: action.package } };
     case 'terminate':
     case 'answer':
-      return { type: 'stop_task', task_id: 'vlm-task' };
+      return { type: 'stop_task', taskId: 'vlm-task' };
     default:
       return { type: 'command', action: 'tap', params: { x: 540, y: 1200 } };
   }

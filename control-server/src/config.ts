@@ -19,7 +19,7 @@ const envSchema = z.object({
 
   // ── DeepSeek V4 Flash (主模型, 文本决策 ~90%) ──
   DEEPSEEK_API_KEY: z.string().default(""),
-  DEEPSEEK_API_URL: z.string().default("https://api.deepseek.com/anthropic"),
+  DEEPSEEK_API_URL: z.string().default("https://api.deepseek.com/anthropic/messages"),
   DEEPSEEK_MODEL: z.string().default("deepseek-v4-flash"),
   DEEPSEEK_MAX_TOKENS: z.coerce.number().default(512),
   DEEPSEEK_TEMPERATURE: z.coerce.number().default(0.1),
@@ -71,8 +71,8 @@ const envSchema = z.object({
   FF_DECISION_ENGINE: z.coerce.boolean().default(true),
   FF_QWEN_VL_FALLBACK: z.coerce.boolean().default(true),
   FF_STREAM_ON_DEMAND: z.coerce.boolean().default(true),
-  FF_CROSS_DEVICE_MEMORY: z.coerce.boolean().default(true),
-  FF_LEGACY_VLM: z.coerce.boolean().default(true),
+  FF_CROSS_DEVICE_MEMORY: z.coerce.boolean().default(false),
+  FF_LEGACY_VLM: z.coerce.boolean().default(false),
 
   // ── Scrcpy (保留) ──
   SCRCPY_JAR_PATH: z.string().default("bin/scrcpy-server.jar"),
@@ -83,7 +83,7 @@ const envSchema = z.object({
   // ── NATS State Sync ──
   NATS_URL: z.string().default("nats://localhost:4222"),
   NATS_TOKEN: z.string().default(""),
-  NATS_ENABLED: z.coerce.boolean().default(true),
+  NATS_ENABLED: z.coerce.boolean().default(false),
 
   // ── MinIO Object Storage ──
   MINIO_ENDPOINT: z.string().default("localhost:9000"),
@@ -91,11 +91,11 @@ const envSchema = z.object({
   MINIO_SECRET_KEY: z.string().default("minioadmin"),
   MINIO_BUCKET: z.string().default("phonefarm"),
   MINIO_USE_SSL: z.coerce.boolean().default(false),
-  MINIO_ENABLED: z.coerce.boolean().default(true),
+  MINIO_ENABLED: z.coerce.boolean().default(false),
 
   // ── Ray Cluster ──
   RAY_ADDRESS: z.string().default("http://localhost:8265"),
-  RAY_ENABLED: z.coerce.boolean().default(true),
+  RAY_ENABLED: z.coerce.boolean().default(false),
 
   // ── WebRTC / Signaling ──
   TURN_SERVER_URL: z.string().default("turn:47.243.254.248:3478?transport=udp"),
@@ -113,9 +113,9 @@ const envSchema = z.object({
   TENANT_ISOLATION_ENABLED: z.coerce.boolean().default(true),
 
   // ── Feature Flags (Phase 2-5) ──
-  FF_WEBRTC_P2P: z.coerce.boolean().default(true),
-  FF_NATS_SYNC: z.coerce.boolean().default(true),
-  FF_RAY_SCHEDULER: z.coerce.boolean().default(true),
+  FF_WEBRTC_P2P: z.coerce.boolean().default(false),
+  FF_NATS_SYNC: z.coerce.boolean().default(false),
+  FF_RAY_SCHEDULER: z.coerce.boolean().default(false),
   FF_FEDERATED_LEARNING: z.coerce.boolean().default(false),
   FF_P2P_GROUP_CONTROL: z.coerce.boolean().default(false),
   FF_MODEL_HOT_UPDATE: z.coerce.boolean().default(true),

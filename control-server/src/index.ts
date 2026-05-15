@@ -234,7 +234,7 @@ if (config.FF_DECISION_ENGINE && (config.DEEPSEEK_API_KEY || config.DASHSCOPE_AP
     sendToDevice(deviceId, decision) {
       hub.sendToDevice(deviceId, {
         type: 'execute_decision',
-        payload: decision,
+        decision,
       });
     },
     onTaskComplete(deviceId, result) {
