@@ -116,19 +116,26 @@ export default function Layout({ children, connectionState }: { children: React.
 
   const adminLinks = [
     { to: '/admin', label: '管理总览', icon: ShieldCheck },
+    { to: '/admin/users', label: '用户管理', icon: Shield },
+    { to: '/admin/tenants', label: '租户管理', icon: Building },
+    { to: '/admin/permissions', label: '权限配置', icon: ShieldCheck },
+    { to: '/admin/credits', label: '积分管理', icon: Play },
+    { to: '/admin/token-pricing', label: 'Token 定价', icon: Play },
     { to: '/admin/card-keys', label: '卡密管理', icon: Key },
+    { to: '/admin/card-batches', label: '卡密批次', icon: Package },
     { to: '/admin/groups', label: '设备分组', icon: TabletSmartphone },
     { to: '/admin/batch', label: '批量操作', icon: ListChecks },
+    { to: '/admin/agents', label: '代理商管理', icon: Shield },
+    { to: '/admin/commissions', label: '佣金结算', icon: Play },
+    { to: '/admin/whitelabel', label: '白标配置', icon: Globe },
     { to: '/admin/audit', label: '审计日志', icon: Search },
     { to: '/admin/vlm-usage', label: 'VLM 用量', icon: BarChart3 },
+    { to: '/admin/assistant-usage', label: 'AI 助手用量', icon: Bot },
     { to: '/admin/alerts', label: '告警规则', icon: AlertTriangle },
     { to: '/admin/health', label: '服务健康', icon: Server },
     { to: '/admin/system-config', label: '系统配置', icon: Sliders },
     { to: '/admin/feature-flags', label: '功能开关', icon: ToggleLeft },
     { to: '/admin/infrastructure', label: '基础监控', icon: Activity },
-    { to: '/admin/users', label: '用户管理', icon: Shield },
-    { to: '/admin/permissions', label: '权限配置', icon: ShieldCheck },
-    { to: '/admin/tenants', label: '租户管理', icon: Building },
   ];
 
   const navLinkCls = (isActive: boolean) =>
