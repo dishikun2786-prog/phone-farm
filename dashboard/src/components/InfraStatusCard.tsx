@@ -13,6 +13,11 @@ export default function InfraStatusCard({ name, icon: Icon, connected, info, cla
   const [expanded, setExpanded] = useState(false);
 
   const infoEntries = Object.entries(info).filter(([, v]) => v !== undefined && v !== null);
+  const isDisabled = info.enabled === false;
+
+  const dotColor = connected ? 'bg-green-500 animate-pulse' : isDisabled ? 'bg-gray-400' : 'bg-red-500';
+  const statusText = connected ? '已连接' : isDisabled ? '未启用' : '未连接';
+  const statusColor = connected ? 'text-green-600 dark:text-green-400' : isDisabled ? 'text-gray-500 dark:text-slate-400' : 'text-red-600 dark:text-red-400';
 
   return (
     <div
@@ -25,7 +30,7 @@ export default function InfraStatusCard({ name, icon: Icon, connected, info, cla
           <span className="text-sm font-medium text-gray-900 dark:text-slate-100">{name}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+          <span className={`w-2 h-2 rounded-full ${dotColor}`} />
           {infoEntries.length > 0 && (
             <span className="text-gray-400 dark:text-slate-500">
               {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -34,8 +39,8 @@ export default function InfraStatusCard({ name, icon: Icon, connected, info, cla
         </div>
       </div>
       <div className="space-y-0.5 mb-1">
-        <p className={`text-xs font-medium ${connected ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-          {connected ? '已连接' : '未连接'}
+        <p className={`text-xs font-medium ${statusColor}`}>
+          {statusText}
         </p>
       </div>
       {expanded && infoEntries.length > 0 && (

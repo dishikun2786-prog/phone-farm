@@ -179,42 +179,56 @@ export async function systemConfigRoutes(app: FastifyInstance): Promise<void> {
       status["redis"] = { connected: false, info: { error: "Not initialized" } };
     }
 
-    // NATS — read from app singleton
+    // NATS — read from app singleton (optional: gated by NATS_ENABLED)
     try {
+      const rc = getRC();
+      const natsEnabled = rc.getBoolean("infra.nats.enabled", false);
       const nats = (app as any).nats;
+      const isConnected = nats?.isConnected?.() ?? false;
       status["nats"] = {
-        connected: nats?.isConnected?.() ?? false,
-        info: { connected: nats?.isConnected?.() ?? false },
+        connected: isConnected,
+        info: { enabled: natsEnabled, connected: isConnected },
       };
     } catch {
       status["nats"] = { connected: false, info: { error: "Not initialized" } };
     }
 
-    // MinIO — read from app singleton
+    // MinIO — read from app singleton (optional: gated by MINIO_ENABLED)
     try {
+      const rc = getRC();
+      const minioEnabled = rc.getBoolean("infra.minio.enabled", false);
       const minio = (app as any).minio;
       const healthy = minio ? await minio.healthCheck().catch(() => false) : false;
-      status["minio"] = { connected: healthy, info: { bucket: minio?.isReady ? "ready" : "not ready" } };
+      status["minio"] = {
+        connected: healthy,
+        info: { enabled: minioEnabled, ready: minio?.isReady ?? false },
+      };
     } catch {
       status["minio"] = { connected: false, info: { error: "Not initialized" } };
     }
 
-    // Ray — read from app singleton
+    // Ray — read from app singleton (optional: gated by FF_RAY_SCHEDULER)
     try {
+      const rc = getRC();
+      const rayEnabled = rc.getBoolean("infra.ray.enabled", false);
       const ray = (app as any).ray;
       const rayHealthy = ray ? await ray.healthCheck().catch(() => false) : false;
-      status["ray"] = { connected: rayHealthy, info: { ready: ray?.isReady ?? false } };
+      status["ray"] = {
+        connected: rayHealthy,
+        info: { enabled: rayEnabled, ready: ray?.isReady ?? false },
+      };
     } catch {
       status["ray"] = { connected: false, info: { error: "Not initialized" } };
     }
 
-    // WebRTC — check if signaling is available
+    // WebRTC — check if signaling/STUN is available
     try {
       const rc = getRC();
-      const webrtcEnabled = rc.getBoolean("system.webrtc.enabled", false);
+      const webrtcEnabled = rc.getBoolean("infra.webrtc.enabled", false);
+      const stunServer = rc.get("infra.webrtc.stun_server");
       status["webrtc"] = {
         connected: webrtcEnabled,
-        info: { enabled: webrtcEnabled, stun_server: rc.get("system.webrtc.stun_server") },
+        info: { enabled: webrtcEnabled, stun_server: stunServer || "(not set)" },
       };
     } catch {
       status["webrtc"] = { connected: false, info: { error: "Not configured" } };
