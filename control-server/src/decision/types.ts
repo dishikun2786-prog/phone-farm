@@ -96,7 +96,7 @@ export interface DecisionOutput {
 
 export interface TaskResult {
   deviceId: string;
-  status: "completed" | "failed" | "stopped" | "max_steps";
+  status: "completed" | "failed" | "stopped" | "max_steps" | "timeout" | "cancelled";
   message: string;
   totalSteps: number;
   durationMs: number;

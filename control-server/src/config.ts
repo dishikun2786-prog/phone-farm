@@ -4,6 +4,7 @@ const envSchema = z.object({
   // ── Server ──
   PORT: z.coerce.number().default(8443),
   HOST: z.string().default("0.0.0.0"),
+  CORS_ORIGINS: z.string().default("*"),
   DATABASE_URL: z.string().default("postgresql://phonefarm:phonefarm@localhost:5432/phonefarm"),
   REDIS_URL: z.string().default("redis://localhost:6379"),
   JWT_SECRET: z.string().default("dev-secret-change-in-production"),
@@ -18,7 +19,7 @@ const envSchema = z.object({
 
   // ── DeepSeek V4 Flash (主模型, 文本决策 ~90%) ──
   DEEPSEEK_API_KEY: z.string().default(""),
-  DEEPSEEK_API_URL: z.string().default("https://api.deepseek.com/anthropic/messages"),
+  DEEPSEEK_API_URL: z.string().default("https://api.deepseek.com/anthropic"),
   DEEPSEEK_MODEL: z.string().default("deepseek-v4-flash"),
   DEEPSEEK_MAX_TOKENS: z.coerce.number().default(512),
   DEEPSEEK_TEMPERATURE: z.coerce.number().default(0.1),
@@ -29,6 +30,19 @@ const envSchema = z.object({
   DASHSCOPE_VL_MODEL: z.string().default("qwen3-vl-plus"),
   DASHSCOPE_VL_MAX_TOKENS: z.coerce.number().default(1024),
   DASHSCOPE_VL_TEMPERATURE: z.coerce.number().default(0.1),
+
+  // ── GUI-Plus (GUI自动化模型, 阿里云百炼, 手机+电脑端操作) ──
+  GUI_PLUS_API_KEY: z.string().default(""),
+  GUI_PLUS_API_URL: z.string().default("https://dashscope.aliyuncs.com/compatible-mode/v1"),
+  GUI_PLUS_MODEL: z.string().default("gui-plus-2026-02-26"),
+  GUI_PLUS_MAX_STEPS: z.coerce.number().default(30),
+  GUI_PLUS_MAX_TOKENS: z.coerce.number().default(32768),
+  GUI_PLUS_TEMPERATURE: z.coerce.number().default(0.1),
+  GUI_PLUS_ENABLED: z.coerce.boolean().default(false),
+
+  // ── Volcano Engine ARK (火山方舟) — UI-TARS-72B ──
+  VOLCENGINE_API_KEY: z.string().default(""),
+  VOLCENGINE_API_URL: z.string().default("https://ark.cn-beijing.volces.com/api/v3/chat/completions"),
 
   // ── Routing Thresholds ──
   ROUTER_CONFIDENCE_THRESHOLD: z.coerce.number().default(0.7),
@@ -69,7 +83,7 @@ const envSchema = z.object({
   // ── NATS State Sync ──
   NATS_URL: z.string().default("nats://localhost:4222"),
   NATS_TOKEN: z.string().default(""),
-  NATS_ENABLED: z.coerce.boolean().default(false),
+  NATS_ENABLED: z.coerce.boolean().default(true),
 
   // ── MinIO Object Storage ──
   MINIO_ENDPOINT: z.string().default("localhost:9000"),
@@ -77,11 +91,11 @@ const envSchema = z.object({
   MINIO_SECRET_KEY: z.string().default("minioadmin"),
   MINIO_BUCKET: z.string().default("phonefarm"),
   MINIO_USE_SSL: z.coerce.boolean().default(false),
-  MINIO_ENABLED: z.coerce.boolean().default(false),
+  MINIO_ENABLED: z.coerce.boolean().default(true),
 
   // ── Ray Cluster ──
   RAY_ADDRESS: z.string().default("http://localhost:8265"),
-  RAY_ENABLED: z.coerce.boolean().default(false),
+  RAY_ENABLED: z.coerce.boolean().default(true),
 
   // ── WebRTC / Signaling ──
   TURN_SERVER_URL: z.string().default("turn:47.243.254.248:3478?transport=udp"),
@@ -99,12 +113,13 @@ const envSchema = z.object({
   TENANT_ISOLATION_ENABLED: z.coerce.boolean().default(true),
 
   // ── Feature Flags (Phase 2-5) ──
-  FF_WEBRTC_P2P: z.coerce.boolean().default(false),
-  FF_NATS_SYNC: z.coerce.boolean().default(false),
-  FF_RAY_SCHEDULER: z.coerce.boolean().default(false),
+  FF_WEBRTC_P2P: z.coerce.boolean().default(true),
+  FF_NATS_SYNC: z.coerce.boolean().default(true),
+  FF_RAY_SCHEDULER: z.coerce.boolean().default(true),
   FF_FEDERATED_LEARNING: z.coerce.boolean().default(false),
   FF_P2P_GROUP_CONTROL: z.coerce.boolean().default(false),
   FF_MODEL_HOT_UPDATE: z.coerce.boolean().default(true),
+  FF_GUI_PLUS: z.coerce.boolean().default(false),
 });
 
 export const config = envSchema.parse(process.env);

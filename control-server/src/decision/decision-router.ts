@@ -357,7 +357,7 @@ export class DecisionRouter {
       });
     }
     this.sessions.clear();
-    this.routeStats.clear();
+    this.routeStats = { deepseekCount: 0, qwenVLCount: 0, switchReasons: new Map() };
   }
 
   // ── Internal ──

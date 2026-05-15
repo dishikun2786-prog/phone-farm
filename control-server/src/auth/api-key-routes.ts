@@ -92,7 +92,7 @@ export class ApiKeyStore {
       ipWhitelist: params.ipWhitelist ?? [],
       maxUses: params.maxUses ?? 0,
       usedCount: 0,
-      expiresAt: params.expiresAt ? new Date(params.expiresAt).toISOString() : null,
+      expiresAt: params.expiresAt ? new Date(params.expiresAt) : null,
       enabled: true,
     }).returning();
 
@@ -118,7 +118,7 @@ export class ApiKeyStore {
     record.usedCount++;
     record.lastUsedAt = Date.now();
     db.update(apiKeys)
-      .set({ usedCount: record.usedCount, lastUsedAt: new Date().toISOString() })
+      .set({ usedCount: record.usedCount, lastUsedAt: new Date() })
       .where(eq(apiKeys.id, record.id))
       .execute()
       .catch(() => {}); // fire-and-forget

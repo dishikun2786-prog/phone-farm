@@ -32,13 +32,13 @@ export class CronStore {
     for (const row of rows) {
       this.cache.set(row.id, {
         id: row.id,
-        taskId: row.taskId,
+        taskId: row.taskId ?? '',
         cronExpr: row.cronExpr,
         deviceIds: (row.deviceIds as string[]) ?? [],
         enabled: row.enabled ?? false,
-        lastRunAt: row.lastRunAt ? new Date(row.lastRunAt).getTime() : undefined,
-        nextRunAt: row.nextRunAt ? new Date(row.nextRunAt).getTime() : undefined,
-        createdAt: row.createdAt ? new Date(row.createdAt).getTime() : Date.now(),
+        lastRunAt: row.lastRunAt ? new Date(row.lastRunAt as unknown as string).getTime() : undefined,
+        nextRunAt: row.nextRunAt ? new Date(row.nextRunAt as unknown as string).getTime() : undefined,
+        createdAt: row.createdAt ? new Date(row.createdAt as unknown as string).getTime() : Date.now(),
       });
     }
     this.initialized = true;
@@ -68,8 +68,8 @@ export class CronStore {
           cronExpr: job.cronExpr,
           deviceIds: job.deviceIds,
           enabled: job.enabled,
-          lastRunAt: job.lastRunAt ? new Date(job.lastRunAt).toISOString() : null,
-          nextRunAt: job.nextRunAt ? new Date(job.nextRunAt).toISOString() : null,
+          lastRunAt: job.lastRunAt ? new Date(job.lastRunAt) : null,
+          nextRunAt: job.nextRunAt ? new Date(job.nextRunAt) : null,
         })
         .where(eq(cronJobs.id, job.id));
     } else {
@@ -77,17 +77,17 @@ export class CronStore {
         id: job.id,
         taskId: job.taskId,
         cronExpr: job.cronExpr,
-        deviceIds: job.deviceIds,
+        deviceIds: job.deviceIds as any,
         enabled: job.enabled,
-        lastRunAt: job.lastRunAt ? new Date(job.lastRunAt).toISOString() : null,
-        nextRunAt: job.nextRunAt ? new Date(job.nextRunAt).toISOString() : null,
+        lastRunAt: job.lastRunAt ? new Date(job.lastRunAt) : null,
+        nextRunAt: job.nextRunAt ? new Date(job.nextRunAt) : null,
       });
     }
     this.cache.set(job.id, job);
   }
 
   async updateLastRun(id: string): Promise<void> {
-    const now = new Date().toISOString();
+    const now = new Date();
     await db.update(cronJobs).set({ lastRunAt: now }).where(eq(cronJobs.id, id));
     const job = this.cache.get(id);
     if (job) job.lastRunAt = Date.now();

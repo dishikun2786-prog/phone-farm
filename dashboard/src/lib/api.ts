@@ -1,6 +1,8 @@
 const API_BASE = '/api/v1';
 const REQUEST_TIMEOUT_MS = 15000;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const RETRY_MAX = 1;               // max 1 retry on 5xx / network errors
+const RETRY_BACKOFF_MS = 500;      // initial backoff (doubles each attempt)
 
 export class ApiError extends Error {
   code: 'TIMEOUT' | 'NETWORK' | 'UNAUTHORIZED' | 'FORBIDDEN' | 'NOT_FOUND' | 'CONFLICT' | 'VALIDATION' | 'SERVER' | 'UNKNOWN';
@@ -69,7 +71,8 @@ async function request<T = any>(path: string, options?: RequestInit): Promise<T>
   const inflightReq = inflight.get(key);
   if (inflightReq) return inflightReq as Promise<T>;
 
-  const promise = (async () => {
+  // Helper: perform a single fetch attempt, classified errors as ApiError.
+  async function attemptFetch(): Promise<{ data?: T; retryable: boolean; error: ApiError }> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -88,11 +91,10 @@ async function request<T = any>(path: string, options?: RequestInit): Promise<T>
     } catch (err: any) {
       clearTimeout(timeoutId);
       if (err.name === 'AbortError') {
-        throw new ApiError('请求超时，请检查网络连接', 'TIMEOUT');
+        return { retryable: false, error: new ApiError('请求超时，请检查网络连接', 'TIMEOUT') };
       }
-      const wrapped = new ApiError('无法连接到服务器: ' + (err.message || ''), 'NETWORK');
-      wrapped.cause = err;
-      throw wrapped;
+      // Network errors are retryable
+      return { retryable: true, error: new ApiError('无法连接到服务器: ' + (err.message || ''), 'NETWORK') };
     }
     clearTimeout(timeoutId);
 
@@ -100,12 +102,17 @@ async function request<T = any>(path: string, options?: RequestInit): Promise<T>
       localStorage.removeItem('token');
       localStorage.removeItem('refreshToken');
       window.dispatchEvent(new CustomEvent('phonefarm:auth-expired'));
-      throw new ApiError('登录已过期，请重新登录', 'UNAUTHORIZED', 401);
+      return { retryable: false, error: new ApiError('登录已过期，请重新登录', 'UNAUTHORIZED', 401) };
     }
+
     if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: res.statusText }));
-      throw new ApiError(err.error || res.statusText, classifyError(res.status), res.status);
+      const body = await res.json().catch(() => ({ error: res.statusText }));
+      const errorCode = classifyError(res.status);
+      // Retry on 5xx (SERVER) and 429 (rate-limit); no retry on 4xx
+      const retryable = res.status >= 500 || res.status === 429;
+      return { retryable, error: new ApiError(body.error || res.statusText, errorCode, res.status) };
     }
+
     const data = await res.json();
 
     // Cache GET responses
@@ -120,7 +127,36 @@ async function request<T = any>(path: string, options?: RequestInit): Promise<T>
       }
     }
 
-    return data as T;
+    return { data: data as T, retryable: false, error: null as unknown as ApiError };
+  }
+
+  // Build and store the fetch promise for inflight deduplication
+  const promise = (async (): Promise<T> => {
+    // Retry loop: up to RETRY_MAX additional attempts on retryable errors
+    let lastError: ApiError | null = null;
+    for (let attempt = 0; attempt <= RETRY_MAX; attempt++) {
+      const result = await attemptFetch();
+
+      if (result.data !== undefined) {
+        // Clear GET cache after mutations to avoid stale data
+        if (!isGet) cache.clear();
+        return result.data as T;
+      }
+
+      lastError = result.error;
+
+      // Do not retry if error is not retryable, or this was the last attempt
+      if (!result.retryable || attempt >= RETRY_MAX) {
+        throw lastError;
+      }
+
+      // Wait with exponential backoff before retry
+      const backoff = RETRY_BACKOFF_MS * Math.pow(2, attempt);
+      await new Promise(resolve => setTimeout(resolve, backoff));
+    }
+
+    // Unreachable — satisfied by the throw above
+    throw lastError!;
   })();
 
   inflight.set(key, promise);
@@ -174,6 +210,14 @@ export const api = {
   disableUser: (id: string) => request(`/admin/users/${id}/disable`, { method: 'POST' }),
   enableUser: (id: string) => request(`/admin/users/${id}/enable`, { method: 'POST' }),
   getUserStats: () => request('/admin/users/stats'),
+  createUser: (data: { username: string; password: string; phone?: string; role?: string; tenantId?: string }) =>
+    request('/admin/users', { method: 'POST', body: JSON.stringify(data) }),
+  adminResetPassword: (userId: string, newPassword: string) =>
+    request(`/admin/users/${userId}/reset-password`, { method: 'POST', body: JSON.stringify({ newPassword }) }),
+  deleteUser: (userId: string) =>
+    request(`/admin/users/${userId}`, { method: 'DELETE' }),
+  getUserBalances: (userIds: string[]) =>
+    request('/admin/credits/balances', { method: 'POST', body: JSON.stringify({ userIds }) }),
 
   // Tenant Management (v2 API)
   getTenants: (params?: string) => request(`/api/v2/tenants${params || ''}`),
@@ -184,6 +228,25 @@ export const api = {
     request(`/api/v2/tenants/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteTenant: (id: string) =>
     request(`/api/v2/tenants/${id}`, { method: 'DELETE' }),
+
+  // Tenant User Management
+  getTenantUsers: (tenantId: string, params?: { page?: number; pageSize?: number }) => {
+    const search = new URLSearchParams();
+    if (params?.page) search.set('page', String(params.page));
+    if (params?.pageSize) search.set('pageSize', String(params.pageSize));
+    const qs = search.toString();
+    return request(`/api/v2/tenants/${tenantId}/users${qs ? `?${qs}` : ''}`);
+  },
+  assignUserToTenant: (tenantId: string, userId: string) =>
+    request(`/api/v2/tenants/${tenantId}/users`, { method: 'POST', body: JSON.stringify({ userId }) }),
+  removeUserFromTenant: (tenantId: string, userId: string) =>
+    request(`/api/v2/tenants/${tenantId}/users/${userId}`, { method: 'DELETE' }),
+
+  // Permission Configuration (super_admin only)
+  getPermissions: () => request('/admin/permissions'),
+  updatePermissions: (role: string, resource: string, actions: string[]) =>
+    request('/admin/permissions', { method: 'PUT', body: JSON.stringify({ role, resource, actions }) }),
+  resetPermissions: () => request('/admin/permissions/reset', { method: 'POST' }),
 
   // Devices
   getDevices: () => request('/devices'),
@@ -620,6 +683,14 @@ export const api = {
     return request(`/assistant/sessions${qs ? `?${qs}` : ''}`);
   },
   getAssistantSession: (id: string) => request(`/assistant/sessions/${id}`),
+
+  // ── Admin AI Assistant ──
+  adminAssistantChat: (messages: { role: string; content: string }[], sessionId?: string) =>
+    request('/admin/assistant/chat', { method: 'POST', body: JSON.stringify({ messages, sessionId }) }),
+  adminAssistantGetSessions: () => request('/admin/assistant/sessions'),
+  adminAssistantGetSession: (id: string) => request(`/admin/assistant/sessions/${id}`),
+  adminAssistantDeleteSession: (id: string) =>
+    request(`/admin/assistant/sessions/${id}`, { method: 'DELETE' }),
 
   // Generic request (used by admin pages and custom endpoints)
   request: (path: string, options?: RequestInit) => request(path, options),

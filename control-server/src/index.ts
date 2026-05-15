@@ -1,5 +1,6 @@
 ﻿import fastifyCors from '@fastify/cors';
 import fastifyJwt from '@fastify/jwt';
+import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
 import bcrypt from 'bcryptjs';
@@ -22,6 +23,13 @@ import type { WsHub } from './ws-hub.js';
 import type { RuntimeConfig } from './config-manager/runtime-config.js';
 import type { AuthUser } from './auth/auth-middleware.js';
 
+// Override @fastify/jwt's user type to match our AuthUser model
+declare module '@fastify/jwt' {
+  interface FastifyJWT {
+    user: AuthUser;
+  }
+}
+
 // Fastify instance decoration type declarations
 declare module 'fastify' {
   interface FastifyInstance {
@@ -30,9 +38,6 @@ declare module 'fastify' {
     nats: NatsSync;
     minio: MinioClient;
     ray: RayClient;
-  }
-  interface FastifyRequest {
-    user?: AuthUser;
   }
 }
 
@@ -64,11 +69,14 @@ import { alertRoutes } from './alerts/alert-routes.js';
 import { adminUserRoutes } from './auth/admin-user-routes.js';
 import { apiKeyRoutes } from './auth/api-key-routes.js';
 import { userRoutes } from './auth/user-routes.js';
+import { permissionRoutes } from './auth/permission-routes.js';
+import { reloadPermissions } from './auth/rbac.js';
 import { billingRoutes } from './billing/billing-routes.js';
 import { creditRoutes } from './billing/credit-routes.js';
 import { adminCreditRoutes } from './billing/admin-credit-routes.js';
 import { llmProxyRoutes } from './assistant/llm-proxy-routes.js';
 import { assistantConfigRoutes } from './assistant/assistant-config-routes.js';
+import { adminAssistantRoutes } from './assistant/admin-assistant-routes.js';
 import { configRoutes, deviceConfigResolveRoute } from './config-manager/config-routes.js';
 import { initRuntimeConfig } from './config-manager/runtime-config.js';
 import { systemConfigRoutes } from './config-manager/system-config-routes.js';
@@ -79,15 +87,17 @@ import { modelRoutes } from './model-routes.js';
 import { platformAccountRoutes } from './platform-account-routes.js';
 import { queueRoutes } from './queue/queue-routes.js';
 import { remoteCommandRoutes } from './remote/remote-command-routes.js';
-import { AvRelayManager, registerScrcpyRoutes } from './scrcpy/index.js';
+import { AvRelayManager, FileManager, registerScrcpyRoutes, registerFileRoutes, registerAdbRoutes, registerScriptDeployRoutes } from './scrcpy/index.js';
 import { scriptsManifestRoutes } from './scripts-manifest-routes.js';
 import { statsRoutes } from './stats/stats-routes.js';
 import { promptTemplateRoutes } from './vlm/prompt-template-routes.js';
 import { DEFAULT_MODEL_SEEDS, registerVlmModelRoutes, type VlmModelConfig } from './vlm/vlm-model-routes.js';
 import { webhookRoutes } from './webhook/webhook-routes.js';
 import { tenantRoutes } from './tenant/tenant-routes.js';
+import { tenantUserRoutes } from './tenant/tenant-user-routes.js';
 import { optionalTenant } from './tenant/tenant-middleware.js';
 import { paymentRoutes } from './billing/payment-routes.js';
+import { handleWechatCallback, handleAlipayCallback } from './billing/payment-webhook.js';
 import { subscriptionScheduler } from './billing/subscription-scheduler.js';
 import { seedDefaultPlans } from './billing/plan-seed.js';
 import { portalRoutes } from './portal/portal-routes.js';
@@ -108,10 +118,38 @@ import { RayClient } from './ray/ray-client.js';
 
 const APP_VERSION = "1.0.0";
 
-const app = Fastify({ logger: true });
+const app = Fastify({ logger: true, bodyLimit: 1_048_576 }); // 1MB
+
+// ── Security headers (CSP, X-Frame-Options, HSTS, X-Content-Type-Options) ──
+app.addHook('onSend', async (_request, reply) => {
+  reply.header('X-Content-Type-Options', 'nosniff');
+  reply.header('X-Frame-Options', 'DENY');
+  reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  reply.header('X-XSS-Protection', '0');
+  reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+  reply.header('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https: wss:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'");
+});
 
 // Plugins
-await app.register(fastifyCors, { origin: true });
+const corsRaw = config.CORS_ORIGINS;
+const corsOrigin = corsRaw === '*' || corsRaw === ''
+  ? true
+  : corsRaw.split(',').map(s => s.trim()).filter(Boolean);
+await app.register(fastifyCors, {
+  origin: corsOrigin,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
+});
+await app.register(fastifyRateLimit, {
+  global: true,
+  max: 200,
+  timeWindow: '1 minute',
+  allowList: [],
+  keyGenerator: (req: import('fastify').FastifyRequest) => {
+    return req.ip || (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || 'unknown';
+  },
+});
 await app.register(fastifyJwt, { secret: config.JWT_SECRET });
 await app.register(fastifyWebsocket);
 
@@ -256,7 +294,6 @@ app.register(async function (scope) {
 // REST API routes
 await app.register(deviceRoutes);
 await app.register(taskRoutes);
-await app.register(accountRoutes);
 
 // ── Auth Service ──
 const authService = new AuthService(app, config.JWT_SECRET);
@@ -266,6 +303,12 @@ const authService = new AuthService(app, config.JWT_SECRET);
 await app.register(userRoutes);
 // ── Admin User Management Routes ──
 await app.register(async function (scope) { await adminUserRoutes(scope, authService); });
+// ── Permission Configuration Routes (super_admin only) ──
+await app.register(async function (scope) { await permissionRoutes(scope, authService); });
+	// ── Admin AI Assistant Routes (admin+ only) ──
+	await app.register(async function (scope) { await adminAssistantRoutes(scope, authService); });
+// ── Account Routes (authenticated) ──
+await app.register(async function (scope) { scope.addHook('preHandler', requireAuth(authService)); await accountRoutes(scope); });
 
 // ── Modular Routes ──
 // Device-facing routes (use device auth token, not JWT)
@@ -325,6 +368,10 @@ await app.register(async function (paymentScope) {
   await paymentRoutes(paymentScope);
 });
 
+// Payment webhook callbacks (WeChat Pay / Alipay async notifications — no auth)
+app.post('/api/v2/payment/wechat-callback', async (req, reply) => handleWechatCallback(req, reply));
+app.post('/api/v2/payment/alipay-callback', async (req, reply) => handleAlipayCallback(req, reply));
+
 // Portal BFF routes (customer self-service — require auth + tenant)
 await app.register(async function (portalScope) {
   portalScope.addHook('preHandler', requireAuth(authService));
@@ -374,6 +421,7 @@ await app.register(async function (creditScope) {
 await app.register(async function (tenantScope) {
   tenantScope.addHook('preHandler', optionalTenant());
   await tenantRoutes(tenantScope);
+  await tenantUserRoutes(tenantScope);
 });
 
 // Device-facing config resolve — no JWT auth (devices use WebSocket device token)
@@ -440,6 +488,16 @@ const avRelayManager = new AvRelayManager();
 avRelayManager.setDeviceSender((deviceId, msg) => hub.sendToDevice(deviceId, msg));
 registerScrcpyRoutes(app, avRelayManager);
 
+// File management routes (upload, list, delete, install APK)
+const fileManager = new FileManager((ip: string) => ip);
+registerFileRoutes(app, fileManager);
+
+// ADB command routes
+registerAdbRoutes(app);
+
+// Script OTA deploy routes
+registerScriptDeployRoutes(app, hub);
+
 const vlmModelStore: VlmModelConfig[] = DEFAULT_MODEL_SEEDS.map((seed, i) => ({
   ...seed,
   id: `model-${i}`,
@@ -482,16 +540,17 @@ const aiMemoryScheduler = new MemoryScheduler();
 await app.register(async function (scope: FastifyInstance) {
   registerAiMemoryRoutes(scope, aiMemoryScheduler);
 });
-// [DISABLED] AI Memory Scheduler - DeepSeek API JSON parse issue
-// aiMemoryScheduler.start();
-console.log("[AIMemory] Scheduler API registered, auto-scheduling DISABLED");
+aiMemoryScheduler.start();
+console.log("[AIMemory] Scheduler API registered, auto-scheduling ENABLED");
 
 const loginBodySchema = z.object({
   account: z.string().min(1, '请输入用户名或手机号'),
   password: z.string().min(1, '请输入密码'),
 });
 
-app.post('/api/v1/auth/login', async (req, reply) => {
+app.post('/api/v1/auth/login', {
+  config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+}, async (req, reply) => {
   const parsed = loginBodySchema.safeParse(req.body);
   if (!parsed.success) {
     return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid request body' });
@@ -556,10 +615,10 @@ app.register(async function (adminScope) {
 
   // Health check authenticated variant
   adminScope.get('/api/v1/admin/health', async (req) => {
-    const user = req.user!;
+    const user = req.user as AuthUser;
     return {
       status: 'ok',
-      uptime: process.uptime(),
+      uptime: Math.floor(process.uptime()),
       version: APP_VERSION,
       devicesOnline: hub.getOnlineDevices().length,
       bridge: bridgeClient ? bridgeClient.getStatus() : { enabled: false },
@@ -599,7 +658,7 @@ app.register(async function (adminScope) {
 app.get('/api/v1/health', async () => {
   return {
     status: 'ok',
-    uptime: process.uptime(),
+    uptime: Math.floor(process.uptime()),
     version: '1.0.0',
     devicesOnline: hub.getOnlineDevices().length,
     bridge: bridgeClient ? bridgeClient.getStatus() : { enabled: false },
@@ -639,6 +698,14 @@ try {
   console.warn('[Billing] Non-critical billing init failed:', (err as Error).message);
 }
 
+// ── Load RBAC permission overrides from DB ──
+try {
+  await reloadPermissions();
+  console.log('[RBAC] Permission overrides loaded');
+} catch (err) {
+  console.warn('[RBAC] Permission override load failed — using defaults:', (err as Error).message);
+}
+
 // Graceful shutdown
 const shutdown = () => {
   console.log('\nShutting down...');
@@ -654,7 +721,7 @@ const shutdown = () => {
     try {
       if (bridgeClient) bridgeClient.disconnect();
       hub.dispose();
-      if (nats?.isConnected) await nats.disconnect();
+      if (nats?.isConnected()) await nats.close();
       if (minio) await minio.shutdown?.().catch(() => {});
       if (experienceCompiler) experienceCompiler.stop();
       subscriptionScheduler.stop();

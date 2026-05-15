@@ -326,6 +326,13 @@ export class MinioClient {
     }
   }
 
+  /**
+   * Graceful shutdown — cleanup resources.
+   */
+  async shutdown(): Promise<void> {
+    this.initialized = false;
+  }
+
   get isReady(): boolean {
     return this.initialized;
   }

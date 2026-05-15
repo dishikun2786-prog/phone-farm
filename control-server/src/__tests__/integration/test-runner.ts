@@ -10,7 +10,7 @@
  */
 
 // Check if we're running inside vitest or jest
-const hasVitest = typeof globalThis.describe === "function" && typeof globalThis.it === "function";
+const hasVitest = typeof (globalThis as any).describe === "function" && typeof (globalThis as any).it === "function";
 
 if (!hasVitest) {
   // Standalone mode: provide no-op implementations

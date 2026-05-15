@@ -204,12 +204,12 @@ export class ConfigResolver {
     }
 
     // Build scope filter conditions for this definition
-    const scopeConditions: ReturnType<typeof eq>[] = [];
+    const scopeConditions: any[] = [];
     scopeConditions.push(and(eq(configValues.scope, "global"), eq(configValues.scopeId, "")));
-    if (planId) scopeConditions.push(and(eq(configValues.scope, "plan"), eq(configValues.scopeId, planId)));
-    if (ctx.templateId) scopeConditions.push(and(eq(configValues.scope, "template"), eq(configValues.scopeId, ctx.templateId)));
-    if (groupId) scopeConditions.push(and(eq(configValues.scope, "group"), eq(configValues.scopeId, groupId)));
-    if (ctx.deviceId) scopeConditions.push(and(eq(configValues.scope, "device"), eq(configValues.scopeId, ctx.deviceId)));
+    if (planId) scopeConditions.push(and(eq(configValues.scope, "plan"), eq(configValues.scopeId, planId!)));
+    if (ctx.templateId) scopeConditions.push(and(eq(configValues.scope, "template"), eq(configValues.scopeId, ctx.templateId!)));
+    if (groupId) scopeConditions.push(and(eq(configValues.scope, "group"), eq(configValues.scopeId, groupId!)));
+    if (ctx.deviceId) scopeConditions.push(and(eq(configValues.scope, "device"), eq(configValues.scopeId, ctx.deviceId!)));
 
     // Fetch only values for this specific definition
     const values = await db
