@@ -1,0 +1,493 @@
+{
+  "version": 1,
+  "bugs": [
+    {
+      "id": "bug-001",
+      "timestamp": "2026-05-15T23:12:24.404Z",
+      "error_message": "Null/undefined access in ",
+      "file": "control-server/src/routes.ts",
+      "root_cause": "Property access on potentially null/undefined value",
+      "fix": "Added null safety (optional chaining or null check) | Also: // Send start command to device (camelCase for Android Kotli; taskId: exec.id,",
+      "tags": [
+        "auto-detected",
+        "null-safety",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-15T23:12:35.927Z"
+    },
+    {
+      "id": "bug-002",
+      "timestamp": "2026-05-15T23:13:06.320Z",
+      "error_message": "Wrong reference: async should be preHandler",
+      "file": "control-server/src/routes.ts",
+      "root_cause": "Used \"async\" instead of \"preHandler\"",
+      "fix": "Changed async → preHandler",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T23:13:06.320Z"
+    },
+    {
+      "id": "bug-003",
+      "timestamp": "2026-05-15T23:15:28.191Z",
+      "error_message": "Wrong reference: payload should be decision",
+      "file": "control-server/src/index.ts",
+      "root_cause": "Used \"payload\" instead of \"decision\"",
+      "fix": "Changed payload → decision",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T23:15:28.191Z"
+    },
+    {
+      "id": "bug-004",
+      "timestamp": "2026-05-15T23:15:32.131Z",
+      "error_message": "Incorrect value in code",
+      "file": "control-server/src/config.ts",
+      "root_cause": "Had \"https://api.deepseek.com/anthropic\"",
+      "fix": "Changed to \"https://api.deepseek.com/anthropic/messages\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T23:15:32.131Z"
+    },
+    {
+      "id": "bug-005",
+      "timestamp": "2026-05-15T23:15:35.477Z",
+      "error_message": "Wrong reference: integer should be real",
+      "file": "control-server/src/schema.ts",
+      "root_cause": "Used \"integer\" instead of \"real\"",
+      "fix": "Changed integer → real",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T23:15:35.477Z"
+    },
+    {
+      "id": "bug-006",
+      "timestamp": "2026-05-15T23:16:07.327Z",
+      "error_message": "Wrong condition in logic",
+      "file": "control-server/src/device-config-routes.ts",
+      "root_cause": "Condition was: if (wsHub.sendToDevice(deviceId, { type: \"config_updat)",
+      "fix": "Changed to: if (wsHub.sendToDevice(deviceId, { type: \"config_updat)",
+      "tags": [
+        "auto-detected",
+        "logic-fix",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T23:16:07.328Z"
+    },
+    {
+      "id": "bug-007",
+      "timestamp": "2026-05-15T23:16:54.036Z",
+      "error_message": "Significant refactor of ",
+      "file": "control-server/src/device-config-routes.ts",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 7→10 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T23:16:54.036Z"
+    },
+    {
+      "id": "bug-008",
+      "timestamp": "2026-05-15T23:17:31.102Z",
+      "error_message": "Type error",
+      "file": "dashboard/src/store/index.ts",
+      "root_cause": "Missing or incorrect type annotation",
+      "fix": "Added type assertion/annotation",
+      "tags": [
+        "auto-detected",
+        "type-fix",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T23:17:31.102Z"
+    },
+    {
+      "id": "bug-009",
+      "timestamp": "2026-05-15T23:19:38.050Z",
+      "error_message": "Wrong reference: true should be false",
+      "file": "control-server/src/config.ts",
+      "root_cause": "Used \"true\" instead of \"false\"",
+      "fix": "Changed true → false",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 3,
+      "last_seen": "2026-05-15T23:20:48.075Z"
+    },
+    {
+      "id": "bug-010",
+      "timestamp": "2026-05-15T23:20:34.344Z",
+      "error_message": "Wrong reference: task_id should be taskId",
+      "file": "control-server/src/vlm/vlm-routes.ts",
+      "root_cause": "Used \"task_id\" instead of \"taskId\"",
+      "fix": "Changed task_id → taskId",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T23:20:34.344Z"
+    },
+    {
+      "id": "bug-011",
+      "timestamp": "2026-05-15T23:26:59.340Z",
+      "error_message": "Wrong reference: notNull should be default",
+      "file": "control-server/src/schema.ts",
+      "root_cause": "Used \"notNull\" instead of \"default\"",
+      "fix": "Changed notNull → default",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T23:26:59.340Z"
+    },
+    {
+      "id": "bug-012",
+      "timestamp": "2026-05-15T23:29:01.713Z",
+      "error_message": "Significant refactor of ",
+      "file": "control-server/src/schema.ts",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 4→5 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T23:29:01.713Z"
+    },
+    {
+      "id": "bug-013",
+      "timestamp": "2026-05-15T23:32:17.607Z",
+      "error_message": "Incorrect value in code",
+      "file": "control-server/src/routes.ts",
+      "root_cause": "Had './schema.js'",
+      "fix": "Changed to './config.js'",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T23:32:17.607Z"
+    },
+    {
+      "id": "bug-014",
+      "timestamp": "2026-05-15T23:32:27.336Z",
+      "error_message": "Type error",
+      "file": "control-server/src/routes.ts",
+      "root_cause": "Missing or incorrect type annotation",
+      "fix": "Added type assertion/annotation",
+      "tags": [
+        "auto-detected",
+        "type-fix",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T23:32:27.336Z"
+    },
+    {
+      "id": "bug-015",
+      "timestamp": "2026-05-15T23:32:42.227Z",
+      "error_message": "Missing guard clause",
+      "file": "control-server/src/routes.ts",
+      "root_cause": "No early return/throw for edge case: !parsed.success",
+      "fix": "Added guard clause: if (!parsed.success)",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T23:32:42.227Z"
+    },
+    {
+      "id": "bug-016",
+      "timestamp": "2026-05-15T23:32:51.984Z",
+      "error_message": "Type error",
+      "file": "control-server/src/schema.ts",
+      "root_cause": "Missing or incorrect type annotation",
+      "fix": "Added type assertion/annotation",
+      "tags": [
+        "auto-detected",
+        "type-fix",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T23:32:51.984Z"
+    },
+    {
+      "id": "bug-017",
+      "timestamp": "2026-05-15T23:34:59.234Z",
+      "error_message": "Wrong reference: key should be id",
+      "file": "dashboard/src/pages/config/ConfigTemplateEditor.tsx",
+      "root_cause": "Used \"key\" instead of \"id\"",
+      "fix": "Changed key → id",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T23:34:59.234Z"
+    },
+    {
+      "id": "bug-018",
+      "timestamp": "2026-05-15T23:36:50.733Z",
+      "error_message": "Wrong reference: real should be doublePrecision",
+      "file": "control-server/src/schema.ts",
+      "root_cause": "Used \"real\" instead of \"doublePrecision\"",
+      "fix": "Changed real → doublePrecision",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T23:36:50.733Z"
+    },
+    {
+      "id": "bug-019",
+      "timestamp": "2026-05-16T00:19:09.528Z",
+      "error_message": "Function not marked async",
+      "file": "control-server/src/index.ts",
+      "root_cause": "Function uses await but wasn't declared async",
+      "fix": "Added async modifier",
+      "tags": [
+        "auto-detected",
+        "async-fix",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-16T00:19:09.528Z"
+    },
+    {
+      "id": "bug-020",
+      "timestamp": "2026-05-16T01:06:16.849Z",
+      "error_message": "Significant refactor of ",
+      "file": "dashboard/src/components/StatusBadge.tsx",
+      "root_cause": "14 lines replaced/restructured",
+      "fix": "Rewrote 24→10 lines (14 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-16T01:06:16.849Z"
+    },
+    {
+      "id": "bug-021",
+      "timestamp": "2026-05-16T01:07:22.241Z",
+      "error_message": "Incorrect value in code",
+      "file": "dashboard/src/components/Layout.tsx",
+      "root_cause": "Had \"absolute top-14 right-0 bottom-0 w-72 bg-white da",
+      "fix": "Changed to \"dialog\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-16T01:07:22.241Z"
+    },
+    {
+      "id": "bug-022",
+      "timestamp": "2026-05-16T01:08:44.395Z",
+      "error_message": "CSS fix: to",
+      "file": "dashboard/src/components/Layout.tsx",
+      "root_cause": "to: '/admin/infrastructure', label: '基础监控', icon: Activity → '/admin/audit', label: '审计日志', icon: Search",
+      "fix": "Changed to: '/admin/infrastructure', label: '基础监控', icon: Activity → '/admin/audit', label: '审计日志', icon: Search",
+      "tags": [
+        "auto-detected",
+        "style-fix",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-16T01:08:44.395Z"
+    },
+    {
+      "id": "bug-023",
+      "timestamp": "2026-05-16T01:09:15.535Z",
+      "error_message": "Significant refactor of ",
+      "file": "dashboard/src/components/Layout.tsx",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 17→23 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-16T01:09:15.536Z"
+    },
+    {
+      "id": "bug-024",
+      "timestamp": "2026-05-16T07:00:31.620Z",
+      "error_message": "Incorrect value in code",
+      "file": "control-server/src/index.ts",
+      "root_cause": "Had 'node:path'",
+      "fix": "Changed to 'node:fs'",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-16T07:00:43.269Z"
+    },
+    {
+      "id": "bug-025",
+      "timestamp": "2026-05-16T07:51:54.118Z",
+      "error_message": "Missing error handling in loadUserFromStorage",
+      "file": "dashboard/src/store/index.ts",
+      "root_cause": "Code path had no error handling — exceptions would propagate uncaught",
+      "fix": "Added try/catch block",
+      "tags": [
+        "auto-detected",
+        "error-handling",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-16T07:51:54.118Z"
+    },
+    {
+      "id": "bug-026",
+      "timestamp": "2026-05-16T07:52:06.147Z",
+      "error_message": "Null/undefined access in ",
+      "file": "dashboard/src/store/index.ts",
+      "root_cause": "Property access on potentially null/undefined value",
+      "fix": "Added null safety (optional chaining or null check)",
+      "tags": [
+        "auto-detected",
+        "null-safety",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-16T07:52:06.147Z"
+    },
+    {
+      "id": "bug-027",
+      "timestamp": "2026-05-16T07:52:19.557Z",
+      "error_message": "Significant refactor of ",
+      "file": "dashboard/src/store/index.ts",
+      "root_cause": "6 lines replaced/restructured",
+      "fix": "Rewrote 11→6 lines (6 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-16T07:52:19.557Z"
+    },
+    {
+      "id": "bug-028",
+      "timestamp": "2026-05-16T07:53:53.622Z",
+      "error_message": "Null/undefined access in ",
+      "file": "dashboard/src/App.tsx",
+      "root_cause": "Property access on potentially null/undefined value",
+      "fix": "Added null safety (optional chaining or null check)",
+      "tags": [
+        "auto-detected",
+        "null-safety",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-16T07:53:53.622Z"
+    },
+    {
+      "id": "bug-029",
+      "timestamp": "2026-05-16T08:12:38.056Z",
+      "error_message": "Type error",
+      "file": "control-server/src/auth/admin-user-routes.ts",
+      "root_cause": "Missing or incorrect type annotation",
+      "fix": "Added type assertion/annotation",
+      "tags": [
+        "auto-detected",
+        "type-fix",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-16T08:12:38.056Z"
+    },
+    {
+      "id": "bug-031",
+      "timestamp": "2026-05-16T08:30:00.000Z",
+      "error_message": "Admin credit routes lacked RBAC permission checks — any authenticated user could grant credits",
+      "file": "control-server/src/billing/admin-credit-routes.ts",
+      "root_cause": "Routes registered under requireAuth only, missing requirePermission('billing',...) guards. Also function signature lacked AuthService param for passing to requirePermission.",
+      "fix": "Added requirePermission('billing','write') to grant+update-pricing, requirePermission('billing','read') to transactions/balances/overview/pricing. Changed signature to (app, authService). Updated index.ts call site.",
+      "tags": ["rbac", "security", "credits", "ts"],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-16T08:30:00.000Z"
+    },
+    {
+      "id": "bug-032",
+      "timestamp": "2026-05-16T08:31:00.000Z",
+      "error_message": "User management create/update/query schemas missing customer and agent roles",
+      "file": "control-server/src/auth/admin-user-routes.ts",
+      "root_cause": "createUserSchema, updateUserSchema, userQuerySchema only allowed 5 of 7 roles (super_admin/admin/tenant_admin/operator/viewer). Missing customer and agent.",
+      "fix": "Added 'customer' and 'agent' to ALL_ROLES constant, updated all 3 Zod schemas. Also updated frontend ROLE_LABELS, ROLE_COLORS, and dropdowns in UserManagement.tsx.",
+      "tags": ["rbac", "roles", "user-management", "ts", "tsx"],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-16T08:31:00.000Z"
+    }
+  ]
+}

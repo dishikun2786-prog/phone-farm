@@ -36,6 +36,8 @@ const ROLE_LABELS: Record<string, string> = {
   tenant_admin: '租户管理员',
   operator: '操作员',
   viewer: '观察者',
+  customer: '客户',
+  agent: '代理',
 };
 
 const ROLE_COLORS: Record<string, string> = {
@@ -44,6 +46,8 @@ const ROLE_COLORS: Record<string, string> = {
   tenant_admin: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
   operator: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
   viewer: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-400',
+  customer: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+  agent: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -98,11 +102,9 @@ function CreateUserModal({ open, onClose, onCreated }: { open: boolean; onClose:
           <div>
             <label className="block text-xs text-gray-500 dark:text-slate-400 mb-1">角色</label>
             <select value={role} onChange={e => setRole(e.target.value)} className="w-full border border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded-lg px-3 py-2 text-sm">
-              <option value="operator">操作员</option>
-              <option value="admin">管理员</option>
-              <option value="tenant_admin">租户管理员</option>
-              <option value="viewer">观察者</option>
-              <option value="super_admin">超级管理员</option>
+              {Object.entries(ROLE_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -511,11 +513,9 @@ export default function UserManagement() {
                           onChange={e => setEditRole(e.target.value)}
                           className="text-xs border border-gray-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white rounded px-1.5 py-0.5"
                         >
-                          <option value="super_admin">超级管理员</option>
-                          <option value="admin">管理员</option>
-                          <option value="tenant_admin">租户管理员</option>
-                          <option value="operator">操作员</option>
-                          <option value="viewer">观察者</option>
+                          {Object.entries(ROLE_LABELS).map(([value, label]) => (
+                            <option key={value} value={value}>{label}</option>
+                          ))}
                         </select>
                         <button onClick={handleSaveRole} disabled={saving} className="text-green-600 hover:text-green-700"><Check size={14} /></button>
                         <button onClick={() => setEditingUser(null)} className="text-gray-400 hover:text-gray-600"><X size={14} /></button>

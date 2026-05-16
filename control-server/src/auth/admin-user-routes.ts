@@ -7,17 +7,19 @@ import { users } from "../schema.js";
 import { requireAuth, requirePermission } from "./auth-middleware.js";
 import type { AuthService, AuthUser } from "./auth-middleware.js";
 
+const ALL_ROLES = ["super_admin", "admin", "tenant_admin", "operator", "viewer", "customer", "agent"] as const;
+
 const userQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
   keyword: z.string().optional(),
-  role: z.enum(["super_admin", "admin", "tenant_admin", "operator", "viewer"]).optional(),
+  role: z.enum(ALL_ROLES).optional(),
   status: z.enum(["active", "disabled"]).optional(),
 });
 
 const updateUserSchema = z.object({
   username: z.string().min(2).max(32).optional(),
-  role: z.enum(["super_admin", "admin", "tenant_admin", "operator", "viewer"]).optional(),
+  role: z.enum(ALL_ROLES).optional(),
   status: z.enum(["active", "disabled"]).optional(),
 });
 
@@ -25,7 +27,7 @@ const createUserSchema = z.object({
   username: z.string().min(2).max(32),
   password: z.string().min(6).max(128),
   phone: z.string().min(11).max(20).optional(),
-  role: z.enum(["super_admin", "admin", "tenant_admin", "operator", "viewer"]).default("operator"),
+  role: z.enum(ALL_ROLES).default("operator"),
   tenantId: z.string().uuid().optional(),
 });
 

@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs';
 import 'dotenv/config';
 import { eq, or, and } from 'drizzle-orm';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { WebSocket } from 'ws';
@@ -154,7 +155,8 @@ app.setNotFoundHandler(async (request, reply) => {
   if (request.url.startsWith('/api/') || request.url.startsWith('/ws/')) {
     return reply.status(404).send({ error: 'Not found' });
   }
-  return reply.sendFile('index.html');
+  const html = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../dashboard/dist/index.html'), 'utf-8');
+  return reply.header('Content-Type', 'text/html').send(html);
 });
 
 // WebSocket hub
@@ -404,7 +406,7 @@ await app.register(async function (docsScope) {
 await app.register(async function (creditScope) {
   creditScope.addHook('preHandler', requireAuth(authService));
   await creditRoutes(creditScope);
-  await adminCreditRoutes(creditScope);
+  await adminCreditRoutes(creditScope, authService);
   await llmProxyRoutes(creditScope);
   await assistantConfigRoutes(creditScope);
 });
