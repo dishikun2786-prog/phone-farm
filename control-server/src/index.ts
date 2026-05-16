@@ -281,12 +281,12 @@ app.register(async function (scope) {
   });
 });
 
-// REST API routes
-await app.register(deviceRoutes);
-await app.register(taskRoutes);
-
 // ── Auth Service ──
 const authService = new AuthService(app, config.JWT_SECRET);
+
+// REST API routes — require JWT auth
+await app.register(async function (scope) { scope.addHook('preHandler', requireAuth(authService)); await deviceRoutes(scope); });
+await app.register(async function (scope) { scope.addHook('preHandler', requireAuth(authService)); await taskRoutes(scope); });
 (app as any).authService = authService;
 
 // ── User Routes (register/login/reset-password/profile) ──
