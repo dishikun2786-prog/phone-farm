@@ -1,5 +1,33 @@
 @import "tailwindcss";
 
+/* ── Tailwind v4 品牌设计令牌 ── */
+@theme {
+  --color-brand-50: #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-200: #bfdbfe;
+  --color-brand-500: #3b82f6;
+  --color-brand-600: #2563eb;
+  --color-brand-700: #1d4ed8;
+  --color-ai-50: #faf5ff;
+  --color-ai-100: #f3e8ff;
+  --color-ai-500: #a855f7;
+  --color-ai-600: #9333ea;
+  --color-ok-50: #f0fdf4;
+  --color-ok-100: #dcfce7;
+  --color-ok-600: #16a34a;
+  --color-ok-700: #15803d;
+  --color-warn-50: #fffbeb;
+  --color-warn-100: #fef3c7;
+  --color-warn-600: #d97706;
+  --color-warn-700: #b45309;
+  --color-err-50: #fef2f2;
+  --color-err-100: #fee2e2;
+  --color-err-600: #dc2626;
+  --color-err-700: #b91c1c;
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+}
+
 /* ── CSS 变量主题系统 ── */
 
 :root {
@@ -12,7 +40,6 @@
   --color-text-muted: #94a3b8;
   --color-accent: #2563eb;
   --color-accent-hover: #1d4ed8;
-  /* Whitelabel branding (overridden by /api/v2/whitelabel/theme.css when configured) */
   --pf-primary: #2563eb;
   --pf-secondary: #8B5CF6;
   --pf-font-family: inherit;

@@ -114,28 +114,48 @@ export default function Layout({ children, connectionState }: { children: React.
     { to: '/config/audit', label: '变更审计', icon: Clock },
   ];
 
-  const adminLinks = [
-    { to: '/admin', label: '管理总览', icon: ShieldCheck },
-    { to: '/admin/users', label: '用户管理', icon: Shield },
-    { to: '/admin/tenants', label: '租户管理', icon: Building },
-    { to: '/admin/permissions', label: '权限配置', icon: ShieldCheck },
-    { to: '/admin/credits', label: '积分管理', icon: Play },
-    { to: '/admin/token-pricing', label: 'Token 定价', icon: Play },
-    { to: '/admin/card-keys', label: '卡密管理', icon: Key },
-    { to: '/admin/card-batches', label: '卡密批次', icon: Package },
-    { to: '/admin/groups', label: '设备分组', icon: TabletSmartphone },
-    { to: '/admin/batch', label: '批量操作', icon: ListChecks },
-    { to: '/admin/agents', label: '代理商管理', icon: Shield },
-    { to: '/admin/commissions', label: '佣金结算', icon: Play },
-    { to: '/admin/whitelabel', label: '白标配置', icon: Globe },
-    { to: '/admin/audit', label: '审计日志', icon: Search },
-    { to: '/admin/vlm-usage', label: 'VLM 用量', icon: BarChart3 },
-    { to: '/admin/assistant-usage', label: 'AI 助手用量', icon: Bot },
-    { to: '/admin/alerts', label: '告警规则', icon: AlertTriangle },
-    { to: '/admin/health', label: '服务健康', icon: Server },
-    { to: '/admin/system-config', label: '系统配置', icon: Sliders },
-    { to: '/admin/feature-flags', label: '功能开关', icon: ToggleLeft },
-    { to: '/admin/infrastructure', label: '基础监控', icon: Activity },
+  const adminGroups = [
+    {
+      label: '用户与权限',
+      links: [
+        { to: '/admin', label: '管理总览', icon: ShieldCheck },
+        { to: '/admin/users', label: '用户管理', icon: Shield },
+        { to: '/admin/tenants', label: '租户管理', icon: Building },
+        { to: '/admin/permissions', label: '权限配置', icon: ShieldCheck },
+        { to: '/admin/agents', label: '代理商管理', icon: Shield },
+      ],
+    },
+    {
+      label: '设备与运维',
+      links: [
+        { to: '/admin/groups', label: '设备分组', icon: TabletSmartphone },
+        { to: '/admin/batch', label: '批量操作', icon: ListChecks },
+        { to: '/admin/health', label: '服务健康', icon: Server },
+        { to: '/admin/infrastructure', label: '基础监控', icon: Activity },
+        { to: '/admin/system-config', label: '系统配置', icon: Sliders },
+        { to: '/admin/feature-flags', label: '功能开关', icon: ToggleLeft },
+      ],
+    },
+    {
+      label: '商业化',
+      links: [
+        { to: '/admin/credits', label: '积分管理', icon: Play },
+        { to: '/admin/token-pricing', label: 'Token 定价', icon: Play },
+        { to: '/admin/card-keys', label: '卡密管理', icon: Key },
+        { to: '/admin/card-batches', label: '卡密批次', icon: Package },
+        { to: '/admin/commissions', label: '佣金结算', icon: Play },
+        { to: '/admin/whitelabel', label: '白标配置', icon: Globe },
+      ],
+    },
+    {
+      label: 'AI 与数据',
+      links: [
+        { to: '/admin/vlm-usage', label: 'VLM 用量', icon: BarChart3 },
+        { to: '/admin/assistant-usage', label: 'AI 助手用量', icon: Bot },
+        { to: '/admin/alerts', label: '告警规则', icon: AlertTriangle },
+        { to: '/admin/audit', label: '审计日志', icon: Search },
+      ],
+    },
   ];
 
   const navLinkCls = (isActive: boolean) =>
@@ -274,20 +294,26 @@ export default function Layout({ children, connectionState }: { children: React.
             <ChevronDown size={12} className={`transition-transform ${adminMenuOpen ? 'rotate-180' : ''}`} />
           </button>
           {adminMenuOpen && (
-            <div className="absolute top-full right-0 mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg py-1 w-44 z-50">
-              {adminLinks.map(link => {
-                const isActive = location.pathname === link.to;
-                return (
-                  <button key={link.to}
-                    onClick={() => { navigate(link.to); setAdminMenuOpen(false); }}
-                    className={`w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                      isActive ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium' : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    <link.icon size={14} />{link.label}
-                  </button>
-                );
-              })}
+            <div className="absolute top-full right-0 mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg py-1 w-48 z-50 max-h-96 overflow-y-auto">
+              {adminGroups.map((group, gi) => (
+                <div key={group.label}>
+                  {gi > 0 && <div className="mx-3 my-1 border-t border-gray-100 dark:border-slate-700" />}
+                  <div className="px-3 py-1 text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wider">{group.label}</div>
+                  {group.links.map(link => {
+                    const isActive = location.pathname === link.to;
+                    return (
+                      <button key={link.to}
+                        onClick={() => { navigate(link.to); setAdminMenuOpen(false); }}
+                        className={`w-full flex items-center gap-2 px-4 py-1.5 text-sm transition-colors ${
+                          isActive ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium' : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
+                        }`}
+                      >
+                        <link.icon size={14} />{link.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -340,21 +366,26 @@ export default function Layout({ children, connectionState }: { children: React.
       {isAdminUser && (
         <>
           <div className="px-4 py-1.5 text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wider">管理面板</div>
-          {adminLinks.map(link => {
-            const isActive = location.pathname === link.to;
-            return (
-              <button
-                key={link.to}
-                onClick={() => { navigate(link.to); setMobileMenuOpen(false); }}
-                className={`w-full flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm transition-colors ${
-                  isActive ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium' : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
-                }`}
-              >
-                <link.icon size={18} />
-                {link.label}
-              </button>
-            );
-          })}
+          {adminGroups.map((group) => (
+            <div key={group.label}>
+              <div className="px-4 py-1 text-xs text-gray-400 dark:text-slate-500 mt-1">{group.label}</div>
+              {group.links.map(link => {
+                const isActive = location.pathname === link.to;
+                return (
+                  <button
+                    key={link.to}
+                    onClick={() => { navigate(link.to); setMobileMenuOpen(false); }}
+                    className={`w-full flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm transition-colors ${
+                      isActive ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium' : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    <link.icon size={18} />
+                    {link.label}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </>
       )}
 
@@ -391,9 +422,9 @@ export default function Layout({ children, connectionState }: { children: React.
             <h1 className="text-lg font-bold text-gray-900 dark:text-slate-100">PhoneFarm</h1>
 
             {/* Desktop nav */}
-            <div className="hidden md:flex items-center gap-1">
+            <nav aria-label="主导航" className="hidden md:flex items-center gap-1">
               {navContent}
-            </div>
+            </nav>
           </div>
 
           {/* Desktop right section */}
@@ -431,7 +462,7 @@ export default function Layout({ children, connectionState }: { children: React.
       {mobileMenuOpen && (
         <div className="md:hidden fixed inset-0 z-40">
           <div className="absolute inset-0 bg-black/30" onClick={() => setMobileMenuOpen(false)} />
-          <div className="absolute top-14 right-0 bottom-0 w-72 bg-white dark:bg-slate-800 shadow-xl overflow-y-auto">
+          <div role="dialog" aria-label="移动端导航菜单" className="absolute top-14 right-0 bottom-0 w-72 bg-white dark:bg-slate-800 shadow-xl overflow-y-auto">
             <div className="p-3 flex flex-col gap-0.5">
               {mobileNavContent}
             </div>

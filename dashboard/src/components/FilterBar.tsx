@@ -30,7 +30,7 @@ export default function FilterBar({ options, value, onChange, label }: FilterBar
             }`}
           >
             {opt.label}
-            {value === opt.key && <X size={10} />}
+            {value === opt.key && <X size={10} aria-label="清除筛选" />}
           </button>
         ))}
       </div>
